@@ -1,0 +1,1393 @@
+{
+  "capture": {
+    "date": "2026-11-11",
+    "network": "VRSC mainnet",
+    "daemon": "1.2.18",
+    "kind": "failed-launch-refund",
+    "currency_id": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+    "description": "Decoded RPC fields retained with JSON layout and numeric rendering normalized. The verifier reads amounts with Decimal."
+  },
+  "record": {
+    "importheight": 3311135,
+    "importtxid": "7e5ff6e292f60d875b80d7b8d6111e54d01d6b2c919f4820e9ae20306177131c",
+    "importvout": 0,
+    "import": {
+      "version": 1,
+      "flags": 12,
+      "sourcesystemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+      "sourceheight": 3310354,
+      "importcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+      "valuein": {
+        "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 29.441,
+        "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": 32448735.98341101,
+        "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": 124.17411862,
+        "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": 32448670.89505966,
+        "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": 0.00138395
+      },
+      "tokensout": {},
+      "numoutputs": 7,
+      "hashtransfers": "f6c30b162b50a4c4dcac656031406d9eedb5c6c8242192246bc51411a4c853bc",
+      "exporttxid": "8c371fbf326ab0d3e03514ca2a904bb888a4e2735cdd99aebbe158b90c48edb2",
+      "exporttxout": 1
+    },
+    "importnotarization": {
+      "version": 2,
+      "launchcleared": true,
+      "refunding": true,
+      "samechain": true,
+      "proposer": {
+        "undefined": "",
+        "type": 0
+      },
+      "currencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+      "notarizationheight": 3311132,
+      "currencystate": {
+        "flags": 5,
+        "version": 1,
+        "currencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+        "reservecurrencies": [
+          {
+            "currencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+            "weight": 0.2,
+            "reserves": 0,
+            "priceinreserve": 0.2
+          },
+          {
+            "currencyid": "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY",
+            "weight": 0.2,
+            "reserves": 0,
+            "priceinreserve": 0.2
+          },
+          {
+            "currencyid": "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU",
+            "weight": 0.2,
+            "reserves": 0,
+            "priceinreserve": 0.2
+          },
+          {
+            "currencyid": "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2",
+            "weight": 0.2,
+            "reserves": 0,
+            "priceinreserve": 0.2
+          },
+          {
+            "currencyid": "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp",
+            "weight": 0.2,
+            "reserves": 0,
+            "priceinreserve": 0.2
+          }
+        ],
+        "initialsupply": 10101.0101,
+        "emitted": 0,
+        "supply": 0,
+        "currencies": {
+          "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": {
+            "reservein": 0.001,
+            "primarycurrencyin": 0,
+            "reserveout": 0.001,
+            "lastconversionprice": 0.01456916,
+            "viaconversionprice": 0.01456916,
+            "fees": 0.001,
+            "conversionfees": 0,
+            "priorweights": 0.2
+          },
+          "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": {
+            "reservein": 0,
+            "primarycurrencyin": 0,
+            "reserveout": 0,
+            "lastconversionprice": 0.06145083,
+            "viaconversionprice": 0.06145083,
+            "fees": 0,
+            "conversionfees": 0,
+            "priorweights": 0.2
+          },
+          "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": {
+            "reservein": 0,
+            "primarycurrencyin": 0,
+            "reserveout": 0,
+            "lastconversionprice": 6.9e-7,
+            "viaconversionprice": 6.9e-7,
+            "fees": 0,
+            "conversionfees": 0,
+            "priorweights": 0.2
+          },
+          "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": {
+            "reservein": 0,
+            "primarycurrencyin": 0,
+            "reserveout": 0,
+            "lastconversionprice": 16058.07657164,
+            "viaconversionprice": 16058.07657164,
+            "fees": 0,
+            "conversionfees": 0,
+            "priorweights": 0.2
+          },
+          "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": {
+            "reservein": 0,
+            "primarycurrencyin": 0,
+            "reserveout": 0,
+            "lastconversionprice": 16058.10878232,
+            "viaconversionprice": 16058.10878232,
+            "fees": 0,
+            "conversionfees": 0,
+            "priorweights": 0.2
+          }
+        },
+        "primarycurrencyfees": 0,
+        "primarycurrencyconversionfees": 0,
+        "primarycurrencyout": 0,
+        "preconvertedout": 0
+      },
+      "prevnotarizationtxid": "cc6cb769151510413d2589b67906afae9a29f4fc1c61fcb4741b1baee1df35e2",
+      "prevnotarizationout": 1,
+      "prevheight": 3311132,
+      "hashprevcrossnotarization": "c139cc457ae99066e52af5aecfb509b32bb02af449b0048c6ce9e4dd96a1af95",
+      "currencystates": [],
+      "proofroots": [],
+      "nodes": []
+    },
+    "transfers": [
+      {
+        "version": 1,
+        "currencyvalues": {
+          "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 29.44
+        },
+        "flags": 7,
+        "convert": true,
+        "preconvert": true,
+        "feecurrencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+        "fees": 0.0002,
+        "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+        "destination": {
+          "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+          "auxdests": [
+            {
+              "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "type": 4
+            }
+          ],
+          "type": 68
+        }
+      },
+      {
+        "version": 1,
+        "currencyvalues": {
+          "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": 124.17411862
+        },
+        "flags": 7,
+        "convert": true,
+        "preconvert": true,
+        "feecurrencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+        "fees": 0.0002,
+        "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+        "destination": {
+          "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+          "auxdests": [
+            {
+              "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "type": 4
+            }
+          ],
+          "type": 68
+        }
+      },
+      {
+        "version": 1,
+        "currencyvalues": {
+          "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": 0.00138395
+        },
+        "flags": 7,
+        "convert": true,
+        "preconvert": true,
+        "feecurrencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+        "fees": 0.0002,
+        "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+        "destination": {
+          "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+          "auxdests": [
+            {
+              "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "type": 4
+            }
+          ],
+          "type": 68
+        }
+      },
+      {
+        "version": 1,
+        "currencyvalues": {
+          "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": 32448670.89505966
+        },
+        "flags": 7,
+        "convert": true,
+        "preconvert": true,
+        "feecurrencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+        "fees": 0.0002,
+        "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+        "destination": {
+          "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+          "auxdests": [
+            {
+              "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "type": 4
+            }
+          ],
+          "type": 68
+        }
+      },
+      {
+        "version": 1,
+        "currencyvalues": {
+          "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": 32448735.98341101
+        },
+        "flags": 7,
+        "convert": true,
+        "preconvert": true,
+        "feecurrencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+        "fees": 0.0002,
+        "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+        "destination": {
+          "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+          "auxdests": [
+            {
+              "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "type": 4
+            }
+          ],
+          "type": 68
+        }
+      }
+    ]
+  },
+  "transaction": {
+    "hex": "0400008085202f8907e235dfe1ae1b1b74b4fc611cfcf4299aaeaf0679b689253d4110151569b76ccc00000000694c670101010121038d259ec6175e192f8417914293dd09203885bc33039080f2a33f08a3fdddc81840d2ad59d65fc01339b020e63a60a55c62663c2759004aae77abe149b5b928a32d213ffc6fb545acf97e59b2d6e18bd3f00637279711f2fce3f3f4f3508981f5c4ffffffffe235dfe1ae1b1b74b4fc611cfcf4299aaeaf0679b689253d4110151569b76ccc01000000694c67010101012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c3406856038fde8a3c45895faef0540df939f5d4c061e62016201d58a1bfa2701b234bd33db7826911b0fa2363853ebdb3c81dec40c45a6de8205a52225016f5048effffffffe235dfe1ae1b1b74b4fc611cfcf4299aaeaf0679b689253d4110151569b76ccc02000000694c67010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c05040dc57e486856ef1b1ba8e9d26a2f4006808e8bd20e9274ccf5139402f3685b8557b4b50ea301065cd06f3046312e9d78689314819dee1257ac32fb5a85a675a22ffffffffe235dfe1ae1b1b74b4fc611cfcf4299aaeaf0679b689253d4110151569b76ccc03000000694c67010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c05040e1d912afe69feb85ca1dc1764215093be808bd4364f2862182b23cbe5c8b2ff55fa420509ad8099d4631ec03a16a1edcd652df9015985927ba08c105b1d9d14cffffffffe235dfe1ae1b1b74b4fc611cfcf4299aaeaf0679b689253d4110151569b76ccc04000000694c67010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c0504005b659f2233ff16027120ce004b7f74b6eaad6bba57171576a2492c1dcfdcb6f10559b2401ee72f500e68814a01174d0f0316868671464248ce1c42eb9922ca4ffffffffe235dfe1ae1b1b74b4fc611cfcf4299aaeaf0679b689253d4110151569b76ccc05000000694c67010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c050408d671263affe72ccd57a448a83d7f171554c030b73bc62dd4cf84e2543ec8d264afc9a03efa542a31fd32109b03c769c0bb36a7b632f762b3cd8c6b596dc53f2ffffffffe235dfe1ae1b1b74b4fc611cfcf4299aaeaf0679b689253d4110151569b76ccc06000000694c67010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c05040ce90f7f2cc51c37650282013e94a9f9925fe975fb1394d8f62938109a7062fd410e6e6edb6643a926c1f3932de7777172c7b2202b79781f7f5ee0a0575e6fdacffffffff090000000000000000fd5d0127040300010121038d259ec6175e192f8417914293dd09203885bc33039080f2a33f08a3fdddc818cc4d300104030d010121038d259ec6175e192f8417914293dd09203885bc33039080f2a33f08a3fdddc8184d060101000c001af5b8015c64d39ab44c60ead8317f9f5a9b6c4c12833200120ff692fec0a969da7815f7a42e4ce6e1e24021051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0667baf000000002c4f07c32c38c8560934ce41c96ec2078dd79e4ced8f2b0232870b004558cef7fb1211e71ea8023ae17227b7b7f4a7fd16ab22e402000000a9c658f3c3135d95cce71575cb09da99031a57b1ae9e367e30870b00f87f6d4412dad7c4452e8293850df5327f02c3089b1c0200000000000007000000bc53c8a41114c56b24922124c8c6b5ed9e6d40316065acdcc4a4502b160bc3f6b2ed480cb958e1bbae99dd5c73e2a488b84b902aca1435e0d3b06a32bf1f378c01000000750000000000000000fdd6022704030001012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c3cc4da90204030501012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c34d7f020280140000120ff692fec0a969da7815f7a42e4ce6e1e2402101000500120ff692fec0a969da7815f7a42e4ce6e1e24021051af5b8015c64d39ab44c60ead8317f9f5a9b6c4c4558cef7fb1211e71ea8023ae17227b7b7f4a7fdf87f6d4412dad7c4452e8293850df5327f02c308a9c658f3c3135d95cce71575cb09da99031a57b12c4f07c32c38c8560934ce41c96ec2078dd79e4c05002d3101002d3101002d3101002d3101002d310105000000000000000000000000000000000000000000000000000000000000000000000000000000009cb1f4d7fb500000000000000000000000000000000000000000000000000000000000000000000005a0860100000000000000000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000000000000000000000005a086010000000000000000000000000000000000000000000000000000000000000000000000000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005a086010000000000000000000000000000000000000000000000000000000000000000000000000005002d3101002d3101002d3101002d3101002d310105000000000000000000000000000000000000000000000000000000000000000000000000000000001c863200e235dfe1ae1b1b74b4fc611cfcf4299aaeaf0679b689253d4110151569b76ccc0100000095afa196dde4e96c8c04b049f42ab02bb309b5cfaef52ae56690e97a45cc39c11c8632000000007500e079af0000000024050403000000cc1b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021750000000000000000551b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021cc3604030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211a014558cef7fb1211e71ea8023ae17227b7b7f4a7fdada089d516750000000000000000531b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021cc3404030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211801f87f6d4412dad7c4452e8293850df5327f02c30887b81b750000000000000000581b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021cc3904030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211d01a9c658f3c3135d95cce71575cb09da99031a57b184e0e586f0d9bc2e750000000000000000581b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021cc3904030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211d012c4f07c32c38c8560934ce41c96ec2078dd79e4c84e0e59f90ad9e6d75204e00000000000024050403000000cc1b040300010115049ae144b2e1cf597d38d1853a633e88c0e0739f3075204e00000000000024050403000000cc1b040300010115041ac3e9024e040736ed171267f81ace1b67522c1c7500000000238632000000000000000000000000",
+    "txid": "7e5ff6e292f60d875b80d7b8d6111e54d01d6b2c919f4820e9ae20306177131c",
+    "overwintered": true,
+    "version": 4,
+    "versiongroupid": "892f2085",
+    "locktime": 0,
+    "expiryheight": 3311139,
+    "vin": [
+      {
+        "txid": "cc6cb769151510413d2589b67906afae9a29f4fc1c61fcb4741b1baee1df35e2",
+        "vout": 0,
+        "addresses": [
+          "RKLN7wFhbrJFkPG8XkKteErAe5CjqoddTm"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "0101010121038d259ec6175e192f8417914293dd09203885bc33039080f2a33f08a3fdddc81840d2ad59d65fc01339b020e63a60a55c62663c2759004aae77abe149b5b928a32d213ffc6fb545acf97e59b2d6e18bd3f00637279711f2fce3f3f4f3508981f5c4",
+          "hex": "4c670101010121038d259ec6175e192f8417914293dd09203885bc33039080f2a33f08a3fdddc81840d2ad59d65fc01339b020e63a60a55c62663c2759004aae77abe149b5b928a32d213ffc6fb545acf97e59b2d6e18bd3f00637279711f2fce3f3f4f3508981f5c4"
+        },
+        "value": 0,
+        "valueSat": 0,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "cc6cb769151510413d2589b67906afae9a29f4fc1c61fcb4741b1baee1df35e2",
+        "vout": 1,
+        "addresses": [
+          "RDTq9qn1Lthv7fvsdbWz36mGp8HK9XaruZ"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "010101012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c3406856038fde8a3c45895faef0540df939f5d4c061e62016201d58a1bfa2701b234bd33db7826911b0fa2363853ebdb3c81dec40c45a6de8205a52225016f5048e",
+          "hex": "4c67010101012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c3406856038fde8a3c45895faef0540df939f5d4c061e62016201d58a1bfa2701b234bd33db7826911b0fa2363853ebdb3c81dec40c45a6de8205a52225016f5048e"
+        },
+        "value": 0,
+        "valueSat": 0,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "cc6cb769151510413d2589b67906afae9a29f4fc1c61fcb4741b1baee1df35e2",
+        "vout": 2,
+        "addresses": [
+          "RFw9AVfgNKcHe2Vp2eyzHrX65aFD9Ky8df"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c05040dc57e486856ef1b1ba8e9d26a2f4006808e8bd20e9274ccf5139402f3685b8557b4b50ea301065cd06f3046312e9d78689314819dee1257ac32fb5a85a675a22",
+          "hex": "4c67010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c05040dc57e486856ef1b1ba8e9d26a2f4006808e8bd20e9274ccf5139402f3685b8557b4b50ea301065cd06f3046312e9d78689314819dee1257ac32fb5a85a675a22"
+        },
+        "value": 29.441,
+        "valueSat": 2944100000,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "cc6cb769151510413d2589b67906afae9a29f4fc1c61fcb4741b1baee1df35e2",
+        "vout": 3,
+        "addresses": [
+          "RFw9AVfgNKcHe2Vp2eyzHrX65aFD9Ky8df"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c05040e1d912afe69feb85ca1dc1764215093be808bd4364f2862182b23cbe5c8b2ff55fa420509ad8099d4631ec03a16a1edcd652df9015985927ba08c105b1d9d14c",
+          "hex": "4c67010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c05040e1d912afe69feb85ca1dc1764215093be808bd4364f2862182b23cbe5c8b2ff55fa420509ad8099d4631ec03a16a1edcd652df9015985927ba08c105b1d9d14c"
+        },
+        "value": 0,
+        "valueSat": 0,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "cc6cb769151510413d2589b67906afae9a29f4fc1c61fcb4741b1baee1df35e2",
+        "vout": 4,
+        "addresses": [
+          "RFw9AVfgNKcHe2Vp2eyzHrX65aFD9Ky8df"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c0504005b659f2233ff16027120ce004b7f74b6eaad6bba57171576a2492c1dcfdcb6f10559b2401ee72f500e68814a01174d0f0316868671464248ce1c42eb9922ca4",
+          "hex": "4c67010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c0504005b659f2233ff16027120ce004b7f74b6eaad6bba57171576a2492c1dcfdcb6f10559b2401ee72f500e68814a01174d0f0316868671464248ce1c42eb9922ca4"
+        },
+        "value": 0,
+        "valueSat": 0,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "cc6cb769151510413d2589b67906afae9a29f4fc1c61fcb4741b1baee1df35e2",
+        "vout": 5,
+        "addresses": [
+          "RFw9AVfgNKcHe2Vp2eyzHrX65aFD9Ky8df"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c050408d671263affe72ccd57a448a83d7f171554c030b73bc62dd4cf84e2543ec8d264afc9a03efa542a31fd32109b03c769c0bb36a7b632f762b3cd8c6b596dc53f2",
+          "hex": "4c67010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c050408d671263affe72ccd57a448a83d7f171554c030b73bc62dd4cf84e2543ec8d264afc9a03efa542a31fd32109b03c769c0bb36a7b632f762b3cd8c6b596dc53f2"
+        },
+        "value": 0,
+        "valueSat": 0,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "cc6cb769151510413d2589b67906afae9a29f4fc1c61fcb4741b1baee1df35e2",
+        "vout": 6,
+        "addresses": [
+          "RFw9AVfgNKcHe2Vp2eyzHrX65aFD9Ky8df"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c05040ce90f7f2cc51c37650282013e94a9f9925fe975fb1394d8f62938109a7062fd410e6e6edb6643a926c1f3932de7777172c7b2202b79781f7f5ee0a0575e6fdac",
+          "hex": "4c67010101012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c05040ce90f7f2cc51c37650282013e94a9f9925fe975fb1394d8f62938109a7062fd410e6e6edb6643a926c1f3932de7777172c7b2202b79781f7f5ee0a0575e6fdac"
+        },
+        "value": 0,
+        "valueSat": 0,
+        "sequence": 4294967295
+      }
+    ],
+    "vout": [
+      {
+        "value": 0,
+        "valueSat": 0,
+        "n": 0,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "crosschainimport": {
+            "version": 1,
+            "flags": 12,
+            "sourcesystemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+            "sourceheight": 3310354,
+            "importcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+            "valuein": {
+              "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 29.441,
+              "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": 32448735.98341101,
+              "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": 124.17411862,
+              "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": 32448670.89505966,
+              "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": 0.00138395
+            },
+            "tokensout": {},
+            "numoutputs": 7,
+            "hashtransfers": "f6c30b162b50a4c4dcac656031406d9eedb5c6c8242192246bc51411a4c853bc",
+            "exporttxid": "8c371fbf326ab0d3e03514ca2a904bb888a4e2735cdd99aebbe158b90c48edb2",
+            "exporttxout": 1
+          },
+          "spendableoutput": false,
+          "reqSigs": 1,
+          "addresses": [
+            "RKLN7wFhbrJFkPG8XkKteErAe5CjqoddTm"
+          ],
+          "asm": "040300010121038d259ec6175e192f8417914293dd09203885bc33039080f2a33f08a3fdddc818 OP_CHECKCRYPTOCONDITION 04030d010121038d259ec6175e192f8417914293dd09203885bc33039080f2a33f08a3fdddc8184d060101000c001af5b8015c64d39ab44c60ead8317f9f5a9b6c4c12833200120ff692fec0a969da7815f7a42e4ce6e1e24021051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0667baf000000002c4f07c32c38c8560934ce41c96ec2078dd79e4ced8f2b0232870b004558cef7fb1211e71ea8023ae17227b7b7f4a7fd16ab22e402000000a9c658f3c3135d95cce71575cb09da99031a57b1ae9e367e30870b00f87f6d4412dad7c4452e8293850df5327f02c3089b1c0200000000000007000000bc53c8a41114c56b24922124c8c6b5ed9e6d40316065acdcc4a4502b160bc3f6b2ed480cb958e1bbae99dd5c73e2a488b84b902aca1435e0d3b06a32bf1f378c01000000 OP_DROP",
+          "hex": "27040300010121038d259ec6175e192f8417914293dd09203885bc33039080f2a33f08a3fdddc818cc4d300104030d010121038d259ec6175e192f8417914293dd09203885bc33039080f2a33f08a3fdddc8184d060101000c001af5b8015c64d39ab44c60ead8317f9f5a9b6c4c12833200120ff692fec0a969da7815f7a42e4ce6e1e24021051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0667baf000000002c4f07c32c38c8560934ce41c96ec2078dd79e4ced8f2b0232870b004558cef7fb1211e71ea8023ae17227b7b7f4a7fd16ab22e402000000a9c658f3c3135d95cce71575cb09da99031a57b1ae9e367e30870b00f87f6d4412dad7c4452e8293850df5327f02c3089b1c0200000000000007000000bc53c8a41114c56b24922124c8c6b5ed9e6d40316065acdcc4a4502b160bc3f6b2ed480cb958e1bbae99dd5c73e2a488b84b902aca1435e0d3b06a32bf1f378c0100000075"
+        },
+        "spentTxId": "6d579fd162d447f8ecbdc07de9a17dc08cb46e0c7ee25a1b17f2e7600361684d",
+        "spentIndex": 0,
+        "spentHeight": 3311135
+      },
+      {
+        "value": 0,
+        "valueSat": 0,
+        "n": 1,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "acceptednotarization": {
+            "version": 2,
+            "launchcleared": true,
+            "refunding": true,
+            "samechain": true,
+            "proposer": {
+              "undefined": "",
+              "type": 0
+            },
+            "currencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+            "notarizationheight": 3311132,
+            "currencystate": {
+              "flags": 5,
+              "version": 1,
+              "currencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "reservecurrencies": [
+                {
+                  "currencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+                  "weight": 0.2,
+                  "reserves": 0,
+                  "priceinreserve": 0.2
+                },
+                {
+                  "currencyid": "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY",
+                  "weight": 0.2,
+                  "reserves": 0,
+                  "priceinreserve": 0.2
+                },
+                {
+                  "currencyid": "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU",
+                  "weight": 0.2,
+                  "reserves": 0,
+                  "priceinreserve": 0.2
+                },
+                {
+                  "currencyid": "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2",
+                  "weight": 0.2,
+                  "reserves": 0,
+                  "priceinreserve": 0.2
+                },
+                {
+                  "currencyid": "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp",
+                  "weight": 0.2,
+                  "reserves": 0,
+                  "priceinreserve": 0.2
+                }
+              ],
+              "initialsupply": 10101.0101,
+              "emitted": 0,
+              "supply": 0,
+              "currencies": {
+                "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": {
+                  "reservein": 0.001,
+                  "primarycurrencyin": 0,
+                  "reserveout": 0.001,
+                  "lastconversionprice": 0.01456916,
+                  "viaconversionprice": 0.01456916,
+                  "fees": 0.001,
+                  "conversionfees": 0,
+                  "priorweights": 0.2
+                },
+                "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": {
+                  "reservein": 0,
+                  "primarycurrencyin": 0,
+                  "reserveout": 0,
+                  "lastconversionprice": 0.06145083,
+                  "viaconversionprice": 0.06145083,
+                  "fees": 0,
+                  "conversionfees": 0,
+                  "priorweights": 0.2
+                },
+                "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": {
+                  "reservein": 0,
+                  "primarycurrencyin": 0,
+                  "reserveout": 0,
+                  "lastconversionprice": 6.9e-7,
+                  "viaconversionprice": 6.9e-7,
+                  "fees": 0,
+                  "conversionfees": 0,
+                  "priorweights": 0.2
+                },
+                "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": {
+                  "reservein": 0,
+                  "primarycurrencyin": 0,
+                  "reserveout": 0,
+                  "lastconversionprice": 16058.07657164,
+                  "viaconversionprice": 16058.07657164,
+                  "fees": 0,
+                  "conversionfees": 0,
+                  "priorweights": 0.2
+                },
+                "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": {
+                  "reservein": 0,
+                  "primarycurrencyin": 0,
+                  "reserveout": 0,
+                  "lastconversionprice": 16058.10878232,
+                  "viaconversionprice": 16058.10878232,
+                  "fees": 0,
+                  "conversionfees": 0,
+                  "priorweights": 0.2
+                }
+              },
+              "primarycurrencyfees": 0,
+              "primarycurrencyconversionfees": 0,
+              "primarycurrencyout": 0,
+              "preconvertedout": 0
+            },
+            "prevnotarizationtxid": "cc6cb769151510413d2589b67906afae9a29f4fc1c61fcb4741b1baee1df35e2",
+            "prevnotarizationout": 1,
+            "prevheight": 3311132,
+            "hashprevcrossnotarization": "c139cc457ae99066e52af5aecfb509b32bb02af449b0048c6ce9e4dd96a1af95",
+            "currencystates": [],
+            "proofroots": [],
+            "nodes": []
+          },
+          "spendableoutput": false,
+          "reqSigs": 1,
+          "addresses": [
+            "RDTq9qn1Lthv7fvsdbWz36mGp8HK9XaruZ"
+          ],
+          "asm": "04030001012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c3 OP_CHECKCRYPTOCONDITION 04030501012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c34d7f020280140000120ff692fec0a969da7815f7a42e4ce6e1e2402101000500120ff692fec0a969da7815f7a42e4ce6e1e24021051af5b8015c64d39ab44c60ead8317f9f5a9b6c4c4558cef7fb1211e71ea8023ae17227b7b7f4a7fdf87f6d4412dad7c4452e8293850df5327f02c308a9c658f3c3135d95cce71575cb09da99031a57b12c4f07c32c38c8560934ce41c96ec2078dd79e4c05002d3101002d3101002d3101002d3101002d310105000000000000000000000000000000000000000000000000000000000000000000000000000000009cb1f4d7fb500000000000000000000000000000000000000000000000000000000000000000000005a0860100000000000000000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000000000000000000000005a086010000000000000000000000000000000000000000000000000000000000000000000000000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005a086010000000000000000000000000000000000000000000000000000000000000000000000000005002d3101002d3101002d3101002d3101002d310105000000000000000000000000000000000000000000000000000000000000000000000000000000001c863200e235dfe1ae1b1b74b4fc611cfcf4299aaeaf0679b689253d4110151569b76ccc0100000095afa196dde4e96c8c04b049f42ab02bb309b5cfaef52ae56690e97a45cc39c11c863200000000 OP_DROP",
+          "hex": "2704030001012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c3cc4da90204030501012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c34d7f020280140000120ff692fec0a969da7815f7a42e4ce6e1e2402101000500120ff692fec0a969da7815f7a42e4ce6e1e24021051af5b8015c64d39ab44c60ead8317f9f5a9b6c4c4558cef7fb1211e71ea8023ae17227b7b7f4a7fdf87f6d4412dad7c4452e8293850df5327f02c308a9c658f3c3135d95cce71575cb09da99031a57b12c4f07c32c38c8560934ce41c96ec2078dd79e4c05002d3101002d3101002d3101002d3101002d310105000000000000000000000000000000000000000000000000000000000000000000000000000000009cb1f4d7fb500000000000000000000000000000000000000000000000000000000000000000000005a0860100000000000000000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000000000000000000000005a086010000000000000000000000000000000000000000000000000000000000000000000000000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005a086010000000000000000000000000000000000000000000000000000000000000000000000000005002d3101002d3101002d3101002d3101002d310105000000000000000000000000000000000000000000000000000000000000000000000000000000001c863200e235dfe1ae1b1b74b4fc611cfcf4299aaeaf0679b689253d4110151569b76ccc0100000095afa196dde4e96c8c04b049f42ab02bb309b5cfaef52ae56690e97a45cc39c11c86320000000075"
+        },
+        "spentTxId": "6d579fd162d447f8ecbdc07de9a17dc08cb46e0c7ee25a1b17f2e7600361684d",
+        "spentIndex": 1,
+        "spentHeight": 3311135
+      },
+      {
+        "value": 29.44,
+        "valueSat": 2944000000,
+        "n": 2,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "evalnone": "valid",
+          "spendableoutput": true,
+          "reqSigs": 1,
+          "addresses": [
+            "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          ],
+          "asm": "0403000000 OP_CHECKCRYPTOCONDITION 04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_DROP",
+          "hex": "050403000000cc1b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e2402175"
+        },
+        "spentTxId": "07b1a85e599cc6e468ae63a9f590366533dde8d71c30808906f1cdb9d6834788",
+        "spentIndex": 0,
+        "spentHeight": 3419216
+      },
+      {
+        "value": 0,
+        "valueSat": 0,
+        "n": 3,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "reserveoutput": {
+            "version": 1,
+            "currencyvalues": {
+              "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": 124.17411862
+            }
+          },
+          "spendableoutput": true,
+          "reserve_balance": {
+            "vUSDT": 124.17411862
+          },
+          "reqSigs": 1,
+          "addresses": [
+            "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          ],
+          "asm": "04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_CHECKCRYPTOCONDITION 04030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211a014558cef7fb1211e71ea8023ae17227b7b7f4a7fdada089d516 OP_DROP",
+          "hex": "1b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021cc3604030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211a014558cef7fb1211e71ea8023ae17227b7b7f4a7fdada089d51675"
+        },
+        "spentTxId": "f04413fe346a7fa001ea6b75ca0c8f5b048e2ef18551c43bca0783a87333f327",
+        "spentIndex": 0,
+        "spentHeight": 3419189
+      },
+      {
+        "value": 0,
+        "valueSat": 0,
+        "n": 4,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "reserveoutput": {
+            "version": 1,
+            "currencyvalues": {
+              "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": 0.00138395
+            }
+          },
+          "spendableoutput": true,
+          "reserve_balance": {
+            "tBTC": 0.00138395
+          },
+          "reqSigs": 1,
+          "addresses": [
+            "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          ],
+          "asm": "04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_CHECKCRYPTOCONDITION 04030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211801f87f6d4412dad7c4452e8293850df5327f02c30887b81b OP_DROP",
+          "hex": "1b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021cc3404030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211801f87f6d4412dad7c4452e8293850df5327f02c30887b81b75"
+        },
+        "spentTxId": "db7e055745ddda172b4914822f3f4757f1f3d729535096e2da4334e4e2a77aa6",
+        "spentIndex": 0,
+        "spentHeight": 3419189
+      },
+      {
+        "value": 0,
+        "valueSat": 0,
+        "n": 5,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "reserveoutput": {
+            "version": 1,
+            "currencyvalues": {
+              "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": 32448670.89505966
+            }
+          },
+          "spendableoutput": true,
+          "reserve_balance": {
+            "Bulls": 32448670.89505966
+          },
+          "reqSigs": 1,
+          "addresses": [
+            "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          ],
+          "asm": "04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_CHECKCRYPTOCONDITION 04030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211d01a9c658f3c3135d95cce71575cb09da99031a57b184e0e586f0d9bc2e OP_DROP",
+          "hex": "1b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021cc3904030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211d01a9c658f3c3135d95cce71575cb09da99031a57b184e0e586f0d9bc2e75"
+        },
+        "spentTxId": "9c4f4a7a3278b4d81905fd6c1b0c9213b80a47350ffb3a4d649f4828938cd4ed",
+        "spentIndex": 0,
+        "spentHeight": 3419197
+      },
+      {
+        "value": 0,
+        "valueSat": 0,
+        "n": 6,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "reserveoutput": {
+            "version": 1,
+            "currencyvalues": {
+              "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": 32448735.98341101
+            }
+          },
+          "spendableoutput": true,
+          "reserve_balance": {
+            "Bears": 32448735.98341101
+          },
+          "reqSigs": 1,
+          "addresses": [
+            "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          ],
+          "asm": "04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_CHECKCRYPTOCONDITION 04030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211d012c4f07c32c38c8560934ce41c96ec2078dd79e4c84e0e59f90ad9e6d OP_DROP",
+          "hex": "1b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021cc3904030901011504120ff692fec0a969da7815f7a42e4ce6e1e240211d012c4f07c32c38c8560934ce41c96ec2078dd79e4c84e0e59f90ad9e6d75"
+        },
+        "spentTxId": "3faf26bc9060ba62e709125881a9599f3f035517fbe0db74c0a36686077c0eca",
+        "spentIndex": 0,
+        "spentHeight": 3419197
+      },
+      {
+        "value": 0.0002,
+        "valueSat": 20000,
+        "n": 7,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "evalnone": "valid",
+          "spendableoutput": true,
+          "reqSigs": 1,
+          "addresses": [
+            "iHbTMYB43xqqFVmEqJkqff6GrZDQoaiq6g"
+          ],
+          "asm": "0403000000 OP_CHECKCRYPTOCONDITION 040300010115049ae144b2e1cf597d38d1853a633e88c0e0739f30 OP_DROP",
+          "hex": "050403000000cc1b040300010115049ae144b2e1cf597d38d1853a633e88c0e0739f3075"
+        },
+        "spentTxId": "dd6306ab28fe416ee2ee2012663e0797b59199710309effac4839c2006b24ae9",
+        "spentIndex": 448,
+        "spentHeight": 3311992
+      },
+      {
+        "value": 0.0002,
+        "valueSat": 20000,
+        "n": 8,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "evalnone": "valid",
+          "spendableoutput": true,
+          "reqSigs": 1,
+          "addresses": [
+            "i5v3h9FWVdRFbNHU7DfcpGykQjRaHtMqu7"
+          ],
+          "asm": "0403000000 OP_CHECKCRYPTOCONDITION 040300010115041ac3e9024e040736ed171267f81ace1b67522c1c OP_DROP",
+          "hex": "050403000000cc1b040300010115041ac3e9024e040736ed171267f81ace1b67522c1c75"
+        },
+        "spentTxId": "f640eacf5fd552be589156b9d4cf65da815e596cb148e18d3d97721a5802e7ab",
+        "spentIndex": 242,
+        "spentHeight": 3401688
+      }
+    ],
+    "vjoinsplit": [],
+    "valueBalance": 0,
+    "vShieldedSpend": [],
+    "vShieldedOutput": [],
+    "blockhash": "0000000000008d67f95b6c8d750437c9fdd2cab939dd2728042e3ee3edbad7aa",
+    "height": 3311135,
+    "confirmations": 1007395,
+    "time": 1732021553,
+    "blocktime": 1732021553
+  },
+  "export_transaction": {
+    "hex": "0400008085202f8907321a082fdc889f8890481188418234c91854f1f6c92b13cd3b6495aff7c6937e04000000694c67010101012102cbfe54fb371cfc89d35b46cafcad6ac3b7dc9b40546b0f30b2b29a4865ed3b4a4075924f529e92b3b098765bba42182f991b6bd90824c092cefb2806f397d39ed54158cda4bde84924522995c818b3100eca9dbf9363b99e59b67d9bb1e9dade63ffffffffa32d67acb93bfd399851d04d8d366f21b874f310209304b78ff6d433845242f500000000694c6701010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e1865687461454840b75dfae6add4cca97807add45a2aaf7a4c7757deb4c4cfdfa5febe5d0fc5956e4363e323a5213b3341d8b6b58e663d793e1e88475e476c1091ac6eadb3c268dbffffffffa32d67acb93bfd399851d04d8d366f21b874f310209304b78ff6d433845242f501000000694c6701010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e18656874614548408ff269ff21c067ec8e7fdab638ab5d7b48f47d0cd01d1a1e99792ea79920c30726ff5a956011e9a6a420f064d739a5d608d2eebc86f63f77bee5f775a534e477ffffffffa32d67acb93bfd399851d04d8d366f21b874f310209304b78ff6d433845242f502000000694c6701010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e186568746145484096272a9a17bc2c403a9330edb12ae9cd386761b88fa70fd0c92a20beac9b6a511b7582f49cac62a2f4091fe88bf9d707ba14c69d31692fd16b7aba4acf261198ffffffffa32d67acb93bfd399851d04d8d366f21b874f310209304b78ff6d433845242f503000000694c6701010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e18656874614548407a88c6582e59cbec6bf3e20a62836fc5d74f37afbafe490877cd6fcf4832e58869578a9c1252b20c7308f8fb380cf84a7cd9b07bc441f61aa875880617bff598ffffffffa32d67acb93bfd399851d04d8d366f21b874f310209304b78ff6d433845242f504000000694c6701010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e1865687461454840b977385aff6c165bbb0d0a14f311aa50f637c24a1ade1dd5ed6be3ff935d68fc19da91a0bd5fcd67301286bb93e61af3f4c959dc113310310d0f7fc59e2aef49ffffffff321a082fdc889f8890481188418234c91854f1f6c92b13cd3b6495aff7c6937e03000000694c67010101012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c34022c5c99b75415c903bfbd0d6bd4655dcac7932f5c13d403c72d4d3024818651d0a83f976659fc98071f44c1eb456da5ff4c86e46509d3445859783d07006501effffffff03a0667baf00000000fb2704030001012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c050cc4ccf04030b01012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c0504ca686fefeff01051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0667baf000000002c4f07c32c38c8560934ce41c96ec2078dd79e4ced8f2b0232870b004558cef7fb1211e71ea8023ae17227b7b7f4a7fd16ab22e402000000a9c658f3c3135d95cce71575cb09da99031a57b1ae9e367e30870b00f87f6d4412dad7c4452e8293850df5327f02c3089b1c020000000000120ff692fec0a969da7815f7a42e4ce6e1e24021750000000000000000fdf7011a04030001011452047d0db35c330271aae70bedce996b5239ca5ccc4dd70104030c01011452047d0db35c330271aae70bedce996b5239ca5c4dba01010001001af5b8015c64d39ab44c60ead8317f9f5a9b6c4cbc53c8a41114c56b24922124c8c6b5ed9e6d40316065acdcc4a4502b160bc3f61af5b8015c64d39ab44c60ead8317f9f5a9b6c4c120ff692fec0a969da7815f7a42e4ce6e1e2402144141ac3e9024e040736ed171267f81ace1b67522c1c011604149ae144b2e1cf597d38d1853a633e88c0e0739f30010000000500000080c9850b80c98512051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0c10c00000000002c4f07c32c38c8560934ce41c96ec2078dd79e4c617162e0bc0000004558cef7fb1211e71ea8023ae17227b7b7f4a7fd605e2f0000000000a9c658f3c3135d95cce71575cb09da99031a57b1189d49e0bc000000f87f6d4412dad7c4452e8293850df5327f02c3082200000000000000051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0667baf000000002c4f07c32c38c8560934ce41c96ec2078dd79e4ced8f2b0232870b004558cef7fb1211e71ea8023ae17227b7b7f4a7fd16ab22e402000000a9c658f3c3135d95cce71575cb09da99031a57b1ae9e367e30870b00f87f6d4412dad7c4452e8293850df5327f02c3089b1c0200000000000000750000000000000000fdc1021a0403000101142de39c6e196f822dc54a3caed7e90c361a9ceac0cc4da1020403050101142de39c6e196f822dc54a3caed7e90c361a9ceac04d84020280020000120ff692fec0a969da7815f7a42e4ce6e1e2402101000300120ff692fec0a969da7815f7a42e4ce6e1e24021051af5b8015c64d39ab44c60ead8317f9f5a9b6c4c4558cef7fb1211e71ea8023ae17227b7b7f4a7fdf87f6d4412dad7c4452e8293850df5327f02c308a9c658f3c3135d95cce71575cb09da99031a57b12c4f07c32c38c8560934ce41c96ec2078dd79e4c05002d3101002d3101002d3101002d3101002d31010500a56eaf00000000b64cf3e302000000791c0200000000009601ed9d73860b008c1ec92175860b009cb1f4d7fb50009cb1f4d7fb500000000000000000488f7ad5ea000000000000000000000000000000000000000500a56eaf00000000b64cf3e302000000791c0200000000009601ed9d73860b008c1ec92175860b000500000000000000000000000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000000000000000000000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005a0c10c0000000000605e2f00000000002200000000000000189d49e0bc000000617162e0bc00000005002d3101002d3101002d3101002d3101002d310105003b0b0000000000605e2f00000000002200000000000000189d49e0bc000000617162e0bc00000012833200321a082fdc889f8890481188418234c91854f1f6c92b13cd3b6495aff7c6937e03000000e77890721efa904921a179a9ed01cc9ae4949c38940eaf23f522eb11cf4e8da00a8332000000007500000000288332000000000000000000000000",
+    "txid": "8c371fbf326ab0d3e03514ca2a904bb888a4e2735cdd99aebbe158b90c48edb2",
+    "overwintered": true,
+    "version": 4,
+    "versiongroupid": "892f2085",
+    "locktime": 0,
+    "expiryheight": 3310376,
+    "vin": [
+      {
+        "txid": "7e93c6f7af95643bcd132bc9f6f15418c934824188114890889f88dc2f081a32",
+        "vout": 4,
+        "addresses": [
+          "RGkrs7SndcpsV61oKK2jYdMiU8PgkLU2qP"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "010101012102cbfe54fb371cfc89d35b46cafcad6ac3b7dc9b40546b0f30b2b29a4865ed3b4a4075924f529e92b3b098765bba42182f991b6bd90824c092cefb2806f397d39ed54158cda4bde84924522995c818b3100eca9dbf9363b99e59b67d9bb1e9dade63",
+          "hex": "4c67010101012102cbfe54fb371cfc89d35b46cafcad6ac3b7dc9b40546b0f30b2b29a4865ed3b4a4075924f529e92b3b098765bba42182f991b6bd90824c092cefb2806f397d39ed54158cda4bde84924522995c818b3100eca9dbf9363b99e59b67d9bb1e9dade63"
+        },
+        "value": 0,
+        "valueSat": 0,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+        "vout": 0,
+        "addresses": [
+          "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "01010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e1865687461454840b75dfae6add4cca97807add45a2aaf7a4c7757deb4c4cfdfa5febe5d0fc5956e4363e323a5213b3341d8b6b58e663d793e1e88475e476c1091ac6eadb3c268db",
+          "hex": "4c6701010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e1865687461454840b75dfae6add4cca97807add45a2aaf7a4c7757deb4c4cfdfa5febe5d0fc5956e4363e323a5213b3341d8b6b58e663d793e1e88475e476c1091ac6eadb3c268db"
+        },
+        "value": 29.4402,
+        "valueSat": 2944020000,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+        "vout": 1,
+        "addresses": [
+          "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "01010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e18656874614548408ff269ff21c067ec8e7fdab638ab5d7b48f47d0cd01d1a1e99792ea79920c30726ff5a956011e9a6a420f064d739a5d608d2eebc86f63f77bee5f775a534e477",
+          "hex": "4c6701010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e18656874614548408ff269ff21c067ec8e7fdab638ab5d7b48f47d0cd01d1a1e99792ea79920c30726ff5a956011e9a6a420f064d739a5d608d2eebc86f63f77bee5f775a534e477"
+        },
+        "value": 0.0002,
+        "valueSat": 20000,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+        "vout": 2,
+        "addresses": [
+          "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "01010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e186568746145484096272a9a17bc2c403a9330edb12ae9cd386761b88fa70fd0c92a20beac9b6a511b7582f49cac62a2f4091fe88bf9d707ba14c69d31692fd16b7aba4acf261198",
+          "hex": "4c6701010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e186568746145484096272a9a17bc2c403a9330edb12ae9cd386761b88fa70fd0c92a20beac9b6a511b7582f49cac62a2f4091fe88bf9d707ba14c69d31692fd16b7aba4acf261198"
+        },
+        "value": 0.0002,
+        "valueSat": 20000,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+        "vout": 3,
+        "addresses": [
+          "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "01010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e18656874614548407a88c6582e59cbec6bf3e20a62836fc5d74f37afbafe490877cd6fcf4832e58869578a9c1252b20c7308f8fb380cf84a7cd9b07bc441f61aa875880617bff598",
+          "hex": "4c6701010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e18656874614548407a88c6582e59cbec6bf3e20a62836fc5d74f37afbafe490877cd6fcf4832e58869578a9c1252b20c7308f8fb380cf84a7cd9b07bc441f61aa875880617bff598"
+        },
+        "value": 0.0002,
+        "valueSat": 20000,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+        "vout": 4,
+        "addresses": [
+          "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "01010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e1865687461454840b977385aff6c165bbb0d0a14f311aa50f637c24a1ade1dd5ed6be3ff935d68fc19da91a0bd5fcd67301286bb93e61af3f4c959dc113310310d0f7fc59e2aef49",
+          "hex": "4c6701010101210367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e1865687461454840b977385aff6c165bbb0d0a14f311aa50f637c24a1ade1dd5ed6be3ff935d68fc19da91a0bd5fcd67301286bb93e61af3f4c959dc113310310d0f7fc59e2aef49"
+        },
+        "value": 0.0002,
+        "valueSat": 20000,
+        "sequence": 4294967295
+      },
+      {
+        "txid": "7e93c6f7af95643bcd132bc9f6f15418c934824188114890889f88dc2f081a32",
+        "vout": 3,
+        "addresses": [
+          "RDTq9qn1Lthv7fvsdbWz36mGp8HK9XaruZ"
+        ],
+        "minrequired": 1,
+        "scriptSig": {
+          "asm": "010101012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c34022c5c99b75415c903bfbd0d6bd4655dcac7932f5c13d403c72d4d3024818651d0a83f976659fc98071f44c1eb456da5ff4c86e46509d3445859783d07006501e",
+          "hex": "4c67010101012102d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c34022c5c99b75415c903bfbd0d6bd4655dcac7932f5c13d403c72d4d3024818651d0a83f976659fc98071f44c1eb456da5ff4c86e46509d3445859783d07006501e"
+        },
+        "value": 0,
+        "valueSat": 0,
+        "sequence": 4294967295
+      }
+    ],
+    "vout": [
+      {
+        "value": 29.441,
+        "valueSat": 2944100000,
+        "n": 0,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "reservedeposit": {
+            "version": 1,
+            "currencyvalues": {
+              "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 29.441,
+              "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": 32448735.98341101,
+              "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": 124.17411862,
+              "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": 32448670.89505966,
+              "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": 0.00138395
+            },
+            "controllingcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          },
+          "spendableoutput": false,
+          "reserve_balance": {
+            "Bears": 32448735.98341101,
+            "vUSDT": 124.17411862,
+            "Bulls": 32448670.89505966,
+            "tBTC": 0.00138395
+          },
+          "reqSigs": 1,
+          "addresses": [
+            "RFw9AVfgNKcHe2Vp2eyzHrX65aFD9Ky8df"
+          ],
+          "asm": "04030001012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c050 OP_CHECKCRYPTOCONDITION 04030b01012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c0504ca686fefeff01051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0667baf000000002c4f07c32c38c8560934ce41c96ec2078dd79e4ced8f2b0232870b004558cef7fb1211e71ea8023ae17227b7b7f4a7fd16ab22e402000000a9c658f3c3135d95cce71575cb09da99031a57b1ae9e367e30870b00f87f6d4412dad7c4452e8293850df5327f02c3089b1c020000000000120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_DROP",
+          "hex": "2704030001012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c050cc4ccf04030b01012103b99d7cb946c5b1f8a54cde49b8d7e0a2a15a22639feb798009f82b519526c0504ca686fefeff01051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0667baf000000002c4f07c32c38c8560934ce41c96ec2078dd79e4ced8f2b0232870b004558cef7fb1211e71ea8023ae17227b7b7f4a7fd16ab22e402000000a9c658f3c3135d95cce71575cb09da99031a57b1ae9e367e30870b00f87f6d4412dad7c4452e8293850df5327f02c3089b1c020000000000120ff692fec0a969da7815f7a42e4ce6e1e2402175"
+        },
+        "spentTxId": "cc6cb769151510413d2589b67906afae9a29f4fc1c61fcb4741b1baee1df35e2",
+        "spentIndex": 3,
+        "spentHeight": 3311135
+      },
+      {
+        "value": 0,
+        "valueSat": 0,
+        "n": 1,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "crosschainexport": {
+            "version": 1,
+            "flags": 1,
+            "sourceheightstart": 3310347,
+            "sourceheightend": 3310354,
+            "sourcesystemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+            "destinationsystemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+            "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+            "numinputs": 5,
+            "totalamounts": {
+              "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 29.441,
+              "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": 32448735.98341101,
+              "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": 124.17411862,
+              "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": 32448670.89505966,
+              "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": 0.00138395
+            },
+            "totalfees": {
+              "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 0.00836,
+              "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": 8112.18399585,
+              "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": 0.03104352,
+              "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": 8112.16772376,
+              "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": 3.4e-7
+            },
+            "hashtransfers": "f6c30b162b50a4c4dcac656031406d9eedb5c6c8242192246bc51411a4c853bc",
+            "totalburned": {},
+            "rewardaddress": "i5v3h9FWVdRFbNHU7DfcpGykQjRaHtMqu7",
+            "firstinput": 1
+          },
+          "spendableoutput": false,
+          "reqSigs": 1,
+          "addresses": [
+            "RGkrs7SndcpsV61oKK2jYdMiU8PgkLU2qP"
+          ],
+          "asm": "04030001011452047d0db35c330271aae70bedce996b5239ca5c OP_CHECKCRYPTOCONDITION 04030c01011452047d0db35c330271aae70bedce996b5239ca5c4dba01010001001af5b8015c64d39ab44c60ead8317f9f5a9b6c4cbc53c8a41114c56b24922124c8c6b5ed9e6d40316065acdcc4a4502b160bc3f61af5b8015c64d39ab44c60ead8317f9f5a9b6c4c120ff692fec0a969da7815f7a42e4ce6e1e2402144141ac3e9024e040736ed171267f81ace1b67522c1c011604149ae144b2e1cf597d38d1853a633e88c0e0739f30010000000500000080c9850b80c98512051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0c10c00000000002c4f07c32c38c8560934ce41c96ec2078dd79e4c617162e0bc0000004558cef7fb1211e71ea8023ae17227b7b7f4a7fd605e2f0000000000a9c658f3c3135d95cce71575cb09da99031a57b1189d49e0bc000000f87f6d4412dad7c4452e8293850df5327f02c3082200000000000000051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0667baf000000002c4f07c32c38c8560934ce41c96ec2078dd79e4ced8f2b0232870b004558cef7fb1211e71ea8023ae17227b7b7f4a7fd16ab22e402000000a9c658f3c3135d95cce71575cb09da99031a57b1ae9e367e30870b00f87f6d4412dad7c4452e8293850df5327f02c3089b1c0200000000000000 OP_DROP",
+          "hex": "1a04030001011452047d0db35c330271aae70bedce996b5239ca5ccc4dd70104030c01011452047d0db35c330271aae70bedce996b5239ca5c4dba01010001001af5b8015c64d39ab44c60ead8317f9f5a9b6c4cbc53c8a41114c56b24922124c8c6b5ed9e6d40316065acdcc4a4502b160bc3f61af5b8015c64d39ab44c60ead8317f9f5a9b6c4c120ff692fec0a969da7815f7a42e4ce6e1e2402144141ac3e9024e040736ed171267f81ace1b67522c1c011604149ae144b2e1cf597d38d1853a633e88c0e0739f30010000000500000080c9850b80c98512051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0c10c00000000002c4f07c32c38c8560934ce41c96ec2078dd79e4c617162e0bc0000004558cef7fb1211e71ea8023ae17227b7b7f4a7fd605e2f0000000000a9c658f3c3135d95cce71575cb09da99031a57b1189d49e0bc000000f87f6d4412dad7c4452e8293850df5327f02c3082200000000000000051af5b8015c64d39ab44c60ead8317f9f5a9b6c4ca0667baf000000002c4f07c32c38c8560934ce41c96ec2078dd79e4ced8f2b0232870b004558cef7fb1211e71ea8023ae17227b7b7f4a7fd16ab22e402000000a9c658f3c3135d95cce71575cb09da99031a57b1ae9e367e30870b00f87f6d4412dad7c4452e8293850df5327f02c3089b1c020000000000000075"
+        },
+        "spentTxId": "864ae71f49223a08666f66464bd778be4b758867180c6cbd58dbce80f4f1326d",
+        "spentIndex": 0,
+        "spentHeight": 3311134
+      },
+      {
+        "value": 0,
+        "valueSat": 0,
+        "n": 2,
+        "scriptPubKey": {
+          "type": "cryptocondition",
+          "acceptednotarization": {
+            "version": 2,
+            "prelaunch": true,
+            "samechain": true,
+            "proposer": {
+              "undefined": "",
+              "type": 0
+            },
+            "currencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+            "notarizationheight": 3310354,
+            "currencystate": {
+              "flags": 3,
+              "version": 1,
+              "currencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "reservecurrencies": [
+                {
+                  "currencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+                  "weight": 0.2,
+                  "reserves": 29.43264,
+                  "priceinreserve": 0.01456915
+                },
+                {
+                  "currencyid": "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY",
+                  "weight": 0.2,
+                  "reserves": 124.1430751,
+                  "priceinreserve": 0.06145082
+                },
+                {
+                  "currencyid": "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU",
+                  "weight": 0.2,
+                  "reserves": 0.00138361,
+                  "priceinreserve": 6.8e-7
+                },
+                {
+                  "currencyid": "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2",
+                  "weight": 0.2,
+                  "reserves": 32440558.7273359,
+                  "priceinreserve": 16058.07657163
+                },
+                {
+                  "currencyid": "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp",
+                  "weight": 0.2,
+                  "reserves": 32440623.79941516,
+                  "priceinreserve": 16058.10878231
+                }
+              ],
+              "initialsupply": 10101.0101,
+              "emitted": 0,
+              "supply": 10101.0101,
+              "currencies": {
+                "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": {
+                  "reservein": 29.43264,
+                  "primarycurrencyin": 0,
+                  "reserveout": 0,
+                  "lastconversionprice": 0.01456916,
+                  "viaconversionprice": 0.01456916,
+                  "fees": 0.00836,
+                  "conversionfees": 0.00736,
+                  "priorweights": 0.2
+                },
+                "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": {
+                  "reservein": 124.1430751,
+                  "primarycurrencyin": 0,
+                  "reserveout": 0,
+                  "lastconversionprice": 0.06145083,
+                  "viaconversionprice": 0.06145083,
+                  "fees": 0.03104352,
+                  "conversionfees": 0.03104352,
+                  "priorweights": 0.2
+                },
+                "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": {
+                  "reservein": 0.00138361,
+                  "primarycurrencyin": 0,
+                  "reserveout": 0,
+                  "lastconversionprice": 6.9e-7,
+                  "viaconversionprice": 6.9e-7,
+                  "fees": 3.4e-7,
+                  "conversionfees": 3.4e-7,
+                  "priorweights": 0.2
+                },
+                "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": {
+                  "reservein": 32440558.7273359,
+                  "primarycurrencyin": 0,
+                  "reserveout": 0,
+                  "lastconversionprice": 16058.07657164,
+                  "viaconversionprice": 16058.07657164,
+                  "fees": 8112.16772376,
+                  "conversionfees": 8112.16772376,
+                  "priorweights": 0.2
+                },
+                "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": {
+                  "reservein": 32440623.79941516,
+                  "primarycurrencyin": 0,
+                  "reserveout": 0,
+                  "lastconversionprice": 16058.10878232,
+                  "viaconversionprice": 16058.10878232,
+                  "fees": 8112.18399585,
+                  "conversionfees": 8112.18399585,
+                  "priorweights": 0.2
+                }
+              },
+              "primarycurrencyfees": 0,
+              "primarycurrencyconversionfees": 0,
+              "primarycurrencyout": 0,
+              "preconvertedout": 10086.03926344
+            },
+            "prevnotarizationtxid": "7e93c6f7af95643bcd132bc9f6f15418c934824188114890889f88dc2f081a32",
+            "prevnotarizationout": 3,
+            "prevheight": 3310346,
+            "hashprevcrossnotarization": "a08d4ecf11eb22f523af0e94389c94e49acc01eda979a1214990fa1e729078e7",
+            "currencystates": [],
+            "proofroots": [],
+            "nodes": []
+          },
+          "spendableoutput": false,
+          "reqSigs": 1,
+          "addresses": [
+            "RDTq9qn1Lthv7fvsdbWz36mGp8HK9XaruZ"
+          ],
+          "asm": "0403000101142de39c6e196f822dc54a3caed7e90c361a9ceac0 OP_CHECKCRYPTOCONDITION 0403050101142de39c6e196f822dc54a3caed7e90c361a9ceac04d84020280020000120ff692fec0a969da7815f7a42e4ce6e1e2402101000300120ff692fec0a969da7815f7a42e4ce6e1e24021051af5b8015c64d39ab44c60ead8317f9f5a9b6c4c4558cef7fb1211e71ea8023ae17227b7b7f4a7fdf87f6d4412dad7c4452e8293850df5327f02c308a9c658f3c3135d95cce71575cb09da99031a57b12c4f07c32c38c8560934ce41c96ec2078dd79e4c05002d3101002d3101002d3101002d3101002d31010500a56eaf00000000b64cf3e302000000791c0200000000009601ed9d73860b008c1ec92175860b009cb1f4d7fb50009cb1f4d7fb500000000000000000488f7ad5ea000000000000000000000000000000000000000500a56eaf00000000b64cf3e302000000791c0200000000009601ed9d73860b008c1ec92175860b000500000000000000000000000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000000000000000000000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005a0c10c0000000000605e2f00000000002200000000000000189d49e0bc000000617162e0bc00000005002d3101002d3101002d3101002d3101002d310105003b0b0000000000605e2f00000000002200000000000000189d49e0bc000000617162e0bc00000012833200321a082fdc889f8890481188418234c91854f1f6c92b13cd3b6495aff7c6937e03000000e77890721efa904921a179a9ed01cc9ae4949c38940eaf23f522eb11cf4e8da00a833200000000 OP_DROP",
+          "hex": "1a0403000101142de39c6e196f822dc54a3caed7e90c361a9ceac0cc4da1020403050101142de39c6e196f822dc54a3caed7e90c361a9ceac04d84020280020000120ff692fec0a969da7815f7a42e4ce6e1e2402101000300120ff692fec0a969da7815f7a42e4ce6e1e24021051af5b8015c64d39ab44c60ead8317f9f5a9b6c4c4558cef7fb1211e71ea8023ae17227b7b7f4a7fdf87f6d4412dad7c4452e8293850df5327f02c308a9c658f3c3135d95cce71575cb09da99031a57b12c4f07c32c38c8560934ce41c96ec2078dd79e4c05002d3101002d3101002d3101002d3101002d31010500a56eaf00000000b64cf3e302000000791c0200000000009601ed9d73860b008c1ec92175860b009cb1f4d7fb50009cb1f4d7fb500000000000000000488f7ad5ea000000000000000000000000000000000000000500a56eaf00000000b64cf3e302000000791c0200000000009601ed9d73860b008c1ec92175860b000500000000000000000000000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000000000000000000000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005143b1600000000003bc45d00000000004500000000000000cc5098e1750100001877c9e17501000005a0c10c0000000000605e2f00000000002200000000000000189d49e0bc000000617162e0bc00000005002d3101002d3101002d3101002d3101002d310105003b0b0000000000605e2f00000000002200000000000000189d49e0bc000000617162e0bc00000012833200321a082fdc889f8890481188418234c91854f1f6c92b13cd3b6495aff7c6937e03000000e77890721efa904921a179a9ed01cc9ae4949c38940eaf23f522eb11cf4e8da00a83320000000075"
+        },
+        "spentTxId": "864ae71f49223a08666f66464bd778be4b758867180c6cbd58dbce80f4f1326d",
+        "spentIndex": 1,
+        "spentHeight": 3311134
+      }
+    ],
+    "vjoinsplit": [],
+    "valueBalance": 0,
+    "vShieldedSpend": [],
+    "vShieldedOutput": [],
+    "blockhash": "f25b0d1f0cb819b89422fa7244c0cbd3e00b5c414d24a7d888349aa5d6c64544",
+    "height": 3310356,
+    "confirmations": 1008180,
+    "time": 1731972665,
+    "blocktime": 1731972665
+  },
+  "source_transactions": [
+    {
+      "hex": "0400008085202f8905421c7285f3bce03a7e41d4ba291a2027e2b81ac35de711688edae917340897b401000000694c6701010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b40ddc75724bba80b41c01bfca2ccd4442e50120325eb3a1b2881e47b596187a30465443a40b9051f4dd206af7210f99b28a72d0f3475775db9f656270b48127f33ffffffffd6a1278cdab72a4b393e2c69f17d6de889a0e987ee95d5db3fc02188d4c9121a00000000694c6701010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b40b543d676cb1e9ea8c83d31dfaf909eb74fd547a9162ca8d0cf2504e2336231d30cb98ec2e43758efe0711466cd206bbe7125e7aff08232d95f1f06a2290509fcffffffffde741d1547fb72e5a7e14c31c47929153ac410679660c4438ee02608d9f7fe2703000000694c6701010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b4041809fdfaa630f1068f18f33f5de3554c2db40571925747f18e951a38bf54eaf4aafe5ea0d0dfca54b943e42f949970dc0c594a0a912cea2da70940efcad3fe5ffffffff0fd877abe2aa416eb88cd0bf8bac0940d9a95054534f52b4df72e36de149ac4c0a000000694c6701010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b4039c6e3677be9a3d5c5cd9a6553f3f5d9d92bb5caebbb2d6a909ae154e9a5c32d7679b3c3feb8ec1f8afa1718b409b07656de0b06773cdc8ba709aedc121f0ee3ffffffffc8bc6faab8913a9b792140daeaef654521a6029849a4ef1eb1873808d1baf69c02000000694c6701010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b40356381c4ae3a2d05a3e1d062fcbd5cccee786b299c7f96c5c3078158f2c4dcb2134988adaf5b970e48c02981729183a405a46dff951bf6003f85af2e6d281da0ffffffff06202e7aaf00000000af1a040300010114cb8a0f7f651b484a81e2312c3438deb601e27368cc4c90040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c74011af5b8015c64d39ab44c60ead8317f9f5a9b6c4c89fae6bf00071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e2402175204e000000000000af1a040300010114cb8a0f7f651b484a81e2312c3438deb601e27368cc4c90040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c74014558cef7fb1211e71ea8023ae17227b7b7f4a7fdada089d516071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e2402175204e000000000000ad1a040300010114cb8a0f7f651b484a81e2312c3438deb601e27368cc4c8e040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c7201f87f6d4412dad7c4452e8293850df5327f02c30887b81b071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e2402175204e000000000000b21a040300010114cb8a0f7f651b484a81e2312c3438deb601e27368cc4c93040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c7701a9c658f3c3135d95cce71575cb09da99031a57b184e0e586f0d9bc2e071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e2402175204e000000000000b21a040300010114cb8a0f7f651b484a81e2312c3438deb601e27368cc4c93040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c77012c4f07c32c38c8560934ce41c96ec2078dd79e4c84e0e59f90ad9e6d071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e24021758cd0383e0400000024050403000000cc1b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e240217500000000268332000000000000000000000000",
+      "txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+      "overwintered": true,
+      "version": 4,
+      "versiongroupid": "892f2085",
+      "locktime": 0,
+      "expiryheight": 3310374,
+      "vin": [
+        {
+          "txid": "b497083417e9da8e6811e75dc31ab8e227201a29bad4417e3ae0bcf385721c42",
+          "vout": 1,
+          "addresses": [
+            "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          ],
+          "minrequired": 1,
+          "scriptSig": {
+            "asm": "01010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b40ddc75724bba80b41c01bfca2ccd4442e50120325eb3a1b2881e47b596187a30465443a40b9051f4dd206af7210f99b28a72d0f3475775db9f656270b48127f33",
+            "hex": "4c6701010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b40ddc75724bba80b41c01bfca2ccd4442e50120325eb3a1b2881e47b596187a30465443a40b9051f4dd206af7210f99b28a72d0f3475775db9f656270b48127f33"
+          },
+          "value": 211.6792998,
+          "valueSat": 21167929980,
+          "sequence": 4294967295
+        },
+        {
+          "txid": "1a12c9d48821c03fdbd595ee87e9a089e86d7df1692c3e394b2ab7da8c27a1d6",
+          "vout": 0,
+          "addresses": [
+            "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          ],
+          "minrequired": 1,
+          "scriptSig": {
+            "asm": "01010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b40b543d676cb1e9ea8c83d31dfaf909eb74fd547a9162ca8d0cf2504e2336231d30cb98ec2e43758efe0711466cd206bbe7125e7aff08232d95f1f06a2290509fc",
+            "hex": "4c6701010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b40b543d676cb1e9ea8c83d31dfaf909eb74fd547a9162ca8d0cf2504e2336231d30cb98ec2e43758efe0711466cd206bbe7125e7aff08232d95f1f06a2290509fc"
+          },
+          "value": 0,
+          "valueSat": 0,
+          "sequence": 4294967295
+        },
+        {
+          "txid": "27fef7d90826e08e43c460966710c43a152979c4314ce1a7e572fb47151d74de",
+          "vout": 3,
+          "addresses": [
+            "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          ],
+          "minrequired": 1,
+          "scriptSig": {
+            "asm": "01010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b4041809fdfaa630f1068f18f33f5de3554c2db40571925747f18e951a38bf54eaf4aafe5ea0d0dfca54b943e42f949970dc0c594a0a912cea2da70940efcad3fe5",
+            "hex": "4c6701010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b4041809fdfaa630f1068f18f33f5de3554c2db40571925747f18e951a38bf54eaf4aafe5ea0d0dfca54b943e42f949970dc0c594a0a912cea2da70940efcad3fe5"
+          },
+          "value": 0,
+          "valueSat": 0,
+          "sequence": 4294967295
+        },
+        {
+          "txid": "4cac49e16de372dfb4524f535450a9d94009ac8bbfd08cb86e41aae2ab77d80f",
+          "vout": 10,
+          "addresses": [
+            "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          ],
+          "minrequired": 1,
+          "scriptSig": {
+            "asm": "01010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b4039c6e3677be9a3d5c5cd9a6553f3f5d9d92bb5caebbb2d6a909ae154e9a5c32d7679b3c3feb8ec1f8afa1718b409b07656de0b06773cdc8ba709aedc121f0ee3",
+            "hex": "4c6701010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b4039c6e3677be9a3d5c5cd9a6553f3f5d9d92bb5caebbb2d6a909ae154e9a5c32d7679b3c3feb8ec1f8afa1718b409b07656de0b06773cdc8ba709aedc121f0ee3"
+          },
+          "value": 0,
+          "valueSat": 0,
+          "sequence": 4294967295
+        },
+        {
+          "txid": "9cf6bad1083887b11eefa4499802a6214565efeada4021799b3a91b8aa6fbcc8",
+          "vout": 2,
+          "addresses": [
+            "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+          ],
+          "minrequired": 1,
+          "scriptSig": {
+            "asm": "01010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b40356381c4ae3a2d05a3e1d062fcbd5cccee786b299c7f96c5c3078158f2c4dcb2134988adaf5b970e48c02981729183a405a46dff951bf6003f85af2e6d281da0",
+            "hex": "4c6701010101210295dc128746338640f2559f57b69dca08dbd2379cf78207460d44c9e823ba902b40356381c4ae3a2d05a3e1d062fcbd5cccee786b299c7f96c5c3078158f2c4dcb2134988adaf5b970e48c02981729183a405a46dff951bf6003f85af2e6d281da0"
+          },
+          "value": 0,
+          "valueSat": 0,
+          "sequence": 4294967295
+        }
+      ],
+      "vout": [
+        {
+          "value": 29.4402,
+          "valueSat": 2944020000,
+          "n": 0,
+          "scriptPubKey": {
+            "type": "cryptocondition",
+            "reservetransfer": {
+              "version": 1,
+              "currencyvalues": {
+                "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 29.44
+              },
+              "flags": 7,
+              "convert": true,
+              "preconvert": true,
+              "feecurrencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+              "fees": 0.0002,
+              "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "destination": {
+                "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+                "auxdests": [
+                  {
+                    "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+                    "type": 4
+                  }
+                ],
+                "type": 68
+              }
+            },
+            "spendableoutput": false,
+            "reqSigs": 1,
+            "addresses": [
+              "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU"
+            ],
+            "asm": "040300010114cb8a0f7f651b484a81e2312c3438deb601e27368 OP_CHECKCRYPTOCONDITION 040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c74011af5b8015c64d39ab44c60ead8317f9f5a9b6c4c89fae6bf00071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_DROP",
+            "hex": "1a040300010114cb8a0f7f651b484a81e2312c3438deb601e27368cc4c90040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c74011af5b8015c64d39ab44c60ead8317f9f5a9b6c4c89fae6bf00071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e2402175"
+          },
+          "spentTxId": "8c371fbf326ab0d3e03514ca2a904bb888a4e2735cdd99aebbe158b90c48edb2",
+          "spentIndex": 1,
+          "spentHeight": 3310356
+        },
+        {
+          "value": 0.0002,
+          "valueSat": 20000,
+          "n": 1,
+          "scriptPubKey": {
+            "type": "cryptocondition",
+            "reservetransfer": {
+              "version": 1,
+              "currencyvalues": {
+                "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY": 124.17411862
+              },
+              "flags": 7,
+              "convert": true,
+              "preconvert": true,
+              "feecurrencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+              "fees": 0.0002,
+              "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "destination": {
+                "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+                "auxdests": [
+                  {
+                    "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+                    "type": 4
+                  }
+                ],
+                "type": 68
+              }
+            },
+            "spendableoutput": false,
+            "reserve_balance": {
+              "vUSDT": 124.17411862
+            },
+            "reqSigs": 1,
+            "addresses": [
+              "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU"
+            ],
+            "asm": "040300010114cb8a0f7f651b484a81e2312c3438deb601e27368 OP_CHECKCRYPTOCONDITION 040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c74014558cef7fb1211e71ea8023ae17227b7b7f4a7fdada089d516071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_DROP",
+            "hex": "1a040300010114cb8a0f7f651b484a81e2312c3438deb601e27368cc4c90040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c74014558cef7fb1211e71ea8023ae17227b7b7f4a7fdada089d516071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e2402175"
+          },
+          "spentTxId": "8c371fbf326ab0d3e03514ca2a904bb888a4e2735cdd99aebbe158b90c48edb2",
+          "spentIndex": 2,
+          "spentHeight": 3310356
+        },
+        {
+          "value": 0.0002,
+          "valueSat": 20000,
+          "n": 2,
+          "scriptPubKey": {
+            "type": "cryptocondition",
+            "reservetransfer": {
+              "version": 1,
+              "currencyvalues": {
+                "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": 0.00138395
+              },
+              "flags": 7,
+              "convert": true,
+              "preconvert": true,
+              "feecurrencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+              "fees": 0.0002,
+              "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "destination": {
+                "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+                "auxdests": [
+                  {
+                    "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+                    "type": 4
+                  }
+                ],
+                "type": 68
+              }
+            },
+            "spendableoutput": false,
+            "reserve_balance": {
+              "tBTC": 0.00138395
+            },
+            "reqSigs": 1,
+            "addresses": [
+              "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU"
+            ],
+            "asm": "040300010114cb8a0f7f651b484a81e2312c3438deb601e27368 OP_CHECKCRYPTOCONDITION 040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c7201f87f6d4412dad7c4452e8293850df5327f02c30887b81b071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_DROP",
+            "hex": "1a040300010114cb8a0f7f651b484a81e2312c3438deb601e27368cc4c8e040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c7201f87f6d4412dad7c4452e8293850df5327f02c30887b81b071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e2402175"
+          },
+          "spentTxId": "8c371fbf326ab0d3e03514ca2a904bb888a4e2735cdd99aebbe158b90c48edb2",
+          "spentIndex": 3,
+          "spentHeight": 3310356
+        },
+        {
+          "value": 0.0002,
+          "valueSat": 20000,
+          "n": 3,
+          "scriptPubKey": {
+            "type": "cryptocondition",
+            "reservetransfer": {
+              "version": 1,
+              "currencyvalues": {
+                "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2": 32448670.89505966
+              },
+              "flags": 7,
+              "convert": true,
+              "preconvert": true,
+              "feecurrencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+              "fees": 0.0002,
+              "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "destination": {
+                "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+                "auxdests": [
+                  {
+                    "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+                    "type": 4
+                  }
+                ],
+                "type": 68
+              }
+            },
+            "spendableoutput": false,
+            "reserve_balance": {
+              "Bulls": 32448670.89505966
+            },
+            "reqSigs": 1,
+            "addresses": [
+              "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU"
+            ],
+            "asm": "040300010114cb8a0f7f651b484a81e2312c3438deb601e27368 OP_CHECKCRYPTOCONDITION 040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c7701a9c658f3c3135d95cce71575cb09da99031a57b184e0e586f0d9bc2e071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_DROP",
+            "hex": "1a040300010114cb8a0f7f651b484a81e2312c3438deb601e27368cc4c93040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c7701a9c658f3c3135d95cce71575cb09da99031a57b184e0e586f0d9bc2e071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e2402175"
+          },
+          "spentTxId": "8c371fbf326ab0d3e03514ca2a904bb888a4e2735cdd99aebbe158b90c48edb2",
+          "spentIndex": 4,
+          "spentHeight": 3310356
+        },
+        {
+          "value": 0.0002,
+          "valueSat": 20000,
+          "n": 4,
+          "scriptPubKey": {
+            "type": "cryptocondition",
+            "reservetransfer": {
+              "version": 1,
+              "currencyvalues": {
+                "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp": 32448735.98341101
+              },
+              "flags": 7,
+              "convert": true,
+              "preconvert": true,
+              "feecurrencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+              "fees": 0.0002,
+              "destinationcurrencyid": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+              "destination": {
+                "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+                "auxdests": [
+                  {
+                    "address": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+                    "type": 4
+                  }
+                ],
+                "type": 68
+              }
+            },
+            "spendableoutput": false,
+            "reserve_balance": {
+              "Bears": 32448735.98341101
+            },
+            "reqSigs": 1,
+            "addresses": [
+              "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU"
+            ],
+            "asm": "040300010114cb8a0f7f651b484a81e2312c3438deb601e27368 OP_CHECKCRYPTOCONDITION 040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c77012c4f07c32c38c8560934ce41c96ec2078dd79e4c84e0e59f90ad9e6d071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_DROP",
+            "hex": "1a040300010114cb8a0f7f651b484a81e2312c3438deb601e27368cc4c93040308010114cb8a0f7f651b484a81e2312c3438deb601e273684c77012c4f07c32c38c8560934ce41c96ec2078dd79e4c84e0e59f90ad9e6d071af5b8015c64d39ab44c60ead8317f9f5a9b6c4c809b204414120ff692fec0a969da7815f7a42e4ce6e1e2402101160414120ff692fec0a969da7815f7a42e4ce6e1e24021120ff692fec0a969da7815f7a42e4ce6e1e2402175"
+          },
+          "spentTxId": "8c371fbf326ab0d3e03514ca2a904bb888a4e2735cdd99aebbe158b90c48edb2",
+          "spentIndex": 5,
+          "spentHeight": 3310356
+        },
+        {
+          "value": 182.2377998,
+          "valueSat": 18223779980,
+          "n": 5,
+          "scriptPubKey": {
+            "type": "cryptocondition",
+            "evalnone": "valid",
+            "spendableoutput": true,
+            "reqSigs": 1,
+            "addresses": [
+              "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+            ],
+            "asm": "0403000000 OP_CHECKCRYPTOCONDITION 04030001011504120ff692fec0a969da7815f7a42e4ce6e1e24021 OP_DROP",
+            "hex": "050403000000cc1b04030001011504120ff692fec0a969da7815f7a42e4ce6e1e2402175"
+          },
+          "spentTxId": "07b1a85e599cc6e468ae63a9f590366533dde8d71c30808906f1cdb9d6834788",
+          "spentIndex": 1,
+          "spentHeight": 3419216
+        }
+      ],
+      "vjoinsplit": [],
+      "valueBalance": 0,
+      "vShieldedSpend": [],
+      "vShieldedOutput": [],
+      "blockhash": "000000000000499a15fe8ee10d568a35607879a53e497d91a8efb3a807cce01a",
+      "height": 3310354,
+      "confirmations": 1008182,
+      "time": 1731972611,
+      "blocktime": 1731972611
+    }
+  ]
+}

@@ -1,0 +1,194 @@
+{
+  "refund_fixtures": 5,
+  "refund_receipts": 10,
+  "burn_fixtures": 1,
+  "fixtures": [
+    {
+      "kind": "refund",
+      "file": "refund-bots-launch.json",
+      "txid": "7e5ff6e292f60d875b80d7b8d6111e54d01d6b2c919f4820e9ae20306177131c",
+      "height": 3311135,
+      "currency_id": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+      "state_flags": 5,
+      "receipts": [
+        {
+          "ordinal": 0,
+          "source_txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+          "source_vout": 0,
+          "flags": 7,
+          "currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "amount": "29.44000000",
+          "fee_currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "transfer_fee": "0.00020000",
+          "result_vout": 2,
+          "destination": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+        },
+        {
+          "ordinal": 1,
+          "source_txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+          "source_vout": 1,
+          "flags": 7,
+          "currency": "i9oCSqKALwJtcv49xUKS2U2i79h1kX6NEY",
+          "amount": "124.17411862",
+          "fee_currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "transfer_fee": "0.00020000",
+          "result_vout": 3,
+          "destination": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+        },
+        {
+          "ordinal": 2,
+          "source_txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+          "source_vout": 2,
+          "flags": 7,
+          "currency": "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU",
+          "amount": "0.00138395",
+          "fee_currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "transfer_fee": "0.00020000",
+          "result_vout": 4,
+          "destination": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+        },
+        {
+          "ordinal": 3,
+          "source_txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+          "source_vout": 3,
+          "flags": 7,
+          "currency": "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2",
+          "amount": "32448670.89505966",
+          "fee_currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "transfer_fee": "0.00020000",
+          "result_vout": 5,
+          "destination": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+        },
+        {
+          "ordinal": 4,
+          "source_txid": "f542528433d4f68fb704932010f374b8216f368d4dd0519839fd3bb9ac672da3",
+          "source_vout": 4,
+          "flags": 7,
+          "currency": "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp",
+          "amount": "32448735.98341101",
+          "fee_currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "transfer_fee": "0.00020000",
+          "result_vout": 6,
+          "destination": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p"
+        }
+      ]
+    },
+    {
+      "kind": "refund",
+      "file": "refund-bots.json",
+      "txid": "4aaecbff35b436a4b950aa7be18afaa696b0c3de5c7b3e9275172a2f1f0f12ad",
+      "height": 4032992,
+      "currency_id": "i582ifsBK7SUN32rrXU5inHfXB5YJq438p",
+      "state_flags": 37,
+      "receipts": [
+        {
+          "ordinal": 0,
+          "source_txid": "0834a74a84bc9b344c0707fc38ef98aa105a1986c64d34b99302cd4572027c8a",
+          "source_vout": 0,
+          "flags": 1027,
+          "currency": "i7Woqe6DzhKYe9vHAqCYSSwgk1LrvRcEAp",
+          "amount": "98008.73401981",
+          "fee_currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "transfer_fee": "0.00020010",
+          "result_vout": 2,
+          "destination": "RLd78pzMa8kghSZ746Sgnp2A93qZsMCHxE"
+        },
+        {
+          "ordinal": 1,
+          "source_txid": "5a54c7d62b0f0a7a551b95415402612b0c7e041c2563ced4090538f671ffc8fc",
+          "source_vout": 0,
+          "flags": 1027,
+          "currency": "iJxDEvJffuUNVRfCmDJN9nzCzjehj4n1e2",
+          "amount": "54631.76926177",
+          "fee_currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "transfer_fee": "0.00020010",
+          "result_vout": 3,
+          "destination": "RDfTcqVkrn3zWxfzYqtQkZELSJKLVYZUsr"
+        }
+      ]
+    },
+    {
+      "kind": "refund",
+      "file": "refund-eurc.json",
+      "txid": "1ec0943f2cf11529fdc4eaa2bf08c155d5579dbb48459133856627a893992b6f",
+      "height": 4037922,
+      "currency_id": "i4EwCbq21jeYxPngmorM9BdSoBdi191EQw",
+      "state_flags": 37,
+      "receipts": [
+        {
+          "ordinal": 0,
+          "source_txid": "392e6d3b8d3447cc37ee58088342abe44c4c5e128f6852cf307be8fb3eaf8580",
+          "source_vout": 0,
+          "flags": 1027,
+          "currency": "iC5TQFrFXSYLQGkiZ8FYmZHFJzaRF5CYgE",
+          "amount": "0.00088541",
+          "fee_currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "transfer_fee": "0.00020010",
+          "result_vout": 2,
+          "destination": "RW9dfRtnRUe6Zb8XGDLVtLqTPWBcUyTeEg"
+        }
+      ]
+    },
+    {
+      "kind": "refund",
+      "file": "refund-superbasket.json",
+      "txid": "d6dff9b8606595f44395a919024ac0a9637926ff0fa5f41db0ec62c1d955e096",
+      "height": 3895824,
+      "currency_id": "iFPazWbwUnTHQYUiH5upZMqBtcEhfRdE4v",
+      "state_flags": 37,
+      "receipts": [
+        {
+          "ordinal": 0,
+          "source_txid": "b84251c36bd48cc1f9f4a76859f6356f3ddf2730ed60c6c70802edb6e8e08a83",
+          "source_vout": 0,
+          "flags": 3,
+          "currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "amount": "5.00000000",
+          "fee_currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "transfer_fee": "0.00020010",
+          "result_vout": 2,
+          "destination": "RMuyJvYdkdTE68SDW2eGXsenbQE4oPUrRZ"
+        }
+      ]
+    },
+    {
+      "kind": "refund",
+      "file": "refund-tbtc.json",
+      "txid": "ce1140df9237e11a4bc6ba443f9f308e381fe45fafbeec90e47e685a2fd9e0a6",
+      "height": 3895824,
+      "currency_id": "i5csnsWTvJq8zqwdm2AKDyc9xmQro9AgYX",
+      "state_flags": 37,
+      "receipts": [
+        {
+          "ordinal": 0,
+          "source_txid": "cf54c19593cd3b65c366ed0716fc440d865f5836cc6bc9f7b4757c7cb19d5ee5",
+          "source_vout": 0,
+          "flags": 3,
+          "currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "amount": "5.00000000",
+          "fee_currency": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "transfer_fee": "0.00020010",
+          "result_vout": 2,
+          "destination": "RMuyJvYdkdTE68SDW2eGXsenbQE4oPUrRZ"
+        }
+      ]
+    },
+    {
+      "kind": "ethereum-dai-reserve-burn",
+      "file": "burn-ethereum-dai.json",
+      "txid": "3dc91a55d290aef54c3e2a0452bd519709f613b7bf7177b1403f8f4d43a57c7a",
+      "height": 3277394,
+      "main_import_vout": 0,
+      "companion_import_vout": 1,
+      "external_source_height": 21048511,
+      "export_digest": "72b2ea4fafbd20289a2eba80073fbdcd298daaf4631f1877cd772b310e9d7571",
+      "principal_dai": "3448.97439266",
+      "fee_dai": "0.14425030",
+      "dai_reserve_increase": "3449.11864296",
+      "unchanged_pool_supply": "749168.7840437",
+      "vrsc_reserve_withdrawal": "0.03973600",
+      "explicit_native_payments": "0.00397360",
+      "native_input_output_difference": "0.03576240"
+    }
+  ]
+}

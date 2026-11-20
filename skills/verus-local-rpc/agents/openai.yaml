@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verus Local RPC"
+  short_description: "Query a local Verus daemon safely"
+  default_prompt: "Use $verus-local-rpc to inspect the local Verus daemon with targeted read-only RPC calls."

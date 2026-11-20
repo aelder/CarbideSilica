@@ -1,0 +1,95 @@
+{
+  "export": {
+    "txid": "be18650c80273f3bacf2273829c1b92a203ed40c4bcb5dd735e4369768c33819",
+    "vout": [
+      {
+        "n": 0,
+        "scriptPubKey": {},
+        "value": 101.0026505,
+        "valueSat": 10100265050
+      },
+      {
+        "n": 1,
+        "scriptPubKey": {
+          "crosschainexport": {
+            "destinationcurrencyid": "i3f7tSctFkiPpiedY8QR5Tep9p4qDVebDx",
+            "destinationsystemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+            "firstinput": 1,
+            "flags": 128,
+            "hashtransfers": "f0dce1d7b03cde4eca8ac52fd5571ca607a6c0dfc0d6b35c34c87a2f323b10dc",
+            "numinputs": 12,
+            "rewardaddress": "RYTtgn6ZzRTJ8CQ75JzyWhEj18XKihZCtY",
+            "sourceheightend": 2758814,
+            "sourceheightstart": 2758806,
+            "sourcesystemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+            "totalamounts": {
+              "i3f7tSctFkiPpiedY8QR5Tep9p4qDVebDx": 1453.04389575,
+              "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 101.0026505
+            },
+            "totalburned": {},
+            "totalfees": {
+              "i3f7tSctFkiPpiedY8QR5Tep9p4qDVebDx": 0.32326096,
+              "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 0.0531505
+            },
+            "version": 1
+          },
+          "type": "cryptocondition"
+        },
+        "value": 0.0,
+        "valueSat": 0
+      },
+      {
+        "n": 2,
+        "scriptPubKey": {
+          "finalizeexport": {
+            "currencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+            "finalizationtype": 2,
+            "output": {
+              "txid": "0000000000000000000000000000000000000000000000000000000000000000",
+              "voutnum": 1
+            },
+            "status": "pending"
+          },
+          "type": "cryptocondition"
+        },
+        "value": 0.0,
+        "valueSat": 0
+      }
+    ],
+    "capture": "VRSC mainnet cache, block 2758816, finalization output 2 references export output 1"
+  },
+  "legacy": {
+    "txid": "a9130ff3282547fa33d182129832752fd0b7956e0d2e763c4229064a034a0a89",
+    "vout": [
+      {
+        "value": 0.000988,
+        "valueZat": 98800,
+        "valueSat": 98800,
+        "n": 0,
+        "scriptPubKey": {
+          "hex": "21020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9ac",
+          "type": "pubkey"
+        },
+        "spentTxId": "c6c5a9cb79f81be99d31670ae24756a7354b4531be5bed06302b5af812fcfb02",
+        "spentIndex": 974,
+        "spentHeight": 266266
+      },
+      {
+        "value": 0.0,
+        "valueZat": 0,
+        "valueSat": 0,
+        "n": 1,
+        "scriptPubKey": {
+          "hex": "6a4c6d88f66090cfd1b091e054cad11611a02c7c6e935fd6fef7985606000000000000187b0300e7528588d98ae2fcd8ec2a3445ca39a2595f3d0b9c015cf7aac993a72417995f5652534300554575fa161a811a38f52801cc4f83d142664e19bd4bc286cf3a988a48f9f4483e030100",
+          "type": "nulldata"
+        }
+      }
+    ],
+    "capture": "VRSC block 228124, saved stakeguard capture blocks-228112-228131.jsonl.gz",
+    "height": 228124,
+    "notarized_height": 228120,
+    "notarized_hash": "000000000000065698f7fed65f936e7c2ca01116d1ca54e091b0d1cf9060f688",
+    "notarized_time": 1540992115,
+    "destination_txid": "5f991724a793c9aaf75c019c0b3d5f59a239ca45342aecd8fce28ad9888552e7"
+  }
+}

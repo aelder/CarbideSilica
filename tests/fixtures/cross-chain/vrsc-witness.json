@@ -1,0 +1,142 @@
+{
+  "txid": "8709b2dc58acd1f8f7912aa8723b194f9a8820b0d3b55cfd1666930c40a9da00",
+  "overwintered": true,
+  "version": 4,
+  "versiongroupid": "892f2085",
+  "locktime": 0,
+  "expiryheight": 3083127,
+  "vin": [
+    {
+      "txid": "12d656e5598e416b5f958b2c73e1aaaa6a7a2138b70418bd511238f0bacfa688",
+      "vout": 2,
+      "addresses": [
+        "iByTJrnrwStZyV2qnLg5jipp12rnAPfCZZ"
+      ],
+      "minrequired": 1,
+      "scriptSig": {},
+      "value": 0.09249547,
+      "valueSat": 9249547,
+      "sequence": 4294967295
+    }
+  ],
+  "vout": [
+    {
+      "value": 0,
+      "valueSat": 0,
+      "n": 0,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "finalizenotarization": {
+          "finalizationtype": 1,
+          "status": "pending",
+          "evidenceoutputs": [
+            1
+          ],
+          "currencyid": "i9nwxtKuVYX4MSbeULLiK2ttVi6rUEhh4X",
+          "output": {
+            "txid": "99cb138ed3e09a835acbb6673a6320ef41fc6b9563a94c8964ac295bd2ad513d",
+            "voutnum": 1
+          }
+        },
+        "spendableoutput": false,
+        "reqSigs": 1,
+        "addresses": [
+          "RRbKYitLH9EhQCvCo4bPZqJx3TWxASadxE"
+        ]
+      },
+      "spentTxId": "b31de1b5fb1859ef2d2da776f94a92d374727b5f7ce9ed69aea0b15770e191c3",
+      "spentIndex": 1,
+      "spentHeight": 3083108
+    },
+    {
+      "value": 0,
+      "valueSat": 0,
+      "n": 1,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "notaryevidence": {
+          "version": 1,
+          "type": 1,
+          "systemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "output": {
+            "txid": "99cb138ed3e09a835acbb6673a6320ef41fc6b9563a94c8964ac295bd2ad513d",
+            "voutnum": 1
+          },
+          "state": 1,
+          "evidence": {
+            "version": 1,
+            "chainobjects": [
+              {
+                "vdxftype": "i4rEBcdKyPW3NF1MoJWq2znsgtQE5myHhj",
+                "value": {
+                  "version": 1,
+                  "chainobjects": [
+                    {
+                      "vdxftype": "i6ZGLNfqu4cQ3h98VHimETwnWtizMwCJw6",
+                      "value": {
+                        "version": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "vdxftype": "iP1QT5ee7EP63WSrfjiMFc1dVJVSAy85cT",
+                "value": {
+                  "version": 1,
+                  "systemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+                  "output": {
+                    "txid": "99cb138ed3e09a835acbb6673a6320ef41fc6b9563a94c8964ac295bd2ad513d",
+                    "voutnum": 1
+                  },
+                  "confirmed": true,
+                  "signatures": {
+                    "iByTJrnrwStZyV2qnLg5jipp12rnAPfCZZ": {
+                      "version": 2,
+                      "blockheight": 3083106,
+                      "hashtype": "keccak",
+                      "signatures": [
+                        "1fde789d8ab3ce316f675ca38ed259cb738532cda9b2102ac55f397033483e236476911337e238cb928301ee74d258c8875a5d22fa92d802a503d2a9152b0527c0"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "spendableoutput": false,
+        "reqSigs": 1,
+        "addresses": [
+          "RQWMeecjGFF3ZAVeSimRbyG9iMDUHPY5Ny"
+        ]
+      }
+    },
+    {
+      "value": 0.09239547,
+      "valueSat": 9239547,
+      "n": 2,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "evalnone": "valid",
+        "spendableoutput": true,
+        "reqSigs": 1,
+        "addresses": [
+          "iByTJrnrwStZyV2qnLg5jipp12rnAPfCZZ"
+        ]
+      },
+      "spentTxId": "b5537bbcdcd9d3601b383484216dc8a651ffa565bd36199a52db716e7dd1e083",
+      "spentIndex": 0,
+      "spentHeight": 3083118
+    }
+  ],
+  "vjoinsplit": [],
+  "valueBalance": 0,
+  "vShieldedSpend": [],
+  "vShieldedOutput": [],
+  "blockhash": "f5c99e961ff1c62f35eea5a2a8cc0da6f6d5799f6d1ace0e1347b2495264bc6b",
+  "height": 3083107,
+  "confirmations": 1152436,
+  "time": 1717905862,
+  "blocktime": 1717905862
+}

@@ -1,0 +1,20 @@
+{
+  "note": "Synthetic currency bundle with an indexed ratio and a lump-sum ask.",
+  "currency_i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV_offers_in_currency_i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": [
+    {
+      "currencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+      "price": 3.9e-07,
+      "offer": {
+        "offer": {
+          "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 0.0001,
+          "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2": 1e-08
+        },
+        "accept": {
+          "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": 258
+        },
+        "blockexpiry": 7777777,
+        "txid": "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7"
+      }
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "note": "Synthetic decoded identity import for UI and source-provenance tests.",
+  "txid": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+  "vin": [],
+  "vout": [
+    {
+      "n": 0,
+      "valueSat": 0,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "crosschainimport": {
+          "flags": 4,
+          "sourcesystemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "sourceheight": 10,
+          "numoutputs": 1,
+          "exporttxid": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4"
+        }
+      }
+    },
+    {
+      "n": 1,
+      "valueSat": 0,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "crosschainimport": {
+          "flags": 64
+        }
+      }
+    },
+    {
+      "n": 2,
+      "valueSat": 0,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "notaryevidence": {}
+      }
+    },
+    {
+      "n": 3,
+      "valueSat": 0,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "notaryevidence": {}
+      }
+    },
+    {
+      "n": 4,
+      "valueSat": 0,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "crosschainexport": {
+          "issupplemental": true,
+          "transfers": [
+            {
+              "flags": 4096,
+              "destination": {
+                "identity": {
+                  "version": 3,
+                  "name": "vARRR",
+                  "identityaddress": "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2",
+                  "systemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+                  "parent": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+                  "revocationauthority": "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2",
+                  "recoveryauthority": "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "n": 5,
+      "valueSat": 0,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "identityprimary": {
+          "version": 3,
+          "name": "vARRR",
+          "identityaddress": "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2",
+          "systemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "parent": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "revocationauthority": "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2",
+          "recoveryauthority": "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2"
+        },
+        "addresses": [
+          "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2"
+        ]
+      }
+    }
+  ]
+}

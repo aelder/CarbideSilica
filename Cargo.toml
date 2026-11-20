@@ -1,0 +1,48 @@
+[package]
+name = "verus-explorer-tui"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "A terminal blockchain explorer for Verus and PBaaS chains"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "vcarbide"
+path = "src/main.rs"
+
+[features]
+default = []
+public-api = []
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+clap = { version = "4.6", features = ["derive", "env"] }
+crossterm = "0.29"
+directories = "6"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+maxminddb = "0.30"
+rand = "0.10"
+ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls"] }
+ripemd = "0.1"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+time = { version = "0.3.55", features = ["formatting"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tokio = { version = "1.53", features = ["fs", "macros", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+toml = "0.8"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["process", "signal", "fs"] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = "z"
+panic = "abort"
+strip = "symbols"

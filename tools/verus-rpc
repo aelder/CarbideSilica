@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly PROGRAM=${0##*/}
+readonly DEFAULT_CHAIN=VRSC
+readonly DEFAULT_HOST=127.0.0.1
+readonly CONNECT_TIMEOUT=10
+readonly RESPONSE_TIMEOUT=60
+readonly LOCK_FILE=${TMPDIR:-/tmp}/verus-rpc-wrapper.lock
+
+chain=$DEFAULT_CHAIN
+testnet=false
+conf_file=
+host=$DEFAULT_HOST
+port=
+raw_params=
+
+usage() {
+    cat <<EOF
+Usage: $PROGRAM [OPTIONS] METHOD [PARAM ...]
+
+Call an allowlisted read-only RPC on a loopback Verus daemon.
+
+Options:
+  -chain=NAME, --chain NAME    Chain name (default: VRSC)
+  -testnet, --testnet          Use the VRSC testnet default RPC port
+  --conf PATH                  Read RPC credentials and port from PATH
+  --host HOST                  Loopback host: 127.0.0.1 or ::1
+  --port PORT                  Override the RPC port
+  --raw-params JSON            Supply the complete params array as JSON
+  -h, --help                   Show this help
+
+Unquoted parameters that are valid JSON retain their JSON type. Other
+parameters become JSON strings. Use --raw-params when exact typing matters.
+
+Examples:
+  $PROGRAM getinfo
+  $PROGRAM getblock 4221288 1
+  $PROGRAM getrawtransaction TXID 1
+  $PROGRAM getimports 'NATI🦉' 3230833 3231832
+  $PROGRAM --raw-params '["SUPER🛒",3437350,3438350]' getimports
+EOF
+}
+
+die() {
+    printf '%s: %s\n' "$PROGRAM" "$*" >&2
+    exit 64
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
+}
+
+config_value() {
+    local key=$1
+    local line value
+    line=$(sed -nE "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*(.*)$/\\1/ip" "$conf_file" | tail -n 1)
+    value=${line%$'\r'}
+    if [[ $value == \"*\" && $value == *\" ]]; then
+        value=${value:1:${#value}-2}
+    elif [[ $value == \'*\' && $value == *\' ]]; then
+        value=${value:1:${#value}-2}
+    fi
+    printf '%s' "$value"
+}
+
+is_allowed_method() {
+    case $1 in
+        getaddressbalance | getaddresstxids | getaddressutxos | getblock | \
+            getblockchaininfo | getblockcount | getcurrency | getcurrencyconverters | \
+            getcurrencystate | getexports | getidentitieswithaddress | \
+            getidentitieswithrecovery | getidentitieswithrevocation | getidentity | \
+            getidentitycontent | getidentityhistory | getimports | getinfo | \
+            getmininginfo | getnetworkinfo | getnettotals | getoffers | \
+            getpeerinfo | getpendingtransfers | getrawmempool | getrawtransaction | \
+            gettransaction | gettxout | help | listcurrencies)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+curl_config_escape() {
+    local value=$1
+    value=${value//\\/\\\\}
+    value=${value//\"/\\\"}
+    printf '%s' "$value"
+}
+
+while (($#)); do
+    case $1 in
+        -chain=*)
+            chain=${1#*=}
+            shift
+            ;;
+        --chain | -chain)
+            (($# >= 2)) || die "$1 requires a value"
+            chain=$2
+            shift 2
+            ;;
+        -testnet | --testnet)
+            testnet=true
+            shift
+            ;;
+        --conf)
+            (($# >= 2)) || die "--conf requires a path"
+            conf_file=$2
+            shift 2
+            ;;
+        --host)
+            (($# >= 2)) || die "--host requires a value"
+            host=$2
+            shift 2
+            ;;
+        --port)
+            (($# >= 2)) || die "--port requires a value"
+            port=$2
+            shift 2
+            ;;
+        --raw-params)
+            (($# >= 2)) || die "--raw-params requires a JSON array"
+            raw_params=$2
+            shift 2
+            ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            die "unknown option: $1"
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+(($# >= 1)) || die "an RPC method is required"
+method=$1
+shift
+is_allowed_method "$method" || die "RPC method is not in the read-only allowlist: $method"
+
+case $host in
+    127.0.0.1 | ::1 | '[::1]') ;;
+    *) die "refusing non-loopback RPC host: $host" ;;
+esac
+
+require_command curl
+require_command jq
+require_command flock
+
+if [[ -z $conf_file ]]; then
+    conf_file=${VERUS_CONF:-$HOME/.komodo/$chain/$chain.conf}
+fi
+[[ -r $conf_file ]] || die "configuration file is not readable: $conf_file"
+
+rpc_user=$(config_value rpcuser)
+rpc_password=$(config_value rpcpassword)
+[[ -n $rpc_user ]] || die "rpcuser is missing from $conf_file"
+[[ -n $rpc_password ]] || die "rpcpassword is missing from $conf_file"
+
+if [[ -z $port ]]; then
+    port=$(config_value rpcport)
+fi
+if [[ -z $port ]]; then
+    if [[ ${chain,,} == vrsc && $testnet == true ]]; then
+        port=27484
+    else
+        port=27486
+    fi
+fi
+[[ $port =~ ^[0-9]+$ ]] && ((port >= 1 && port <= 65535)) || die "invalid RPC port: $port"
+
+if [[ -n $raw_params ]]; then
+    (($# == 0)) || die "do not combine --raw-params with positional parameters"
+    jq -e 'type == "array"' >/dev/null 2>&1 <<<"$raw_params" || die "--raw-params must be a JSON array"
+    params=$(jq -c . <<<"$raw_params")
+else
+    encoded_params=()
+    for parameter in "$@"; do
+        if jq -e . >/dev/null 2>&1 <<<"$parameter"; then
+            encoded_params+=("$(jq -c . <<<"$parameter")")
+        else
+            encoded_params+=("$(jq -cn --arg value "$parameter" '$value')")
+        fi
+    done
+    if ((${#encoded_params[@]})); then
+        joined=$(IFS=,; printf '%s' "${encoded_params[*]}")
+        params=[$joined]
+    else
+        params=[]
+    fi
+fi
+
+request=$(jq -cn --arg method "$method" --argjson params "$params" \
+    '{jsonrpc:"1.0",id:"verus-rpc-wrapper",method:$method,params:$params}')
+
+auth_file=$(mktemp "${TMPDIR:-/tmp}/verus-rpc-auth.XXXXXX")
+trap 'rm -f "$auth_file"' EXIT
+chmod 600 "$auth_file"
+printf 'user = "%s:%s"\n' \
+    "$(curl_config_escape "$rpc_user")" \
+    "$(curl_config_escape "$rpc_password")" >"$auth_file"
+
+exec 9>"$LOCK_FILE"
+flock -w "$((CONNECT_TIMEOUT + RESPONSE_TIMEOUT + 5))" 9 || {
+    printf '%s: timed out waiting for another RPC wrapper call\n' "$PROGRAM" >&2
+    exit 75
+}
+
+if [[ $host == ::1 ]]; then
+    rpc_url="http://[::1]:$port/"
+else
+    rpc_url="http://$host:$port/"
+fi
+
+if response=$(curl \
+    --config "$auth_file" \
+    --silent \
+    --show-error \
+    --connect-timeout "$CONNECT_TIMEOUT" \
+    --max-time "$RESPONSE_TIMEOUT" \
+    --header 'content-type: application/json' \
+    --data-binary "$request" \
+    "$rpc_url"); then
+    :
+else
+    status=$?
+    printf '%s: transport failure calling %s (curl exit %d)\n' \
+        "$PROGRAM" "$method" "$status" >&2
+    exit "$status"
+fi
+
+if ! jq -e 'type == "object" and has("result") and has("error")' >/dev/null 2>&1 <<<"$response"; then
+    printf '%s: invalid JSON-RPC response calling %s\n' "$PROGRAM" "$method" >&2
+    printf '%s\n' "$response" >&2
+    exit 70
+fi
+
+if jq -e '.error != null' >/dev/null 2>&1 <<<"$response"; then
+    printf '%s: RPC error calling %s: ' "$PROGRAM" "$method" >&2
+    jq -c '.error' <<<"$response" >&2
+    exit 69
+fi
+
+jq '.result' <<<"$response"

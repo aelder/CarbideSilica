@@ -1,0 +1,431 @@
+{
+  "txid": "1126d448f635d933bfc23805985775ec103f2c05ed1e830c9796002ae401c06d",
+  "overwintered": true,
+  "version": 4,
+  "versiongroupid": "892f2085",
+  "locktime": 0,
+  "expiryheight": 3241038,
+  "vin": [
+    {
+      "txid": "03b0c37439cf08837132bb68d9cb6ae9812e332377c2add84e040b462a4a102a",
+      "vout": 0,
+      "addresses": [
+        "RDTq9qn1Lthv7fvsdbWz36mGp8HK9XaruZ"
+      ],
+      "minrequired": 1,
+      "scriptSig": {},
+      "value": 0,
+      "valueSat": 0,
+      "sequence": 4294967295
+    },
+    {
+      "txid": "03b0c37439cf08837132bb68d9cb6ae9812e332377c2add84e040b462a4a102a",
+      "vout": 5,
+      "addresses": [
+        "RRbKYitLH9EhQCvCo4bPZqJx3TWxASadxE"
+      ],
+      "minrequired": 1,
+      "scriptSig": {},
+      "value": 0,
+      "valueSat": 0,
+      "sequence": 4294967295
+    },
+    {
+      "txid": "03b0c37439cf08837132bb68d9cb6ae9812e332377c2add84e040b462a4a102a",
+      "vout": 3,
+      "addresses": [
+        "RRbKYitLH9EhQCvCo4bPZqJx3TWxASadxE"
+      ],
+      "minrequired": 1,
+      "scriptSig": {},
+      "value": 0,
+      "valueSat": 0,
+      "sequence": 4294967295
+    },
+    {
+      "txid": "59ae0b6c053db97b1222b1d28055d0f4fb435806284ad807f9e7724631c1c141",
+      "vout": 1,
+      "addresses": [
+        "i4NpJp1vqrXgDvSNBXkNYvTR1VF2HMkeDA"
+      ],
+      "minrequired": 1,
+      "scriptSig": {},
+      "value": 0.02306767,
+      "valueSat": 2306767,
+      "sequence": 4294967295
+    }
+  ],
+  "vout": [
+    {
+      "value": 0,
+      "valueSat": 0,
+      "n": 0,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "acceptednotarization": {
+          "version": 2,
+          "launchcleared": true,
+          "launchconfirmed": true,
+          "launchcomplete": true,
+          "ismirror": true,
+          "proposer": {
+            "address": "RNPkZtfV6yg5qPNChp3kUjLUsM7wvy3qB4",
+            "auxdests": [
+              {
+                "address": "i4NpJp1vqrXgDvSNBXkNYvTR1VF2HMkeDA",
+                "type": 4
+              }
+            ],
+            "type": 66
+          },
+          "currencyid": "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N",
+          "notarizationheight": 82024,
+          "currencystate": {
+            "flags": 48,
+            "version": 1,
+            "currencyid": "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N",
+            "launchcurrencies": [
+              {
+                "currencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+                "weight": 0,
+                "reserves": 1,
+                "priceinreserve": 1
+              }
+            ],
+            "initialsupply": 0,
+            "emitted": 0,
+            "supply": 862300,
+            "currencies": {
+              "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": {
+                "reservein": 0,
+                "primarycurrencyin": 0,
+                "reserveout": 0,
+                "lastconversionprice": 1,
+                "viaconversionprice": 0,
+                "fees": 0.00025,
+                "conversionfees": 0,
+                "priorweights": 0
+              }
+            },
+            "primarycurrencyfees": 0,
+            "primarycurrencyconversionfees": 0,
+            "primarycurrencyout": 0,
+            "preconvertedout": 0
+          },
+          "prevnotarizationtxid": "38747ffac047a5eeadfa63c7279d64338de4511e0ab3957507d720c78d382dd6",
+          "prevnotarizationout": 1,
+          "prevheight": 3240942,
+          "hashprevcrossnotarization": "64242c5c3719491dff29266d79376e2085c0195e131790e8cc356ac678d5007c",
+          "currencystates": [
+            {
+              "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": {
+                "flags": 16,
+                "version": 1,
+                "currencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+                "launchcurrencies": [],
+                "initialsupply": 0,
+                "emitted": 0,
+                "supply": 0,
+                "primarycurrencyfees": 0,
+                "primarycurrencyconversionfees": 0,
+                "primarycurrencyout": 0,
+                "preconvertedout": 0
+              }
+            },
+            {
+              "i6j1rzjgrDhSmUYiTtp21J8Msiudv5hgt9": {
+                "flags": 49,
+                "version": 1,
+                "currencyid": "i6j1rzjgrDhSmUYiTtp21J8Msiudv5hgt9",
+                "reservecurrencies": [
+                  {
+                    "currencyid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+                    "weight": 0.2,
+                    "reserves": 20608.25454795,
+                    "priceinreserve": 1.74354491
+                  },
+                  {
+                    "currencyid": "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N",
+                    "weight": 0.2,
+                    "reserves": 19633.29900785,
+                    "priceinreserve": 1.66105958
+                  },
+                  {
+                    "currencyid": "i9nwxtKuVYX4MSbeULLiK2ttVi6rUEhh4X",
+                    "weight": 0.2,
+                    "reserves": 28.93494252,
+                    "priceinreserve": 0.00244801
+                  },
+                  {
+                    "currencyid": "iGBs4DWztRNvNEJBt4mqHszLxfKTNHTkhM",
+                    "weight": 0.2,
+                    "reserves": 77302.30556743,
+                    "priceinreserve": 6.54009982
+                  },
+                  {
+                    "currencyid": "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU",
+                    "weight": 0.2,
+                    "reserves": 1.16333967,
+                    "priceinreserve": 0.00009842
+                  }
+                ],
+                "initialsupply": 85000,
+                "emitted": 0,
+                "supply": 59098.71989643,
+                "currencies": {
+                  "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV": {
+                    "reservein": 0,
+                    "primarycurrencyin": 0,
+                    "reserveout": 0.04184915,
+                    "lastconversionprice": 1.74354845,
+                    "viaconversionprice": 1.74318488,
+                    "fees": 0,
+                    "conversionfees": 0,
+                    "priorweights": 0.2
+                  },
+                  "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N": {
+                    "reservein": 0.0398875,
+                    "primarycurrencyin": 0,
+                    "reserveout": 0.00506519,
+                    "lastconversionprice": 1.66105823,
+                    "viaconversionprice": 1.66071042,
+                    "fees": 0.00086034,
+                    "conversionfees": 0.00001992,
+                    "priorweights": 0.2
+                  },
+                  "i9nwxtKuVYX4MSbeULLiK2ttVi6rUEhh4X": {
+                    "reservein": 0,
+                    "primarycurrencyin": 0,
+                    "reserveout": 0.02986305,
+                    "lastconversionprice": 0.00245054,
+                    "viaconversionprice": 0.002449,
+                    "fees": 0,
+                    "conversionfees": 0,
+                    "priorweights": 0.2
+                  },
+                  "iGBs4DWztRNvNEJBt4mqHszLxfKTNHTkhM": {
+                    "reservein": 0,
+                    "primarycurrencyin": 0,
+                    "reserveout": 0,
+                    "lastconversionprice": 6.54009982,
+                    "viaconversionprice": 6.53874768,
+                    "fees": 0,
+                    "conversionfees": 0,
+                    "priorweights": 0.2
+                  },
+                  "iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU": {
+                    "reservein": 0.0012,
+                    "primarycurrencyin": 0,
+                    "reserveout": 0,
+                    "lastconversionprice": 0.00009836,
+                    "viaconversionprice": 0.0000984,
+                    "fees": 6e-7,
+                    "conversionfees": 6e-7,
+                    "priorweights": 0.2
+                  }
+                },
+                "primarycurrencyfees": 0,
+                "primarycurrencyconversionfees": 0,
+                "primarycurrencyout": 0,
+                "preconvertedout": 0
+              }
+            }
+          ],
+          "proofroots": [
+            {
+              "version": 1,
+              "type": 1,
+              "systemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+              "height": 3240950,
+              "stateroot": "004ffecfd89d9629496c70a40e7283b2c45bdeeda360f05bf825320675a257b2",
+              "blockhash": "eae0680125db5adf9d565b0a8bbecf7d80e5a6fdc2054c0f7bd2888cdbc3c524",
+              "power": "00000000000d79d20be14cbe6add8dfb000000026e5624a44381e73f080f47a6"
+            },
+            {
+              "version": 1,
+              "type": 1,
+              "systemid": "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N",
+              "height": 82024,
+              "stateroot": "b203205413bee4250c59b50d58cbea8fd854cff79398274c1454b0094484e983",
+              "blockhash": "0000000000015d8a4d6149f52225064dd8f568015eae19dd3de29c3cb39cd1ef",
+              "power": "000000000000000004caec563222c93e00000000000000002a66b1cb05a6c0a5"
+            }
+          ],
+          "nodes": [
+            {
+              "networkaddress": "192.0.2.1:21777",
+              "nodeidentity": "i3UXS5QPRQGNRDDqVnyWTnmFCTHDbzmsYk"
+            },
+            {
+              "networkaddress": "192.0.2.2:21777",
+              "nodeidentity": "i3UXS5QPRQGNRDDqVnyWTnmFCTHDbzmsYk"
+            }
+          ]
+        },
+        "spendableoutput": false,
+        "reqSigs": 1,
+        "addresses": [
+          "RDTq9qn1Lthv7fvsdbWz36mGp8HK9XaruZ"
+        ]
+      },
+      "spentTxId": "34af8bf34cd6a84140c764a25c21fdaeedad74b157afb6a6c578cc13c783d0d1",
+      "spentIndex": 0,
+      "spentHeight": 3241039
+    },
+    {
+      "value": 0,
+      "valueSat": 0,
+      "n": 1,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "notaryevidence": {
+          "version": 1,
+          "type": 2,
+          "systemid": "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N",
+          "output": {
+            "txid": "7a0c534e47bd49ae95ebfde33cf881eed94bc8779cb707afd703cdef08a646b2",
+            "voutnum": 1
+          },
+          "state": 6
+        },
+        "spendableoutput": false,
+        "reqSigs": 1,
+        "addresses": [
+          "RQWMeecjGFF3ZAVeSimRbyG9iMDUHPY5Ny"
+        ]
+      }
+    },
+    {
+      "value": 0,
+      "valueSat": 0,
+      "n": 2,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "notaryevidence": {
+          "version": 1,
+          "type": 2,
+          "systemid": "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N",
+          "output": {
+            "txid": "7a0c534e47bd49ae95ebfde33cf881eed94bc8779cb707afd703cdef08a646b2",
+            "voutnum": 1
+          },
+          "state": 6
+        },
+        "spendableoutput": false,
+        "reqSigs": 1,
+        "addresses": [
+          "RQWMeecjGFF3ZAVeSimRbyG9iMDUHPY5Ny"
+        ]
+      }
+    },
+    {
+      "value": 0,
+      "valueSat": 0,
+      "n": 3,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "finalizenotarization": {
+          "finalizationtype": 1,
+          "status": "pending",
+          "evidenceoutputs": [
+            1,
+            2
+          ],
+          "currencyid": "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N",
+          "output": {
+            "txid": "0000000000000000000000000000000000000000000000000000000000000000",
+            "voutnum": 0
+          }
+        },
+        "spendableoutput": false,
+        "reqSigs": 1,
+        "addresses": [
+          "RRbKYitLH9EhQCvCo4bPZqJx3TWxASadxE"
+        ]
+      },
+      "spentTxId": "34af8bf34cd6a84140c764a25c21fdaeedad74b157afb6a6c578cc13c783d0d1",
+      "spentIndex": 2,
+      "spentHeight": 3241039
+    },
+    {
+      "value": 0,
+      "valueSat": 0,
+      "n": 4,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "notaryevidence": {
+          "version": 1,
+          "type": 1,
+          "systemid": "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV",
+          "output": {
+            "txid": "03b0c37439cf08837132bb68d9cb6ae9812e332377c2add84e040b462a4a102a",
+            "voutnum": 0
+          },
+          "state": 1
+        },
+        "spendableoutput": false,
+        "reqSigs": 1,
+        "addresses": [
+          "RQWMeecjGFF3ZAVeSimRbyG9iMDUHPY5Ny"
+        ]
+      }
+    },
+    {
+      "value": 0,
+      "valueSat": 0,
+      "n": 5,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "finalizenotarization": {
+          "finalizationtype": 129,
+          "status": "confirmed",
+          "evidenceinputs": [
+            2
+          ],
+          "evidenceoutputs": [
+            4
+          ],
+          "currencyid": "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N",
+          "output": {
+            "txid": "03b0c37439cf08837132bb68d9cb6ae9812e332377c2add84e040b462a4a102a",
+            "voutnum": 0
+          }
+        },
+        "spendableoutput": false,
+        "reqSigs": 1,
+        "addresses": [
+          "RRbKYitLH9EhQCvCo4bPZqJx3TWxASadxE"
+        ]
+      },
+      "spentTxId": "34af8bf34cd6a84140c764a25c21fdaeedad74b157afb6a6c578cc13c783d0d1",
+      "spentIndex": 1,
+      "spentHeight": 3241039
+    },
+    {
+      "value": 0.02006767,
+      "valueSat": 2006767,
+      "n": 6,
+      "scriptPubKey": {
+        "type": "cryptocondition",
+        "evalnone": "valid",
+        "spendableoutput": true,
+        "reqSigs": 1,
+        "addresses": [
+          "i4NpJp1vqrXgDvSNBXkNYvTR1VF2HMkeDA"
+        ]
+      },
+      "spentTxId": "dcc0c89687a53b1bd77306a8b7958cc480b6ab0a4cf47e80c32e6471b7ebd624",
+      "spentIndex": 1,
+      "spentHeight": 3367892
+    }
+  ],
+  "vjoinsplit": [],
+  "valueBalance": 0,
+  "vShieldedSpend": [],
+  "vShieldedOutput": [],
+  "blockhash": "0000000000001cae9b3685d384329179efe45c31727305d8d324417f7065ebfe",
+  "height": 3241019,
+  "confirmations": 993141,
+  "time": 1727679697,
+  "blocktime": 1727679697
+}

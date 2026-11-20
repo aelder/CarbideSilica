@@ -1,0 +1,73 @@
+{
+  "note": "Synthetic consumed outputs with reserve metadata and nonconsecutive funding transactions.",
+  "sources": [
+    {
+      "txid": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+      "vout": [
+        {
+          "value": 0,
+          "valueSat": 0,
+          "n": 5,
+          "scriptPubKey": {
+            "type": "cryptocondition",
+            "reserveoutput": {
+              "version": 1,
+              "currencyvalues": {
+                "i6j1rzjgrDhSmUYiTtp21J8Msiudv5hgt9": 12.12500001
+              }
+            },
+            "spendableoutput": true,
+            "reserve_balance": {
+              "Bridge": 12.12500001
+            },
+            "reqSigs": 1,
+            "addresses": [
+              "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2"
+            ]
+          }
+        },
+        {
+          "value": 0,
+          "valueSat": 0,
+          "n": 6,
+          "scriptPubKey": {
+            "type": "cryptocondition",
+            "reserveoutput": {
+              "version": 1,
+              "currencyvalues": {
+                "i7neKkvaZPnvfL6bcCnpe32vim4kaMDbWQ": 34.37500002
+              }
+            },
+            "spendableoutput": true,
+            "reserve_balance": {
+              "PUMP": 34.37500002
+            },
+            "reqSigs": 1,
+            "addresses": [
+              "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "txid": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+      "vout": [
+        {
+          "value": 0.0001,
+          "valueSat": 10000,
+          "n": 0,
+          "scriptPubKey": {
+            "type": "cryptocondition",
+            "evalnone": "valid",
+            "spendableoutput": true,
+            "reqSigs": 1,
+            "addresses": [
+              "iExBJfZYK7KREDpuhj6PzZBzqMAKaFg7d2"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
