@@ -256,7 +256,7 @@ def run():
         terminal = Terminal(root, confs[0])
         try:
             screen = terminal.key(b"\x1b[17~", 0.6)
-            assert "Cached observation" in screen and "coinbase" in screen, screen
+            assert "Cached observation" in screen and "Coinbase" in screen, screen
             screen = terminal.key(b"\r", 0.7)
             assert f"Object system: {VDEX}" in screen, screen
             assert len(servers[1].calls) == before

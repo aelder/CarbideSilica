@@ -72,10 +72,10 @@ def run():
                 assert not any(method == 'getaddressbalance' and ADDRESS in str(params)
                                for method, params in source.requests), source.requests
                 terminal.key(b'?', .2)
-                wait(terminal, 'Verus Explorer TUI')
+                wait(terminal, 'Verus Carbide help')
                 terminal.key(b'\x1b', .2)
                 assert ADDRESS in terminal.screen(), terminal.screen()
-                assert 'Verus Explorer TUI' not in terminal.screen(), terminal.screen()
+                assert 'Verus Carbide help' not in terminal.screen(), terminal.screen()
                 terminal.key(b'\x1b', .3)
                 wait(terminal, cross['txid'])
 

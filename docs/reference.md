@@ -29,7 +29,7 @@ Function keys open workspaces and investigation tools. F5 refreshes the current 
 - On Dashboard, recent blocks are on the left and recent confirmed transactions are on the right. Tab or Shift-Tab switches lists. In narrow terminals, Dashboard shows the focused list. Select **Stream Blocks** with Home in the block list to keep new blocks in view. Enter opens the selected block or transaction.
 - `m`: open Mempool as the new navigation root. The first load requests decoded transactions in bulk when supported. Two-second refreshes fetch membership and metadata, with individual lookups for new entries and expanded transaction details.
 - `o`: open Marketplace as the new navigation root from any view
-- `c` or `/currencies`: open the currency browser for the observing system, showing liquidity pools by default (Fractional option required), with known failed launches excluded. **Shift-F** opens filters on the option flags page. Tab or Shift-Tab switches to launch-status filters for Launched, Prelaunch, Failed launch (refunding), and Unknown; Space/Enter toggles inclusion, `l`/`p`/`f`/`u` chooses a single status, `a` includes all, and `d` restores the default. On the option flags page, `j/k` selects a flag, Space/Enter cycles Any → Show → Hide, `a` allows any option flags, `p` restores liquidity pools, and Esc/Shift-F returns to the list. Matches have all Show flags and none of the Hide flags. Launch-status and text filters also apply. Flag changes are local, preserve on Back/refresh, and reset the list to the top. Summary tiles show names, i-addresses, option tags, supply and reserve counts from the list observation. `f` filters names, IDs or options; `j/k`, arrows and paging select; Enter opens; `r` refreshes. Back preserves the filter and selection. Retained lists and cached definitions remain usable offline and are labeled as observations. On an ID with the active-currency flag, `c` opens that ID's associated currency instead; an **Currency Defined** badge makes the link visible.
+- `c` or `/currencies`: open the currency browser for the observing system, showing liquidity pools by default (Fractional option required), with known failed launches excluded. **Shift-F** opens filters on the option flags page. Tab or Shift-Tab switches to launch-status filters for Launched, Prelaunch, Failed launch (refunding), and Unknown; Space/Enter toggles inclusion, `l`/`p`/`f`/`u` chooses a single status, `a` includes all, and `d` restores the default. On the option flags page, `j/k` selects a flag, Space/Enter cycles Any → Show → Hide, `a` allows any option flags, `p` restores liquidity pools, and Esc/Shift-F returns to the list. Matches have all Show flags and none of the Hide flags. Launch-status and text filters also apply. Flag changes are local, preserve on Back/refresh, and reset the list to the top. Summary tiles show names, i-addresses, option tags, supply and reserve counts from the list observation. `f` filters names, IDs or options; `j/k`, arrows and paging select; Enter opens; `r` refreshes. Back preserves the filter and selection. Retained lists and cached definitions remain usable offline and are labeled as observations. On an ID with the active-currency flag, `c` opens that ID's associated currency instead; a **Currency defined** badge makes the link visible.
 - `/<name-or-id>@@`: open a currency viewer on the current chain; cached definitions and states open offline. Definition properties use the ID-style header, option bits appear as configuration badges, and basket/state/activity sections have distinct headings. Marketplace currency links open the same viewer. In the viewer, `g` seeks by block height, Unix seconds or plain text date/time (UTC; date-only means midnight). Numeric inference matches chart seeking; `height:`, `#` and `unix:` remove ambiguity. Future states are rejected. Time lookups show nearest-block coverage and retain the actual state with source/block context. Then `a` checks imports and exports at that state height, `w` loads the preceding 1,000-block window, and `[`/`]` queries adjacent windows up to the selected state's anchor. Queried windows persist with source/block context and reopen as retained observations. `F8` on an activity import/export inspects its source export's input range; select an input and press `Enter` to open F8 at that exact source output. Opening the import transaction and pressing F8 also inspects empty batches and verified explicit launch allocations. `r` refreshes current data, `Tab` shows JSON with observation provenance, and `Enter` follows selected currency, transaction, or block links. For an older DeFi example on VRSC, open `Bridge.vETH@@` and request height `3962166`; recent heights may have no DeFi activity.
 - `a` / `Shift-A` in Marketplace: select the next / previous association, wrapping at either end; preserve that association across offers and breadcrumb navigation
 - `s` / `Shift-S` in Marketplace: cycle sort fields forward / backward (expiry, name, ask amount, listing age); `r` reverses ascending/descending order. Changing sorting returns to the top.
@@ -119,6 +119,24 @@ source; changing a source or branch discards stale date results. Retained fork
 rows use their own cached block timestamps. This does not request an index or
 prompt to enable an API. The setting lasts for the session; Shift-D again restores
 numeric JSON previews.
+
+## Terminal and tmux titles
+
+Carbide sends **Verus Carbide** as a title hint when its terminal UI starts or
+resumes. On Unix, terminals with an xterm-style title stack can restore the
+previous title when Carbide exits or suspends.
+
+In tmux the hint sets the pane title when `allow-set-title` is enabled.
+Use `#{pane_title}` or `#T` in a tmux format to display it. To use the
+pane title for the outer terminal window, add these lines to your tmux config.
+
+```tmux
+set -g set-titles on
+set -g set-titles-string '#T'
+```
+
+The tmux session name is set separately. For example, `tmux new-session -s carbide vcarbide`
+launches Carbide in a session named `carbide`.
 
 ## Clipboard testing and tmux
 
@@ -331,9 +349,10 @@ asks the vDEX daemon about VRSC.
 
 Each row shows the committed heights by system. Foreign proof-root checks use
 the exact block hash on an enabled source for the owning chain. The browser
-distinguishes active blocks, known off-chain blocks, explicit misses and
-unavailable checks. An off-chain or missing root can indicate a fork. The
-browser shows when the checked source is behind the committed height.
+distinguishes active blocks, known off-chain blocks, and explicit misses. It
+also explains whether a check was blocked by source configuration, a failed
+lookup, or a missing hash. An off-chain block or an explicit miss can indicate
+a fork. The browser shows when the checked source is behind the committed height.
 `Enter` opens the notarization transaction, `[` and `]` select a foreign proof
 root, `b` opens the resolved block, `r` refreshes the current perspective and
 `Esc` returns to the currency.
@@ -436,3 +455,7 @@ Supplemental burn instruction tags do not assert an independently correlated
 Ethereum receipt or a replayed customer payment.
 
 DeFi accounting keeps instruction principal, transfer custody and transaction fees distinct. Transfer custody includes explicit and valid gateway fee budgets and excludes mint principal. Protocol transactions show a public native delta and an unavailable consensus fee when descriptor accounting cannot be reconstructed. Missing required shielded public balances remain unknown; individual private values remain hidden.
+
+## Badge capitalization
+
+Use Title Case for classification badges and sentence case for status and descriptive badges. Preserve protocol spellings such as PBaaS and StakeGuard, acronyms such as ID and NFT, and the case of currency and identity names. Use typed identifiers when filtering or matching classifications.

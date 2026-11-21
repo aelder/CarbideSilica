@@ -12,6 +12,9 @@ pub const SELECTION_MARKER: &str = ">";
 pub struct Theme {
     pub background: Color,
     pub panel: Color,
+    pub search_placeholder: Color,
+    search_background: Color,
+    search_focus_background: Color,
     pub text: Color,
     pub muted: Color,
     pub accent: Color,
@@ -32,6 +35,9 @@ impl Theme {
         Self {
             background: Color::Rgb(51, 51, 51),
             panel: Color::Rgb(28, 28, 28),
+            search_placeholder: Color::Rgb(127, 142, 158),
+            search_background: Color::Rgb(24, 36, 49),
+            search_focus_background: Color::Rgb(42, 58, 74),
             text: Color::Rgb(245, 245, 220),
             muted: Color::Rgb(188, 188, 188),
             accent: Color::Rgb(255, 215, 0),
@@ -140,6 +146,15 @@ impl Theme {
 
     pub fn base(&self) -> Style {
         Style::default().fg(self.text).bg(self.background)
+    }
+
+    pub fn search_field(&self, active: bool) -> Style {
+        let background = if active {
+            self.search_focus_background
+        } else {
+            self.search_background
+        };
+        self.base().bg(background)
     }
 
     pub fn header(&self) -> Style {

@@ -636,14 +636,17 @@ pub(super) fn render(
             .collect();
         let count = reserves.len();
         let unit = if count == 1 { "reserve" } else { "reserves" };
-        let mut summary = Line::from(vec![
+        let start = Line::from(vec![
             Span::raw("Start "),
             theme.value(
                 "start block",
                 entry.definition["startblock"].to_string(),
                 Style::default(),
             ),
-            Span::raw(" · Supply "),
+            Span::raw(" · "),
+        ]);
+        let mut summary = Line::from(vec![
+            Span::raw("Supply "),
             theme.value(
                 "supply",
                 entry
@@ -656,6 +659,9 @@ pub(super) fn render(
             theme.value("reserve count", count.to_string(), Style::default()),
             Span::raw(format!(" {unit}")),
         ]);
+        if start.width() + summary.width() <= content_width {
+            summary.spans.splice(..0, start.spans);
+        }
         let mut reserve_row = None;
         if !reserves.is_empty() {
             let names = reserves.join(", ");

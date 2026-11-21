@@ -26,6 +26,7 @@ def assert_quits(terminal):
     terminal.read(.1)
     assert b'\x1b[?1006l' in terminal.captured, 'Quit did not release terminal mouse mode'
     assert b'\x1b[?2004l' in terminal.captured, 'Quit did not release bracketed paste'
+    assert b'\x1b[23;0t' in terminal.captured, 'Quit did not request title restoration'
 
 
 def run_dashboard():
@@ -81,8 +82,11 @@ def run_dashboard():
                 screen = terminal.screen()
                 heading = next(line for line in screen.splitlines() if 'Recent Blocks' in line)
                 assert heading.index('Recent Blocks') < heading.index('Recent Transactions'), screen
-                assert heading.index('│') == len(heading) // 2, screen
+                midpoint = len(heading) // 2
+                assert heading.index('Recent Transactions') == midpoint + 2, screen
+                assert heading[midpoint - 1:midpoint + 2] == '   ', screen
                 tx_rows = [line for line in screen.splitlines() if 'txid ' in line]
+                assert all(line[midpoint - 1:midpoint + 2] == '   ' for line in tx_rows), screen
                 expected = ['dddddd...dddddd', 'eeeeee...eeeeee', 'ffffff...ffffff']
                 assert len(tx_rows) == len(expected) and all(
                     short in line for short, line in zip(expected, tx_rows)
@@ -171,7 +175,7 @@ def run_mempool():
             try:
                 wait(terminal, 'Recent Blocks')
                 terminal.key(b'm')
-                wait(terminal, 'coinbase')
+                wait(terminal, 'Coinbase')
                 wait(terminal, 'fee 0.00020000')
                 bulk = ('getrawmempool', [True, {'fulltxes': True}])
                 assert bulk in server.requests
@@ -179,7 +183,7 @@ def run_mempool():
                 entries[newcomer] = dict(size=550, fee=0.0003, time=1700000001, height=9, depends=[initial])
                 wait(terminal, '1 unconfirmed parent')
                 assert ('getrawmempool', [True]) in server.requests
-                assert 'coinbase' in terminal.screen(), terminal.screen()
+                assert 'Coinbase' in terminal.screen(), terminal.screen()
                 assert ('getrawtransaction', [initial, 1]) not in server.requests
                 assert server.requests.count(bulk) == 1
                 terminal.key(b'\r')
@@ -301,11 +305,11 @@ def run():
         ('source activity', [(b'\x1bOQ', 'Sources'), (b'a', 'Source activity')]),
         ('relationships', [(TX, 'Transaction Overview'), (b'\x1bOR', 'Relationships')]),
         ('bookmarks', [(b'\x1b[17~', 'Bookmarks')]),
-        ('help', [(b'\x1bOP', 'Verus Explorer TUI')]),
+        ('help', [(b'\x1bOP', 'Verus Carbide help')]),
         ('peers', [(b'`', 'Peers')]),
         ('option filters', [(b'cF', 'Currency option flags')]),
         ('launch filters', [(b'cF\t', 'Currency launch status')]),
-        ('cache confirmation', [(b'?', 'Verus Explorer TUI'), (b'c', 'Clear Cache')]),
+        ('cache confirmation', [(b'?', 'Verus Carbide help'), (b'c', 'Clear Cache')]),
         ('witnesses', [(TX, 'Transaction Overview'), (b'\x1bOS', 'Witness investigation')]),
         ('inclusions', [(TX, 'Transaction Overview'), (b'\x1b[18~', 'Transaction inclusion history')]),
         ('DeFi', [(TX, 'Transaction Overview'), (b'\x1b[19~', 'DeFi trail')]),
@@ -319,6 +323,8 @@ def run():
                 terminal = Terminal(root, conf)
                 try:
                     wait(terminal, 'tip 2/2')
+                    assert 'Verus Carbide' in terminal.screen().splitlines()[0]
+                    assert b'\x1b[22;0t\x1b]0;Verus Carbide\x07' in terminal.captured
                     for keys, needle in steps:
                         terminal.key(keys, .25)
                         wait(terminal, needle)

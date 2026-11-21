@@ -1,12 +1,14 @@
 # Verus Carbide
 
-Carbide is a terminal explorer for Verus and PBaaS chains. It connects to your local daemon. Follow a transaction from its block to a recipient, inspect an identity and its currency, or trace a reserve transfer across chains. Decoded views link to the underlying transactions and RPC data.
+Carbide is a terminal explorer and toolkit for Verus and PBaaS chains. It connects to your local daemon. Follow a transaction from its block to a recipient, inspect an identity and its currency, or trace a reserve transfer across chains. Decoded views link to the underlying transactions and RPC data. Carbide was built as a TUI so it could be used on remote systems over ssh. This software is experimental and comes with no warranty for any purpose. It has been tested only on Debian 13 so far and only lightly. I am not accepting PRs at this time, but tickets with suggestions or reports are welcome.
 
 ![Dashboard with recent blocks on the left and recent transactions on the right](docs/images/dashboard.png)
 
 Select **Stream Blocks** to watch new blocks arrive. Move down to keep a particular block selected, or press `Tab` to browse recent transactions. On a narrow terminal, `Tab` switches which list is visible.
 
 ## Build and run
+
+Carbide has only been tested on Debian 13.
 
 With Rust 1.88 or newer and a running Verus daemon, build and start Carbide from the repository root.
 
@@ -27,7 +29,7 @@ Use `-testnet` for testnet or `-conf=/path/to/daemon.conf` for a nonstandard dae
 
 ## Follow a transaction
 
-1. Press `/`, type `4226272`, and press `Enter`. This mined VRSC block contains one transaction. Its tile identifies the input as coinbase.
+1. Press `/`, type `4226272`, and press `Enter`. This mined VRSC block contains one transaction. Its tile identifies the input as **Coinbase**.
 2. Press `Enter` on the tile. Output 0 pays **3.00046564 VRSC** to a transparent address. Output 1 records the fee pool balance. Only the first is a spendable payment.
 3. Select the recipient address and press `Enter` to explore its activity. Press `Esc` to return. From the transaction, `Tab` opens its JSON and `b` opens the containing block.
 
@@ -58,7 +60,7 @@ Use the arrows or `j`/`k` to select, `Enter` or Right to follow, and `Esc` to cl
 
 ## Identities, currencies and notarizations
 
-Open `vARRR@` and look for **Currency Defined**. Press `c` to switch between the identity and its currency. The identity shows signing authorities, registration evidence and transaction history. The currency shows definition flags, launch status, state and the height and time of its last confirmed notarization.
+Open `vARRR@` and look for **Currency defined**. Press `c` to switch between the identity and its currency. The identity shows signing authorities, registration evidence and transaction history. The currency shows definition flags, launch status, state and the height and time of its last confirmed notarization.
 
 ![vARRR identity with primary addresses, authority information and registration evidence](docs/images/identity.png)
 
@@ -69,7 +71,7 @@ Open `vARRR@` and look for **Currency Defined**. Press `c` to switch between the
 
 </details>
 
-Press `n` on the currency to browse confirmed and pending notarizations. Read the perspective above the list. In this capture, VRSC reports one confirmed and one unconfirmed vARRR notarization. **Unavailable** means Carbide could not check the foreign proof root with an enabled source. With both daemons available, `Tab` switches perspectives. Open a row with `Enter`, then use `F4` in the transaction to investigate witness signatures.
+Press `n` on the currency to browse confirmed and pending notarizations. Read the perspective above the list. In this capture, VRSC reports one confirmed and one unconfirmed vARRR notarization. **No source configured for this chain** means Carbide has no vARRR source to check the foreign proof root. With both daemons available, `Tab` switches perspectives. Open a row with `Enter`, then use `F4` in the transaction to investigate witness signatures.
 
 ![VRSC perspective on vARRR notarizations showing confirmation status and both systems’ proof-root heights](docs/images/notarizations.png)
 
@@ -103,4 +105,4 @@ Press `F9` to chart block intervals, mining or staking difficulty, PoW Ratio, or
 - [Storage guide](STORAGE.md) — cache ownership, retention, reconciliation and reset behavior.
 - [Cross-chain architecture](CROSS_CHAIN_ARCHITECTURE.md) — how chain workspaces, sources and observations relate.
 
-The [Cargo manifest](Cargo.toml) declares the project license as MIT or Apache-2.0.
+Verus Carbide is licensed under the [MIT License](LICENSE).

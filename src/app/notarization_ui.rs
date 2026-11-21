@@ -6,6 +6,7 @@ use std::sync::Mutex;
 const HEADER_HEIGHT: u16 = 4;
 const EVIDENCE_HEIGHT: u16 = 6;
 const ROW_HEIGHT: u16 = 4;
+const VETH_SYSTEM_ID: &str = "i9nwxtKuVYX4MSbeULLiK2ttVi6rUEhh4X";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Perspective {
@@ -170,7 +171,30 @@ struct Header {
 enum Check<T> {
     Found { source: String, value: T },
     NotFound { source: String, tip: Option<u64> },
-    Unavailable,
+    Unavailable(CheckFailure),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CheckFailure {
+    NoSourceConfigured,
+    NoSourceEnabled,
+    ChainQueryFailed,
+    BlockLookupFailed,
+    InvalidHeader,
+    TransactionLookupFailed,
+}
+
+impl CheckFailure {
+    fn label(self) -> &'static str {
+        match self {
+            Self::NoSourceConfigured => "No source configured for this chain",
+            Self::NoSourceEnabled => "No enabled source (see F2)",
+            Self::ChainQueryFailed => "Could not query chain status",
+            Self::BlockLookupFailed => "Block header lookup failed",
+            Self::InvalidHeader => "Source returned an invalid block header",
+            Self::TransactionLookupFailed => "Could not verify the referenced outpoint",
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -501,8 +525,8 @@ pub(super) fn drive(
                         }
                     };
                     let check = match peer {
-                        Some(peer) => foreign_root(peer, &block).await,
-                        None => Check::Unavailable,
+                        Ok(peer) => foreign_root(peer, &block).await,
+                        Err(reason) => Check::Unavailable(*reason),
                     };
                     if !feed.update(generation, &tx, |s| {
                         s.headers.insert((system, block), check);
@@ -592,7 +616,7 @@ async fn inclusion(config: Option<Config>, source: &str, block: &str) -> Check<H
     }
     .await
     else {
-        return Check::Unavailable;
+        return Check::Unavailable(CheckFailure::BlockLookupFailed);
     };
     Check::Found {
         source: source.into(),
@@ -606,12 +630,31 @@ struct PeerSource {
     tip: Option<u64>,
 }
 
-async fn peer_source(config: Option<Config>) -> Option<PeerSource> {
-    let client = RpcClient::for_config(&config?).ok()?;
-    // Qualify not-found responses as well as successful lookups to a specific
-    // endpoint. A fallback response would describe a different chain view.
-    let tip = client.get_blockchain_info().await.ok()?;
-    Some(PeerSource {
+fn foreign_client(config: Option<Config>) -> Result<RpcClient, CheckFailure> {
+    use crate::sources::ConnectionState::Disabled;
+
+    let config = config.ok_or(CheckFailure::NoSourceConfigured)?;
+    let daemon = &config.daemon;
+    if daemon.control.state() == Disabled
+        && daemon
+            .api_pool
+            .endpoints
+            .iter()
+            .all(|api| api.control.state() == Disabled)
+    {
+        return Err(CheckFailure::NoSourceEnabled);
+    }
+    RpcClient::for_config(&config).map_err(|_| CheckFailure::ChainQueryFailed)
+}
+
+async fn peer_source(config: Option<Config>) -> Result<PeerSource, CheckFailure> {
+    let client = foreign_client(config)?;
+    // Pin the lookup and its tip to the same endpoint.
+    let tip = client
+        .get_blockchain_info()
+        .await
+        .map_err(|_| CheckFailure::ChainQueryFailed)?;
+    Ok(PeerSource {
         client,
         source: tip.source_id,
         tip: tip.result["blocks"].as_u64(),
@@ -625,9 +668,10 @@ async fn foreign_root(peer: &PeerSource, block: &str) -> Check<Header> {
         .call_on(&source, "getblockheader", &[json!(block), json!(true)])
         .await
     {
-        Ok(value) => {
-            header(&value, block).map_or(Check::Unavailable, |value| Check::Found { source, value })
-        }
+        Ok(value) => header(&value, block)
+            .map_or(Check::Unavailable(CheckFailure::InvalidHeader), |value| {
+                Check::Found { source, value }
+            }),
         Err(error)
             if error
                 .downcast_ref::<crate::rpc::ApplicationError>()
@@ -638,16 +682,14 @@ async fn foreign_root(peer: &PeerSource, block: &str) -> Check<Header> {
                 tip: peer.tip,
             }
         }
-        Err(_) => Check::Unavailable,
+        Err(_) => Check::Unavailable(CheckFailure::BlockLookupFailed),
     }
 }
 
 async fn foreign_transaction(config: Option<Config>, target: &OutpointRef) -> Check<()> {
-    let Some(config) = config else {
-        return Check::Unavailable;
-    };
-    let Ok(client) = RpcClient::for_config(&config) else {
-        return Check::Unavailable;
+    let client = match foreign_client(config) {
+        Ok(client) => client,
+        Err(reason) => return Check::Unavailable(reason),
     };
     match client.get_raw_transaction(&target.txid).await {
         Ok(result)
@@ -662,7 +704,7 @@ async fn foreign_transaction(config: Option<Config>, target: &OutpointRef) -> Ch
                 value: (),
             }
         }
-        _ => Check::Unavailable,
+        _ => Check::Unavailable(CheckFailure::TransactionLookupFailed),
     }
 }
 
@@ -690,8 +732,9 @@ pub(super) fn summary(
                         .and_then(|block| state.headers.get(&(observer.to_owned(), block.clone())));
                     rows.push((
                         format!(
-                            "  Included: {}",
-                            inclusion_text(included, row.block.is_some(), theme)
+                            "  Included: {}{}",
+                            inclusion_text(included, row.block.is_some(), theme),
+                            inclusion_age(included, current_unix_timestamp())
                         ),
                         None,
                     ));
@@ -741,8 +784,34 @@ fn inclusion_text(check: Option<&Check<Header>>, has_hash: bool, theme: Option<&
     }
 }
 
-fn root_status(check: Option<&Check<Header>>, root: &Root) -> String {
-    match check {
+fn inclusion_age(check: Option<&Check<Header>>, now: i64) -> String {
+    let Some(Check::Found { value, .. }) = check else {
+        return String::new();
+    };
+    let Some(timestamp) = value.time.and_then(|time| i64::try_from(time).ok()) else {
+        return String::new();
+    };
+    let seconds = now.abs_diff(timestamp);
+    let (amount, unit) = match seconds {
+        86_400.. => (seconds / 86_400, "day"),
+        3_600.. => (seconds / 3_600, "hour"),
+        60.. => (seconds / 60, "minute"),
+        _ => (seconds, "second"),
+    };
+    let plural = if amount == 1 { "" } else { "s" };
+    if timestamp > now {
+        format!(" (in {amount} {unit}{plural})")
+    } else {
+        format!(" ({amount} {unit}{plural} ago)")
+    }
+}
+
+fn root_status(check: Option<&Check<Header>>, root: &Root) -> Option<String> {
+    // A standard Ethereum endpoint cannot answer the Verus header RPC.
+    if root.system == VETH_SYSTEM_ID && matches!(check, None | Some(Check::Unavailable(_))) {
+        return None;
+    }
+    Some(match check {
         Some(Check::Found { value, .. }) => match (root.height, value.confirmations) {
             (Some(height), _) if height != value.height => {
                 format!("Height mismatch (found #{})", value.height)
@@ -755,10 +824,10 @@ fn root_status(check: Option<&Check<Header>>, root: &Root) -> String {
             format!("Not found • source tip #{tip} is behind")
         }
         Some(Check::NotFound { .. }) => "Not found • possible fork".into(),
-        Some(Check::Unavailable) => "Unavailable".into(),
+        Some(Check::Unavailable(reason)) => reason.label().into(),
         None if root.hash.is_some() => "Awaiting check".into(),
-        None => "Unavailable".into(),
-    }
+        None => "Proof root has no block hash".into(),
+    })
 }
 
 fn source_label(source: &str) -> String {
@@ -1107,16 +1176,16 @@ fn notarization_tile_lines(
         .roots
         .iter()
         .filter(|root| root.system != perspective.observer)
-        .map(|root| {
+        .filter_map(|root| {
             let check = root
                 .hash
                 .as_ref()
                 .and_then(|hash| state.headers.get(&(root.system.clone(), hash.clone())));
-            format!("{} {}", view.name(&root.system), root_status(check, root))
+            root_status(check, root).map(|status| format!("{} {status}", view.name(&root.system)))
         })
         .collect::<Vec<_>>()
         .join(" | ");
-    vec![
+    let mut lines = vec![
         Line::from(vec![
             Span::styled(format!(" {status} "), badge),
             Span::raw(" "),
@@ -1133,10 +1202,20 @@ fn notarization_tile_lines(
         Line::from(vec![
             Span::styled("Included ", muted),
             theme.value("inclusion height and time", inclusion, Style::default()),
-            Span::raw(if statuses.is_empty() { "" } else { "  ·  " }),
-            theme.value("proof root check", statuses, Style::default()),
+            Span::styled(inclusion_age(check, current_unix_timestamp()), muted),
         ]),
-    ]
+    ];
+    if !statuses.is_empty() {
+        let status = theme.value("proof root check", statuses, Style::default());
+        let inclusion = &mut lines[2];
+        let separator = Span::raw("  ·  ");
+        if inclusion.width() + separator.width() + status.width() <= usize::from(width) {
+            inclusion.spans.extend([separator, status]);
+        } else {
+            lines.push(Line::from(status));
+        }
+    }
+    lines
 }
 
 fn render_selected_evidence(
@@ -1164,11 +1243,10 @@ fn render_selected_evidence(
                     .fg(theme.focus)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(format!(
-                "{} · {}",
-                view.name(&root.system),
-                root_status(check, root)
-            )),
+            Span::raw(match root_status(check, root) {
+                Some(status) => format!("{} · {status}", view.name(&root.system)),
+                None => view.name(&root.system).to_owned(),
+            }),
         ]));
         lines.push(Line::from(theme.value(
             "proof root hash",
@@ -1185,7 +1263,8 @@ fn render_selected_evidence(
     if let Some(target) = &row.foreign_previous {
         let status = match state.transactions.get(target) {
             Some(Check::Found { source, .. }) => format!("Present on {}", source_label(source)),
-            Some(_) => "Unavailable".into(),
+            Some(Check::Unavailable(reason)) => reason.label().into(),
+            Some(Check::NotFound { .. }) => "Referenced outpoint not found".into(),
             None => "Awaiting check".into(),
         };
         let outpoint = format!("{}:{}", target.txid, target.vout);
@@ -1284,6 +1363,31 @@ mod tests {
             text.iter()
                 .any(|(line, _)| line == "  Unconfirmed in current view: unavailable")
         );
+    }
+
+    #[test]
+    fn foreign_root_status_distinguishes_connection_failures_and_missing_hashes() {
+        let mut root = Root {
+            system: "vDEX".into(),
+            height: Some(800),
+            hash: Some("a".repeat(64)),
+        };
+        assert!(matches!(
+            foreign_client(None),
+            Err(CheckFailure::NoSourceConfigured)
+        ));
+        let disabled = Check::Unavailable(CheckFailure::NoSourceEnabled);
+        assert_eq!(
+            root_status(Some(&disabled), &root).as_deref(),
+            Some("No enabled source (see F2)")
+        );
+        root.hash = None;
+        assert_eq!(
+            root_status(None, &root).as_deref(),
+            Some("Proof root has no block hash")
+        );
+        root.system = VETH_SYSTEM_ID.into();
+        assert_eq!(root_status(Some(&disabled), &root), None);
     }
 
     #[test]

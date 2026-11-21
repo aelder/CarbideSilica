@@ -1,6 +1,7 @@
 """Notarization browsing and proof-root checks on paired mock VRSC/vDEX daemons."""
 import http.server
 import json
+import re
 import tempfile
 import threading
 import os
@@ -173,11 +174,15 @@ def run():
                 wait(terminal, "Selected notarization")
                 screen = terminal.screen()
                 assert "Tab perspective" not in screen, screen
+                assert "vETH #800" in screen and key(800) in screen, screen
+                assert "No source configured" not in screen and "No enabled source" not in screen, screen
                 assert any(line.startswith(">") and "Confirmed" in line for line in screen.splitlines()), screen
                 terminal.key(b"/vDEX@@\r")
                 wait(terminal, "Currency vDEX")
                 wait(terminal, "Unconfirmed in current view: 6")
                 wait(terminal, "Included: #4900 at 2023-11-14T23:35:00Z")
+                screen = terminal.screen()
+                assert re.search(r"Included: #4900 at 2023-11-14T23:35:00Z \(\d+ days? ago\)", screen), screen
                 wait(terminal, f"Last confirmed: {key(100)}:1")
                 terminal.key(b"n")
                 wait(terminal, "VRSC view")
@@ -185,10 +190,12 @@ def run():
                 wait(terminal, "Selected notarization")
                 wait(terminal, "Proof roots  VRSC #4800 | vDEX #800")
                 wait(terminal, "vDEX Active")
+                screen = terminal.screen()
+                assert re.search(r"Included #4900 at 2023-11-14T23:35:00Z \(\d+ days? ago\)", screen), screen
                 wait(terminal, "Known off-chain")
                 wait(terminal, "Not found • possible fork")
                 wait(terminal, "Height mismatch (found #841)")
-                wait(terminal, "vDEX Unavailable")
+                wait(terminal, "vDEX Block header lookup failed")
                 wait(terminal, f"Previous on vDEX  {key(199)}:2")
                 wait(terminal, "Present on local-daemon:")
                 terminal.key(b"\x1b[F")

@@ -33,7 +33,7 @@ use crossterm::event::{
 };
 use crossterm::execute;
 use crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    EnterAlternateScreen, LeaveAlternateScreen, SetTitle, disable_raw_mode, enable_raw_mode,
 };
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
@@ -53,15 +53,17 @@ use crate::cache::{Cache, cache_disk_usage};
 use crate::chain_state::{ChainState, RpcObservation, StatusBadge, coinbase_maturity};
 use crate::config::Config;
 use crate::domain::{
-    BlockProductionKind, BlockSummary, ObjectRoute, OutputTag, OutputTagKind, TransactionSummary,
-    defi_currency_ids, emission_timelock, output_tags, private_input_count, private_output_count,
-    transaction_output_tags,
+    BlockProductionKind, BlockSummary, MarketplaceTag, ObjectRoute, OutputTag, OutputTagKind,
+    TransactionSummary, TransactionTag, defi_currency_ids, emission_timelock, output_tags,
+    private_input_count, private_output_count,
 };
 use crate::geoip::{self, GeoIpDatabase, GeoIpStatus, GeoLocation};
 use crate::log_feed::{self, LogChunk};
 use crate::resolver::classify_start_object;
 use crate::rpc::{BlockId, RpcClient};
 use crate::theme::{SELECTION_MARKER, Theme};
+
+const APP_TITLE: &str = "Verus Carbide";
 
 type Tui = Terminal<CrosstermBackend<Stdout>>;
 type BlockHash = String;
@@ -218,7 +220,7 @@ struct ObjectStore {
     currencies_by_id: HashMap<String, CurrencyDefinitionRecord>,
     currency_references: BTreeSet<String>,
     currency_name_hints: HashMap<String, String>,
-    marketplace_tags_by_txid: HashMap<Txid, BTreeSet<String>>,
+    marketplace_tags_by_txid: HashMap<Txid, BTreeSet<MarketplaceTag>>,
     identity_offers: HashMap<String, IdentityOffersState>,
 }
 
@@ -1097,18 +1099,19 @@ impl ObjectStore {
             })
     }
 
-    fn add_marketplace_tag(&mut self, txid: impl Into<Txid>, tag: impl Into<String>) {
+    fn add_marketplace_tag(&mut self, txid: impl Into<Txid>, tag: MarketplaceTag) {
         self.marketplace_tags_by_txid
             .entry(txid.into())
             .or_default()
-            .insert(tag.into());
+            .insert(tag);
     }
 
-    fn marketplace_tags(&self, txid: &str) -> impl Iterator<Item = &String> {
+    fn marketplace_tags(&self, txid: &str) -> impl Iterator<Item = MarketplaceTag> + '_ {
         self.marketplace_tags_by_txid
             .get(txid)
             .into_iter()
             .flatten()
+            .copied()
     }
 
     fn refresh_marketplace_tags(&mut self) {
@@ -1135,8 +1138,8 @@ impl ObjectStore {
                         .transaction(source_txid)
                         .is_some_and(|source| marketplace_funding_shape(&source.raw_json))
                 {
-                    discovered.push((source_txid.to_string(), "Marketplace Offer".to_string()));
-                    discovered.push((proof_txid.clone(), "Marketplace Offer Proof".to_string()));
+                    discovered.push((source_txid.to_string(), MarketplaceTag::Offer));
+                    discovered.push((proof_txid.clone(), MarketplaceTag::OfferProof));
                 }
             }
         }
@@ -1144,12 +1147,12 @@ impl ObjectStore {
         let funding_txids = self
             .marketplace_tags_by_txid
             .iter()
-            .filter(|(_, tags)| tags.contains("Marketplace Offer"))
+            .filter(|(_, tags)| tags.contains(&MarketplaceTag::Offer))
             .map(|(txid, _)| txid.clone())
             .chain(
                 discovered
                     .iter()
-                    .filter(|(_, tag)| tag == "Marketplace Offer")
+                    .filter(|(_, tag)| *tag == MarketplaceTag::Offer)
                     .map(|(txid, _)| txid.clone()),
             )
             .collect::<BTreeSet<_>>();
@@ -1173,11 +1176,11 @@ impl ObjectStore {
                 .map(Vec::len)
                 .unwrap_or_default();
             let tag = if input_count > 1 {
-                "Marketplace Offer Taken"
+                MarketplaceTag::OfferTaken
             } else {
-                "Marketplace Offer Closed"
+                MarketplaceTag::OfferClosed
             };
-            discovered.push((spender_txid, tag.to_string()));
+            discovered.push((spender_txid, tag));
         }
 
         for (txid, tag) in discovered {
@@ -7039,7 +7042,7 @@ fn apply_app_event(state: &mut AppState, app_event: AppEvent) {
                     for offer in &state.marketplace.offers {
                         state
                             .store
-                            .add_marketplace_tag(offer.txid.clone(), "Marketplace Offer");
+                            .add_marketplace_tag(offer.txid.clone(), MarketplaceTag::Offer);
                     }
                     state.store.refresh_marketplace_tags();
                     state.marketplace.selected = selected_txid
@@ -7839,7 +7842,7 @@ fn request_transaction_context(
     if state
         .store
         .marketplace_tags(txid)
-        .any(|tag| tag == "Marketplace Offer")
+        .any(|tag| tag == MarketplaceTag::Offer)
     {
         requested.extend(marketplace_related_spenders(&transaction.raw_json));
     }
@@ -10921,12 +10924,12 @@ fn help_lines(theme: &Theme, state: &AppState, cache_path: &std::path::Path) -> 
         (
             "Identities",
             &[
-                "c opens the associated currency when Currency Defined is shown | [ or p previous version | ] or n next version | v queries one historical reverse-index window",
+                "c opens the associated currency when Currency defined is shown | [ or p previous version | ] or n next version | v queries one historical reverse-index window",
             ],
         ),
     ];
     let mut lines = vec![
-        Line::styled("Verus Explorer TUI", theme.focused()),
+        Line::styled(format!("{APP_TITLE} help"), theme.focused()),
         Line::from(vec![
             Span::styled("Version ", theme.muted()),
             Span::raw(APP_VERSION),
@@ -11674,9 +11677,9 @@ fn render_peer_log(
 
 fn peer_direction(raw: &Value) -> &'static str {
     if raw.get("inbound").and_then(Value::as_bool).unwrap_or(false) {
-        "inbound"
+        "Inbound"
     } else {
-        "outbound"
+        "Outbound"
     }
 }
 
@@ -11742,44 +11745,42 @@ fn render_auxiliary(
 
 fn render_search_bar(frame: &mut Frame<'_>, theme: &Theme, state: &AppState, area: Rect) {
     let icon = theme.glyph("🔎", "/");
-    let (content, style) = if state.search.active {
-        (
-            Line::from(vec![
-                Span::raw(format!(" {icon} ")),
-                Span::raw(state.search.query.clone()),
-                Span::styled(" ", theme.selection_cursor()),
-            ]),
-            theme.focused(),
-        )
+    let icon = Span::styled(format!(" {icon} "), Style::default().fg(theme.link));
+    let content = if state.search.active {
+        Line::from(vec![
+            icon,
+            Span::raw(state.search.query.clone()),
+            Span::styled(" ", theme.selection_cursor()),
+        ])
     } else if let Some(status) = &state.search.status {
-        let status_style = if status.error {
-            theme.negative()
+        let color = if status.error {
+            theme.negative
         } else {
-            theme.warning()
+            theme.warning
         };
-        (
-            Line::from(vec![
-                Span::raw(format!(" {icon} ")),
-                Span::styled(short_id(&state.search.query), theme.link()),
-                Span::raw("  "),
-                Span::styled(status.message.clone(), status_style),
-            ]),
-            theme.base(),
-        )
+        Line::from(vec![
+            icon,
+            Span::styled(
+                short_id(&state.search.query),
+                Style::default().fg(theme.link),
+            ),
+            Span::raw("  "),
+            Span::styled(status.message.clone(), Style::default().fg(color)),
+        ])
     } else {
-        (
-            Line::from(vec![
-                Span::raw(format!(" {icon} ")),
-                Span::styled(
-                    "Search block height/hash/unix time/datetime, TXID, name@, r/i-address, currency@@",
-                    theme.muted(),
-                ),
-                Span::styled("  /", theme.focused()),
-            ]),
-            theme.base(),
-        )
+        Line::from(vec![
+            icon,
+            Span::styled(
+                "Search block height/hash/unix time/datetime, TXID, name@, r/i-address, currency@@",
+                Style::default().fg(theme.search_placeholder),
+            ),
+            Span::styled("  /", Style::default().fg(theme.link)),
+        ])
     };
-    frame.render_widget(Paragraph::new(content).style(style), area);
+    frame.render_widget(
+        Paragraph::new(content).style(theme.search_field(state.search.active)),
+        area,
+    );
 }
 
 fn modal_controls(state: &AppState) -> Option<&'static str> {
@@ -12166,16 +12167,13 @@ fn render_dashboard(
             0..0
         }
     } else {
-        let [blocks, divider, transactions] = Layout::horizontal([
+        let [blocks, gap, transactions] = Layout::horizontal([
             Constraint::Length(lists.width / 2 - 1),
             Constraint::Length(3),
             Constraint::Min(1),
         ])
         .areas(lists);
-        let rule = (0..divider.height)
-            .map(|_| Line::from(" │ "))
-            .collect::<Vec<_>>();
-        frame.render_widget(Paragraph::new(rule).style(theme.muted()), divider);
+        frame.render_widget(Block::default().style(theme.base()), gap);
         render_block_tiles(frame, theme, state, blocks);
         render_dashboard_transactions(frame, config, theme, state, transactions)
     }
@@ -13048,7 +13046,7 @@ fn block_summary_tile_height(
     block: &BlockRecord,
     width: u16,
 ) -> u16 {
-    let width = width.saturating_sub(2);
+    let width = tile_content_width(width);
     wrapped_tile_height(&block_tile_lines(theme, store, block, width), width)
 }
 
@@ -13365,7 +13363,7 @@ fn transaction_summary_tile(
     width: u16,
 ) -> SummaryTile {
     let tags = display_transaction_tags(tx, context.store);
-    let content_width = width.saturating_sub(2);
+    let content_width = tile_content_width(width);
     let mut tag_spans = if tx.raw.is_none() {
         vec![Span::styled(
             format!("{} details uncached", theme.glyph("○", "o")),
@@ -13433,48 +13431,64 @@ fn transaction_tag_spans(theme: &Theme, tags: &[String]) -> Vec<Span<'static>> {
     spans
 }
 
-fn display_transaction_tags(tx: &TransactionSummary, store: &ObjectStore) -> Vec<String> {
-    let defi_labels = [
-        OutputTagKind::CurrencyDefinition,
-        OutputTagKind::ReserveTransfer,
-        OutputTagKind::AutoArbitrage,
-        OutputTagKind::Conversion,
-        OutputTagKind::CrossChainTransfer,
-        OutputTagKind::Export,
-        OutputTagKind::Import,
-    ]
-    .map(OutputTagKind::label);
-    let mut labels = tx
-        .tags()
-        .into_iter()
-        .filter(|label| !defi_labels.contains(label))
-        .map(str::to_string)
-        .collect::<Vec<_>>();
+fn transaction_tags(tx: &TransactionSummary, store: &ObjectStore) -> Vec<TransactionTag> {
+    let mut tags = tx.tags();
+    // Keep DeFi badges after the other protocol badges on transaction summaries.
+    tags.sort_by_key(|tag| {
+        matches!(
+            tag,
+            TransactionTag::Output(OutputTag {
+                kind: OutputTagKind::CurrencyDefinition
+                    | OutputTagKind::ReserveTransfer
+                    | OutputTagKind::AutoArbitrage
+                    | OutputTagKind::Conversion
+                    | OutputTagKind::CrossChainTransfer
+                    | OutputTagKind::Export
+                    | OutputTagKind::Import,
+                ..
+            })
+        )
+    });
     if let Some(raw) = &tx.raw {
-        for tag in transaction_output_tags(raw) {
-            let label = display_output_tag(&tag, store);
-            if !labels.contains(&label) {
-                labels.push(label);
-            }
-        }
         if !consumed_token_burns(raw, store).is_empty() {
-            labels.push("Consumption Burn".into());
+            tags.push(TransactionTag::ConsumptionBurn);
         }
         if stakeguard_enforcement(raw, store) {
-            labels.push("StakeGuard Enforcement".to_string());
+            tags.push(TransactionTag::StakeGuardEnforcement);
         }
         if transaction_has_import_output(raw)
             && !import_auto_arbitrage_input_indexes(raw, store).is_empty()
         {
-            labels.push("Auto-Arbitrage Import".to_string());
+            tags.push(TransactionTag::AutoArbitrageImport);
         }
     }
-    for tag in store.marketplace_tags(&tx.txid) {
-        if !labels.contains(tag) {
-            labels.push(tag.clone());
+    tags.extend(
+        store
+            .marketplace_tags(&tx.txid)
+            .map(TransactionTag::Marketplace),
+    );
+    tags
+}
+
+fn transaction_tag_labels(
+    tags: impl IntoIterator<Item = TransactionTag>,
+    store: &ObjectStore,
+) -> Vec<String> {
+    let mut labels = Vec::new();
+    for tag in tags {
+        let label = match &tag {
+            TransactionTag::Output(output) => display_output_tag(output, store),
+            _ => tag.label().to_string(),
+        };
+        if !labels.contains(&label) {
+            labels.push(label);
         }
     }
     labels
+}
+
+fn display_transaction_tags(tx: &TransactionSummary, store: &ObjectStore) -> Vec<String> {
+    transaction_tag_labels(transaction_tags(tx, store), store)
 }
 
 fn display_output_tag(tag: &OutputTag, store: &ObjectStore) -> String {
@@ -13546,22 +13560,16 @@ fn import_auto_arbitrage_input_indexes(raw: &Value, store: &ObjectStore) -> Hash
 }
 
 fn block_tag_spans(theme: &Theme, block: &BlockRecord, store: &ObjectStore) -> Vec<Span<'static>> {
-    let mut tags = Vec::new();
-    for summary in &block.summary.tx {
+    let tags = block.summary.tx.iter().flat_map(|summary| {
         let summary = store
             .transaction(&summary.txid)
             .map(|record| &record.summary)
             .unwrap_or(summary);
-        for tag in display_transaction_tags(summary, store)
+        transaction_tags(summary, store)
             .into_iter()
-            .filter(|tag| !matches!(tag.as_str(), "coinbase" | "stake"))
-        {
-            if !tags.contains(&tag) {
-                tags.push(tag);
-            }
-        }
-    }
-    transaction_tag_spans(theme, &tags)
+            .filter(|tag| !matches!(tag, TransactionTag::Coinbase | TransactionTag::Stake))
+    });
+    transaction_tag_spans(theme, &transaction_tag_labels(tags, store))
 }
 
 fn transaction_tile_value_spans(
@@ -13611,8 +13619,14 @@ fn render_summary_tile(frame: &mut Frame<'_>, theme: &Theme, tile: SummaryTile, 
 fn render_tile_gutter(frame: &mut Frame<'_>, theme: &Theme, selected: bool, area: Rect) -> Rect {
     frame.render_widget(Paragraph::new("").style(theme.tile_gutter()), area);
     let content = tile_content_area(area);
-    if selected && content.x > area.x {
-        render_selection_gutter(frame, theme, Rect::new(area.x, area.y, 1, content.height));
+    if content.x > area.x {
+        frame.render_widget(
+            Block::default().style(theme.tile_body(selected)),
+            Rect::new(area.x + 1, area.y, area.width - 1, content.height),
+        );
+        if selected {
+            render_selection_gutter(frame, theme, Rect::new(area.x, area.y, 1, content.height));
+        }
     }
     content
 }
@@ -13664,6 +13678,14 @@ fn wrapped_spans_height(spans: &[Span<'_>], width: u16) -> u16 {
     u16::try_from(spans_width(spans).div_ceil(width).max(1)).unwrap_or(u16::MAX)
 }
 
+fn tile_content_width(width: u16) -> u16 {
+    match width {
+        0..=2 => width,
+        3 => 1,
+        _ => width - 3,
+    }
+}
+
 fn tile_content_area(area: Rect) -> Rect {
     if area.width <= 2 || area.height == 0 {
         return area;
@@ -13672,7 +13694,7 @@ fn tile_content_area(area: Rect) -> Rect {
     Rect {
         x: area.x + 2,
         y: area.y,
-        width: area.width - 2,
+        width: tile_content_width(area.width),
         height: area.height - u16::from(area.height > 2),
     }
 }
@@ -13836,14 +13858,12 @@ fn transaction_flow_selections(flows: &[TransactionFlow]) -> Vec<(usize, FlowLin
 fn transaction_flows(raw: &Value, store: &ObjectStore) -> Vec<TransactionFlow> {
     let mut flows = Vec::new();
     let auto_arbitrage_inputs = import_auto_arbitrage_input_indexes(raw, store);
-    let transaction_tags = raw
+    let marketplace_tags = raw
         .get("txid")
         .and_then(Value::as_str)
-        .map(|txid| store.marketplace_tags(txid).cloned().collect::<Vec<_>>())
+        .map(|txid| store.marketplace_tags(txid).collect::<Vec<_>>())
         .unwrap_or_default();
-    let closes_offer = transaction_tags
-        .iter()
-        .any(|tag| tag == "Marketplace Offer Closed");
+    let closes_offer = marketplace_tags.contains(&MarketplaceTag::OfferClosed);
     if let Some(inputs) = raw.get("vin").and_then(Value::as_array) {
         flows.extend(inputs.iter().enumerate().map(|(index, input)| {
             let prevout = input
@@ -13873,7 +13893,7 @@ fn transaction_flows(raw: &Value, store: &ObjectStore) -> Vec<TransactionFlow> {
                     index == 0
                         && store
                             .marketplace_tags(txid)
-                            .any(|tag| tag == "Marketplace Offer")
+                            .any(|tag| tag == MarketplaceTag::Offer)
                 });
             TransactionFlow {
                 references: crate::protocol::References::default(),
@@ -13987,9 +14007,7 @@ fn transaction_flows(raw: &Value, store: &ObjectStore) -> Vec<TransactionFlow> {
     let emission_timelock = emission_timelock(raw);
     let stake = crate::domain::is_stake_transaction(raw);
     let enforcement = stakeguard_enforcement(raw, store);
-    let market_proof = transaction_tags
-        .iter()
-        .any(|tag| tag == "Marketplace Offer Proof");
+    let market_proof = marketplace_tags.contains(&MarketplaceTag::OfferProof);
     if let Some(outputs) = raw.get("vout").and_then(Value::as_array) {
         flows.extend(outputs.iter().enumerate().map(|(index, output)| {
             let script = output.get("scriptPubKey").unwrap_or(&Value::Null);
@@ -14834,7 +14852,7 @@ fn transaction_values_labels(
     let output_total = transaction_side_value_label(&outputs, currency, store);
     let coinbase = inputs.iter().any(|input| input.coinbase);
     let input_total = if coinbase {
-        "coinbase".to_string()
+        TransactionTag::Coinbase.label().to_owned()
     } else {
         transaction_side_value_label(&inputs, currency, store)
     };
@@ -15225,7 +15243,7 @@ fn transaction_flow_tile(
             ),
         ));
     } else if flow.coinbase {
-        lines.push(Line::from("coinbase"));
+        lines.push(Line::from(TransactionTag::Coinbase.label()));
     } else if flow.private {
         lines.push(Line::from("shielded pool"));
     }
@@ -16116,7 +16134,7 @@ fn identity_header_lines(
     ];
     if identity_has_currency(version) {
         lines.push(Line::from(vec![
-            Span::styled(" Currency Defined ", theme.status_badge()),
+            Span::styled(" Currency defined ", theme.status_badge()),
             Span::raw("  "),
             Span::styled("c opens currency definition and activity", theme.link()),
         ]));
@@ -16533,7 +16551,7 @@ fn address_transaction_tile_height(
         .map_or(0, Vec::len)
         + private_output_count(&transaction.raw_json);
     address_transaction_tile_height_for_counts(width, input_count, output_count).saturating_add(
-        address_transaction_tags_height(transaction, store, width.saturating_sub(2)),
+        address_transaction_tags_height(transaction, store, tile_content_width(width)),
     )
 }
 
@@ -16799,7 +16817,10 @@ fn address_flow_line(
     }
     spans.push(Span::styled(format!("#{} ", flow.index), theme.muted()));
     if flow.coinbase {
-        spans.push(Span::styled("coinbase", theme.warning()));
+        spans.push(Span::styled(
+            TransactionTag::Coinbase.label(),
+            theme.warning(),
+        ));
     } else if flow.private {
         spans.push(Span::styled(
             if output {
@@ -17879,7 +17900,7 @@ fn header_line(
     } else {
         chain_name.to_string()
     };
-    let icon = theme.glyph("⛓️", "V");
+    let icon = theme.glyph("🔦", "*");
     let api = if config
         .daemon
         .api_pool
@@ -17909,16 +17930,20 @@ fn header_line(
     let age = last_block_age_text(tip.last_block_time, now);
     let compact = format!("tip {height} ({delta}) | last {age}");
     let minimal = format!("tip {height} | last {age}");
-    for status in [&full, &compact, &minimal] {
-        let line = Line::from(format!(
-            " {icon} {chain} | {status} | {rpc} | {api} | peers {peers} "
-        ));
-        if line.width() <= usize::from(width) {
-            return line;
+    for name in [APP_TITLE, "Carbide"] {
+        for status in [&full, &compact, &minimal] {
+            let line = Line::from(format!(
+                " {icon} {name} | {chain} | {status} | {rpc} | {api} | peers {peers} "
+            ));
+            if line.width() <= usize::from(width) {
+                return line;
+            }
         }
     }
     // At very small widths remove other whole fields before clipping the height.
     for text in [
+        format!("{icon} Carbide | {chain} | {compact} | {rpc}"),
+        format!("{icon} Carbide | {chain} | {minimal}"),
         format!("{chain} | {minimal} | {rpc}"),
         minimal,
         format!("tip {height}"),
@@ -18005,6 +18030,7 @@ fn setup_terminal() -> Result<Tui> {
         EnableMouseCapture,
         EnableBracketedPaste
     )?;
+    set_terminal_title(&mut stdout)?;
     let backend = CrosstermBackend::new(stdout);
     Ok(Terminal::new(backend)?)
 }
@@ -18017,7 +18043,25 @@ fn restore_terminal(terminal: &mut Tui) -> Result<()> {
         DisableBracketedPaste,
         LeaveAlternateScreen
     )?;
+    #[cfg(unix)]
+    execute!(
+        terminal.backend_mut(),
+        crossterm::style::Print("\x1b[23;0t")
+    )?;
     terminal.show_cursor()?;
+    Ok(())
+}
+
+fn set_terminal_title(output: &mut impl io::Write) -> io::Result<()> {
+    // Save the previous title on terminals that support the xterm title stack.
+    #[cfg(unix)]
+    execute!(
+        output,
+        crossterm::style::Print("\x1b[22;0t"),
+        SetTitle(APP_TITLE)
+    )?;
+    #[cfg(not(unix))]
+    execute!(output, SetTitle(APP_TITLE))?;
     Ok(())
 }
 
@@ -18028,6 +18072,7 @@ fn resume_terminal(terminal: &mut Tui, mouse_capture: bool) -> Result<()> {
         EnterAlternateScreen,
         EnableBracketedPaste
     )?;
+    set_terminal_title(terminal.backend_mut())?;
     input::set_mouse_capture(terminal.backend_mut(), mouse_capture)?;
     let size = terminal.size()?;
     terminal.resize(Rect::new(0, 0, size.width, size.height))?;
@@ -19104,11 +19149,11 @@ mod tests {
         };
         let text =
             |width| header_line(&config, &config.chain.name, &theme, &tip, 1180, width).to_string();
-        assert!(text(90).contains("4222000/4222003 (Δ3)"));
-        assert!(text(70).contains("4222000 (Δ3)"));
-        assert!(!text(70).contains('/'));
-        assert!(text(65).contains("tip 4222000 | last 180s"));
-        assert!(!text(65).contains('Δ'));
+        assert!(text(110).contains("Verus Carbide | VRSC"));
+        assert!(text(110).contains("4222000/4222003 (Δ3)"));
+        assert!(text(65).contains("Carbide | VRSC"));
+        assert!(text(65).contains("tip 4222000"));
+        assert!(!text(65).contains('/'));
         assert_eq!(text(7), "4222000");
         for emoji in [crate::cli::EmojiMode::On, crate::cli::EmojiMode::Off] {
             let theme = Theme::desert(emoji);
@@ -19501,6 +19546,77 @@ mod tests {
     }
 
     #[test]
+    fn dashboard_paints_the_full_center_gap_with_the_page_background() {
+        let config = regression_config();
+        let theme = Theme::desert(crate::cli::EmojiMode::Off);
+        let mut state = regression_state();
+        state.dashboard.transactions_focused = true;
+        for width in [80, 81] {
+            let mut terminal =
+                Terminal::new(ratatui::backend::TestBackend::new(width, 20)).unwrap();
+            terminal
+                .draw(|frame| {
+                    render_dashboard(frame, &config, &theme, &state, 0, frame.area());
+                })
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            let midpoint = width / 2;
+            assert_eq!(buffer[(midpoint + 2, 6)].bg, theme.accent);
+            for y in 6..20 {
+                for x in midpoint - 1..midpoint + 2 {
+                    let cell = &buffer[(x, y)];
+                    assert_eq!(cell.symbol(), " ");
+                    assert_eq!(cell.bg, theme.background);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn dashboard_scrollbar_gutter_matches_the_gap_between_block_tiles() {
+        let config = regression_config();
+        let theme = Theme::desert(crate::cli::EmojiMode::Off);
+        let mut state = regression_state();
+        state.dashboard.recent_blocks.clear();
+        for height in (1..=12).rev() {
+            let hash = format!("{height:064x}");
+            state
+                .store
+                .insert_block(test_block(height, &hash, "transaction"));
+            state.dashboard.recent_blocks.push(hash);
+        }
+        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(80, 20)).unwrap();
+        for width in [80, 95] {
+            terminal.backend_mut().resize(width, 20);
+            terminal
+                .draw(|frame| {
+                    render_dashboard(frame, &config, &theme, &state, 0, frame.area());
+                })
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            let rail_x = width / 2 - 2;
+            let gutter_x = rail_x - 1;
+            let tile_x = gutter_x - 1;
+            let first_block_y = 7 + SECTION_HEADING_HEIGHT;
+            let first_block = state
+                .store
+                .block(&state.dashboard.recent_blocks[0])
+                .unwrap();
+            let tile_height =
+                block_summary_tile_height(&theme, &state.store, first_block, gutter_x);
+            let gap_y = first_block_y + tile_height - 1;
+            let gutter = &buffer[(gutter_x, first_block_y)];
+            assert_eq!(gutter.symbol(), " ");
+            assert_eq!(gutter.bg, buffer[(tile_x, gap_y)].bg);
+            assert_ne!(gutter.bg, buffer[(tile_x, first_block_y)].bg);
+            assert!(matches!(
+                buffer[(rail_x, first_block_y)].symbol(),
+                "█" | "│"
+            ));
+        }
+    }
+
+    #[test]
     fn dashboard_requests_the_next_page_at_the_half_page_runway() {
         let mut dashboard = DashboardState {
             recent_blocks: (0..DASHBOARD_BLOCK_COUNT)
@@ -19607,6 +19723,38 @@ mod tests {
     }
 
     #[test]
+    fn summary_tiles_pad_both_sides_inside_the_tile_surface() {
+        let theme = Theme::desert(crate::cli::EmojiMode::Off);
+        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(10, 4)).unwrap();
+        for selected in [false, true] {
+            terminal
+                .draw(|frame| {
+                    render_summary_tile(
+                        frame,
+                        &theme,
+                        SummaryTile {
+                            title: None,
+                            lines: vec![Line::raw("12345678")],
+                            selected,
+                            alignment: Alignment::Right,
+                        },
+                        frame.area(),
+                    );
+                })
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            assert_eq!(buffer[(2, 0)].symbol(), "1");
+            assert_eq!(buffer[(8, 0)].symbol(), "7");
+            assert_eq!(buffer[(8, 1)].symbol(), "8");
+            for x in [1, 9] {
+                assert_eq!(buffer[(x, 0)].symbol(), " ");
+                assert_eq!(Some(buffer[(x, 0)].bg), theme.tile_body(selected).bg);
+            }
+            assert_eq!(buffer[(9, 3)].bg, theme.panel);
+        }
+    }
+
+    #[test]
     fn selected_tile_fills_ordinary_text_and_preserves_badges() {
         use ratatui::{Terminal, backend::TestBackend};
         let theme = Theme::desert(crate::cli::EmojiMode::Off);
@@ -19646,8 +19794,8 @@ mod tests {
 
     #[test]
     fn peer_direction_labels_false_as_outbound() {
-        assert_eq!(peer_direction(&json!({ "inbound": false })), "outbound");
-        assert_eq!(peer_direction(&json!({ "inbound": true })), "inbound");
+        assert_eq!(peer_direction(&json!({ "inbound": false })), "Outbound");
+        assert_eq!(peer_direction(&json!({ "inbound": true })), "Inbound");
     }
 
     #[test]
@@ -19682,6 +19830,47 @@ mod tests {
         let lines = vec![Line::from("first"), Line::from("second")];
         assert_eq!(wrapped_max_scroll(&lines, 20, 2), 0);
         assert_eq!(wrapped_max_scroll(&lines, 20, 10), 0);
+    }
+
+    #[test]
+    fn search_field_distinguishes_placeholder_input_and_status() {
+        let mut state = regression_state();
+        let theme = Theme::desert(crate::cli::EmojiMode::Off);
+        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(100, 1)).unwrap();
+        let render = |terminal: &mut Terminal<_>, state: &AppState| {
+            terminal
+                .draw(|frame| render_search_bar(frame, &theme, state, frame.area()))
+                .unwrap();
+        };
+
+        render(&mut terminal, &state);
+        let idle = terminal.backend().buffer();
+        assert_eq!(idle[(3, 0)].symbol(), "S");
+        assert_eq!(idle[(3, 0)].fg, theme.search_placeholder);
+        assert_eq!(idle[(3, 0)].bg, idle[(99, 0)].bg);
+        assert_ne!(idle[(3, 0)].bg, theme.background);
+        let idle_background = idle[(3, 0)].bg;
+
+        begin_search(&mut state);
+        state.search.query = "42".into();
+        render(&mut terminal, &state);
+        let active = terminal.backend().buffer();
+        assert_eq!(active[(3, 0)].symbol(), "4");
+        assert_eq!(active[(3, 0)].fg, theme.text);
+        assert_ne!(active[(3, 0)].bg, idle_background);
+        assert_eq!(active[(5, 0)].bg, theme.accent);
+        assert_eq!(active[(6, 0)].symbol(), " ");
+
+        state.search.active = false;
+        state.search.status = Some(SearchStatus {
+            message: "No match".into(),
+            error: true,
+        });
+        render(&mut terminal, &state);
+        let status = terminal.backend().buffer();
+        assert_eq!(status[(7, 0)].symbol(), "N");
+        assert_eq!(status[(7, 0)].fg, theme.negative);
+        assert_eq!(status[(7, 0)].bg, idle_background);
     }
 
     #[test]
@@ -19785,9 +19974,9 @@ mod tests {
     #[test]
     fn wrapped_content_scroll_range_stops_at_the_last_line() {
         let lines = vec![Line::from("one two three four")];
-        assert_eq!(wrapped_max_scroll(&lines, 5, 2), 3);
+        assert_eq!(wrapped_max_scroll(&lines, 6, 2), 3);
         let theme = Theme::desert(crate::cli::EmojiMode::Off);
-        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(5, 2)).unwrap();
+        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(6, 2)).unwrap();
         terminal
             .draw(|frame| {
                 let first = scroll_view::paragraph(
@@ -19801,8 +19990,9 @@ mod tests {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        let last_line: String = (0..5).map(|x| buffer[(x, 1)].symbol()).collect();
-        assert_eq!(last_line, "four█");
+        let last_line: String = (0..6).map(|x| buffer[(x, 1)].symbol()).collect();
+        assert_eq!(last_line, "four █");
+        assert_eq!(Some(buffer[(4, 1)].bg), theme.tile_gutter().bg);
     }
 
     #[test]
@@ -20133,7 +20323,11 @@ mod tests {
             })),
         };
 
-        assert_eq!(transaction.tags(), vec!["coinbase"]);
+        assert_eq!(transaction.tags(), vec![TransactionTag::Coinbase]);
+        assert_eq!(
+            display_transaction_tags(&transaction, &ObjectStore::default()),
+            ["Coinbase"]
+        );
     }
 
     #[test]
@@ -20165,7 +20359,7 @@ mod tests {
             })),
         };
 
-        assert_eq!(transaction.tags(), vec!["stake"]);
+        assert_eq!(transaction.tags(), vec![TransactionTag::Stake]);
     }
 
     #[test]
@@ -20183,7 +20377,7 @@ mod tests {
             })),
         };
 
-        assert_eq!(transaction.tags(), vec!["stake"]);
+        assert_eq!(transaction.tags(), vec![TransactionTag::Stake]);
     }
 
     #[test]
@@ -20340,7 +20534,7 @@ mod tests {
             .map(|span| span.content.into_owned())
             .collect::<String>();
 
-        assert!(!labels.contains("coinbase"));
+        assert!(!labels.contains(TransactionTag::Coinbase.label()));
         assert!(labels.contains("Import: Bridge.vETH"));
     }
 
@@ -20382,7 +20576,7 @@ mod tests {
             })),
         };
 
-        assert_eq!(transaction.tags(), vec!["Name Commitment"]);
+        assert_eq!(transaction.tags(), vec![TransactionTag::NameCommitment]);
     }
 
     #[test]
@@ -20516,7 +20710,10 @@ mod tests {
             raw: Some(raw.clone()),
         };
 
-        assert_eq!(transaction.tags(), vec!["Private Input", "Private Output"]);
+        assert_eq!(
+            transaction.tags(),
+            vec![TransactionTag::PrivateInput, TransactionTag::PrivateOutput]
+        );
         let flows = transaction_flows(&raw, &ObjectStore::default());
         assert_eq!(flows.iter().filter(|flow| flow.private).count(), 3);
         assert_eq!(
@@ -21855,17 +22052,17 @@ mod tests {
         assert!(
             store
                 .marketplace_tags(funding_txid)
-                .any(|tag| tag == "Marketplace Offer")
+                .any(|tag| tag == MarketplaceTag::Offer)
         );
         assert!(
             store
                 .marketplace_tags(proof_txid)
-                .any(|tag| tag == "Marketplace Offer Proof")
+                .any(|tag| tag == MarketplaceTag::OfferProof)
         );
         assert!(
             store
                 .marketplace_tags(taken_txid)
-                .any(|tag| tag == "Marketplace Offer Taken")
+                .any(|tag| tag == MarketplaceTag::OfferTaken)
         );
     }
 
@@ -22431,7 +22628,7 @@ mod tests {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(text.contains("Currency Defined"));
+        assert!(text.contains("Currency defined"));
         assert!(text.contains("c opens currency"));
         version.raw_json["identity"]["flags"] = json!(2);
         assert!(!identity_has_currency(&version));

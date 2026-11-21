@@ -1,10 +1,12 @@
 use super::*;
-use ratatui::widgets::{HighlightSpacing, List, ListItem, ListState};
+use ratatui::widgets::{HighlightSpacing, List, ListItem, ListState, Padding};
+
+const SCROLLBAR_COLUMNS: u16 = 2; // One blank gutter column and one rail column.
 
 pub(super) fn content_area(area: Rect, overflowing: bool) -> Rect {
-    let reserve = overflowing && area.width > 1 && area.height > 0;
+    let reserve = overflowing && area.width > SCROLLBAR_COLUMNS && area.height > 0;
     Rect {
-        width: area.width - u16::from(reserve),
+        width: area.width - if reserve { SCROLLBAR_COLUMNS } else { 0 },
         ..area
     }
 }
@@ -17,7 +19,8 @@ pub(super) fn render(
     first: usize,
     visible: usize,
 ) {
-    if total <= visible || visible == 0 || area.width < 2 || area.height == 0 {
+    let content = content_area(area, total > visible);
+    if content.width == area.width || visible == 0 {
         return;
     }
     let height = usize::from(area.height);
@@ -28,10 +31,15 @@ pub(super) fn render(
         .saturating_mul(height - thumb)
         .saturating_add(max_first / 2)
         / max_first;
-    let x = area.right() - 1;
+    let gutter_x = content.right();
+    let rail_x = gutter_x + 1;
     for (offset, y) in (area.y..area.bottom()).enumerate() {
         let active = (start..start + thumb).contains(&offset);
-        if let Some(cell) = frame.buffer_mut().cell_mut((x, y)) {
+        if let Some(cell) = frame.buffer_mut().cell_mut((gutter_x, y)) {
+            cell.reset();
+            cell.set_style(theme.tile_gutter());
+        }
+        if let Some(cell) = frame.buffer_mut().cell_mut((rail_x, y)) {
             cell.reset();
             cell.set_symbol(if active { "█" } else { "│" })
                 .set_style(if active {
@@ -114,13 +122,16 @@ pub(super) fn list(
     let total: usize = heights.iter().sum();
     let visible = usize::from(area.height);
     let mut selection = ListState::default().with_selected((!items.is_empty()).then_some(selected));
+    let content = content_area(area, total > visible);
+    let padding = u16::from(content.width > 3);
     frame.render_stateful_widget(
         List::new(items)
             .style(theme.base())
+            .block(Block::default().padding(Padding::right(padding)))
             .highlight_symbol("  ")
             .highlight_spacing(HighlightSpacing::Always)
             .highlight_style(theme.tile_body(true)),
-        content_area(area, total > visible),
+        content,
         &mut selection,
     );
     let first = heights.iter().take(selection.offset()).sum();
@@ -128,6 +139,18 @@ pub(super) fn list(
         && let Some(preceding) = heights.get(selection.offset()..index)
     {
         let offset = preceding.iter().sum::<usize>();
+        if padding > 0 {
+            let height = heights[index].min(visible.saturating_sub(offset));
+            frame.render_widget(
+                Block::default().style(theme.tile_body(true)),
+                Rect::new(
+                    content.right() - padding,
+                    area.y + offset as u16,
+                    padding,
+                    height as u16,
+                ),
+            );
+        }
         let height = heights[index]
             .saturating_sub(1)
             .max(1)
@@ -162,7 +185,7 @@ mod tests {
         let mut terminal = Terminal::new(TestBackend::new(12, 1)).unwrap();
         terminal
             .draw(|frame| {
-                let items = ["First", "Second"]
+                let items = ["First", "SecondEntry"]
                     .into_iter()
                     .map(|label| vec![Line::raw(label), Line::raw("details"), Line::default()])
                     .collect();
@@ -172,6 +195,23 @@ mod tests {
         let buffer = terminal.backend().buffer();
         assert_eq!(buffer[(0, 0)].symbol(), SELECTION_MARKER);
         assert_eq!(buffer[(2, 0)].symbol(), "S");
+        assert_eq!(buffer[(8, 0)].symbol(), "E");
+        assert_eq!(buffer[(9, 0)].symbol(), " ");
+        assert_eq!(buffer[(9, 0)].bg, theme.tile_body(true).bg.unwrap());
+        assert_eq!(buffer[(10, 0)].symbol(), " ");
+        assert_eq!(Some(buffer[(10, 0)].bg), theme.tile_gutter().bg);
         assert_eq!(buffer[(11, 0)].symbol(), "█");
+        assert_ne!(buffer[(10, 0)].bg, buffer[(11, 0)].bg);
+    }
+
+    #[test]
+    fn scrollbar_reserves_two_columns_only_when_there_is_room() {
+        let area = Rect::new(4, 2, 5, 3);
+        assert_eq!(content_area(area, true), Rect::new(4, 2, 3, 3));
+        assert_eq!(content_area(area, false), area);
+        for width in 0..=SCROLLBAR_COLUMNS {
+            let narrow = Rect { width, ..area };
+            assert_eq!(content_area(narrow, true), narrow);
+        }
     }
 }

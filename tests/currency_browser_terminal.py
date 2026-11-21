@@ -153,7 +153,7 @@ def run():
                 terminal.key(b'\r', .3)
                 wait(terminal, 'Currency VRSC')
                 terminal.key(b'/VRSC@\r', .5)
-                wait(terminal, 'Currency Defined')
+                wait(terminal, 'Currency defined')
                 assert 'c opens currency' in terminal.screen(), terminal.screen()
                 terminal.key(b'c', .3)
                 wait(terminal, 'Currency VRSC')
@@ -161,7 +161,7 @@ def run():
                 assert 'path' in terminal.screen() and 'ID VRSC' in terminal.screen(), terminal.screen()
                 assert 'API communication requires permission' not in terminal.screen(), terminal.screen()
                 terminal.key(b'\tc', .3)  # Currency JSON to the original identity.
-                wait(terminal, 'Currency Defined')
+                wait(terminal, 'Currency defined')
                 terminal.key(b'\tc', .3)  # Identity JSON to currency.
                 wait(terminal, 'c open identity')
                 terminal.key(b'c\x1b', .3)
@@ -171,7 +171,7 @@ def run():
                 wait(terminal, 'Currency Bridge.vDEX')
                 wait(terminal, 'c open identity')
                 terminal.key(b'c', .4)
-                wait(terminal, 'Currency Defined')
+                wait(terminal, 'Currency defined')
                 assert ('getidentity', [BRIDGE]) in server.calls, server.calls
                 terminal.key(b'c', .3)
                 wait(terminal, 'Currency Bridge.vDEX')

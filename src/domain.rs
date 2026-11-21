@@ -73,6 +73,60 @@ pub struct OutputTag {
     pub currency_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MarketplaceTag {
+    Offer,
+    OfferClosed,
+    OfferProof,
+    OfferTaken,
+}
+
+impl MarketplaceTag {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Offer => "Marketplace Offer",
+            Self::OfferClosed => "Marketplace Offer Closed",
+            Self::OfferProof => "Marketplace Offer Proof",
+            Self::OfferTaken => "Marketplace Offer Taken",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TransactionTag {
+    Coinbase,
+    Stake,
+    PrivateInput,
+    PrivateOutput,
+    NameCommitment,
+    IdentityRegistration,
+    IdentityUpdate,
+    Output(OutputTag),
+    ConsumptionBurn,
+    StakeGuardEnforcement,
+    AutoArbitrageImport,
+    Marketplace(MarketplaceTag),
+}
+
+impl TransactionTag {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Coinbase => "Coinbase",
+            Self::Stake => "Stake",
+            Self::PrivateInput => "Private Input",
+            Self::PrivateOutput => "Private Output",
+            Self::NameCommitment => "Name Commitment",
+            Self::IdentityRegistration => "Identity Registration",
+            Self::IdentityUpdate => "Identity Update",
+            Self::Output(tag) => tag.kind.label(),
+            Self::ConsumptionBurn => "Consumption Burn",
+            Self::StakeGuardEnforcement => "StakeGuard Enforcement",
+            Self::AutoArbitrageImport => "Auto-Arbitrage Import",
+            Self::Marketplace(tag) => tag.label(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EmissionTimelock {
     pub locked_output_index: usize,
@@ -173,7 +227,7 @@ pub struct TransactionSummary {
 }
 
 impl TransactionSummary {
-    pub fn tags(&self) -> Vec<&'static str> {
+    pub fn tags(&self) -> Vec<TransactionTag> {
         let Some(raw) = &self.raw else {
             return Vec::new();
         };
@@ -185,34 +239,33 @@ impl TransactionSummary {
             .and_then(Value::as_array)
             .is_some_and(|inputs| inputs.iter().any(|input| input.get("coinbase").is_some()))
         {
-            tags.push("coinbase");
+            tags.push(TransactionTag::Coinbase);
         }
         if is_stake_transaction(raw) {
-            tags.push("stake");
+            tags.push(TransactionTag::Stake);
         }
         if private_input_count(raw) > 0 {
-            tags.push("Private Input");
+            tags.push(TransactionTag::PrivateInput);
         }
         if private_output_count(raw) > 0 {
-            tags.push("Private Output");
+            tags.push(TransactionTag::PrivateOutput);
         }
         if has_name_commitment_output(raw) {
-            tags.push("Name Commitment");
+            tags.push(TransactionTag::NameCommitment);
         }
         if is_identity_registration(raw)
             || text.contains("identityregistration")
             || text.contains("identity registration")
         {
-            tags.push("identity registration");
+            tags.push(TransactionTag::IdentityRegistration);
         } else if text.contains("identity") {
-            tags.push("identity update");
+            tags.push(TransactionTag::IdentityUpdate);
         }
-        for output_tag in transaction_output_tags(raw) {
-            let label = output_tag.kind.label();
-            if !tags.contains(&label) {
-                tags.push(label);
-            }
-        }
+        tags.extend(
+            transaction_output_tags(raw)
+                .into_iter()
+                .map(TransactionTag::Output),
+        );
 
         tags
     }
@@ -1018,7 +1071,10 @@ mod defi_tests {
             txid: export["txid"].as_str().unwrap().into(),
             raw: Some(export.clone()),
         }
-        .tags();
+        .tags()
+        .iter()
+        .map(super::TransactionTag::label)
+        .collect::<Vec<_>>();
         assert!(tags.contains(&"Pending Export Finalization"), "{tags:?}");
         let observing = crate::world::system_id("VRSC", crate::world::Network::Mainnet).unwrap();
         let links = crate::relationships::transaction_links(&observing, export);
@@ -1066,7 +1122,10 @@ mod defi_tests {
             txid: "test".into(),
             raw: Some(raw.clone()),
         }
-        .tags();
+        .tags()
+        .iter()
+        .map(super::TransactionTag::label)
+        .collect::<Vec<_>>();
         assert_eq!(
             tags,
             vec![
@@ -1098,7 +1157,10 @@ mod defi_tests {
             txid,
             raw: Some(raw),
         }
-        .tags();
+        .tags()
+        .iter()
+        .map(super::TransactionTag::label)
+        .collect::<Vec<_>>();
         assert!(
             tags.contains(&"Pending Notarization Finalization"),
             "{tags:?}"
@@ -1118,7 +1180,10 @@ mod defi_tests {
                 txid: "test".into(),
                 raw: Some(raw),
             }
-            .tags();
+            .tags()
+            .iter()
+            .map(super::TransactionTag::label)
+            .collect::<Vec<_>>();
             assert!(
                 !tags.iter().any(|tag| tag.to_lowercase().contains("notar")),
                 "{tags:?}"
@@ -1251,7 +1316,12 @@ mod defi_tests {
             txid: transaction["txid"].as_str().unwrap().to_string(),
             raw: Some(transaction),
         };
-        assert!(summary.tags().contains(&"Emission Timelock"));
+        assert!(
+            summary
+                .tags()
+                .iter()
+                .any(|tag| tag.label() == "Emission Timelock")
+        );
     }
 
     #[test]
@@ -1291,8 +1361,16 @@ mod defi_tests {
             })),
         };
 
-        assert!(registration.tags().contains(&"identity registration"));
-        assert!(!marketplace_funding.tags().contains(&"Name Commitment"));
+        assert!(
+            registration
+                .tags()
+                .contains(&super::TransactionTag::IdentityRegistration)
+        );
+        assert!(
+            !marketplace_funding
+                .tags()
+                .contains(&super::TransactionTag::NameCommitment)
+        );
     }
 
     #[test]
