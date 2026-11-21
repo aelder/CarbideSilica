@@ -77,7 +77,7 @@ fn selected_source(config: &Config, api: Option<usize>) -> (String, String) {
     let source = if let Some(api) = api {
         crate::rpc::source_id("public-api", &config.daemon.api_pool.endpoints[api].url)
     } else {
-        config.source_cache_key("local-daemon")
+        config.daemon_cache_key()
     };
     (config.chain_cache_key(), source)
 }

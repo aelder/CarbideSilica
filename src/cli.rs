@@ -45,12 +45,6 @@ pub struct Cli {
     #[arg(long = "rpcpassword", value_name = "PASSWORD")]
     pub rpc_password: Option<String>,
 
-    #[arg(long = "api-fallback")]
-    pub api_fallback: bool,
-
-    #[arg(long = "fork-api")]
-    pub fork_api: bool,
-
     #[arg(long = "emoji", value_enum, default_value = "auto")]
     pub emoji: EmojiMode,
 
@@ -96,8 +90,6 @@ fn normalize_verus_style_args(args: impl IntoIterator<Item = OsString>) -> Vec<O
     args.into_iter()
         .map(|arg| match arg.to_str() {
             Some("-testnet") => OsString::from("--testnet"),
-            Some("-api-fallback") => OsString::from("--api-fallback"),
-            Some("-fork-api") => OsString::from("--fork-api"),
             Some("-chain") => OsString::from("--chain"),
             Some("-datadir") => OsString::from("--datadir"),
             Some(value) if value.starts_with("-datadir=") => {

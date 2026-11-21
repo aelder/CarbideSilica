@@ -11,7 +11,6 @@ use crate::cli::{Cli, EmojiMode};
 pub struct Config {
     pub chain: ChainSelection,
     pub daemon: DaemonConfig,
-    pub public_api: PublicApiConfig,
     /// Optional hydration must not request permission, including in nested loaders.
     pub api_consent: bool,
     pub cache_path: PathBuf,
@@ -38,13 +37,6 @@ pub struct DaemonConfig {
     pub control: std::sync::Arc<crate::sources::Control>,
     pub observations:
         Option<tokio::sync::mpsc::UnboundedSender<crate::chain_state::RpcObservation>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct PublicApiConfig {
-    pub fallback_enabled: bool,
-    pub fork_analysis_enabled: bool,
-    pub base_url: String,
 }
 
 impl Config {
@@ -108,11 +100,6 @@ impl Config {
                 background: false,
             },
             api_consent: true,
-            public_api: PublicApiConfig {
-                fallback_enabled: cli.api_fallback,
-                fork_analysis_enabled: cli.fork_api,
-                base_url: "https://api.verus.services".to_string(),
-            },
             cache_path: default_cache_path(network),
             emoji: cli.emoji,
             poll_interval_seconds,
@@ -143,16 +130,9 @@ impl Config {
             .unwrap_or_default()
     }
 
-    pub fn source_cache_key(&self, source: &str) -> String {
-        if source.contains(':') {
-            return source.to_string();
-        }
-        let locator = if source == "public-api" {
-            self.public_api.base_url.clone()
-        } else {
-            format!("http://{}:{}", self.daemon.host, self.daemon.port)
-        };
-        crate::rpc::source_id(source, &locator)
+    pub fn daemon_cache_key(&self) -> String {
+        let locator = format!("http://{}:{}", self.daemon.host, self.daemon.port);
+        crate::rpc::source_id("local-daemon", &locator)
     }
 
     pub fn bind_system(&self, info: &serde_json::Value) -> Result<()> {

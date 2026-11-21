@@ -157,7 +157,7 @@ impl Reconciler {
         config.daemon.observations = None;
         let client = RpcClient::for_config(&config)?.noninteractive();
         let cache = Cache::open(&config.cache_path)?;
-        let source = config.source_cache_key("local-daemon");
+        let source = config.daemon_cache_key();
         let state = cache
             .reconciliation_state(&config.chain_cache_key(), &source)
             .await?;

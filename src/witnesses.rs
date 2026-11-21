@@ -170,7 +170,7 @@ fn collect_signatures(value: &Value, origins: &[Origin], report: &mut Report, de
 }
 
 fn source_label(config: &Config, source: &str) -> String {
-    if source == config.source_cache_key("local-daemon") {
+    if source == config.daemon_cache_key() {
         return format!(
             "{} daemon {}:{}",
             config.chain.name, config.daemon.host, config.daemon.port
@@ -210,7 +210,7 @@ impl Fetcher {
         );
         let params = json!([txid, 1]).to_string();
         let cache = Cache::open(&self.config.cache_path)?;
-        let mut sources = vec![self.config.source_cache_key("local-daemon")];
+        let mut sources = vec![self.config.daemon_cache_key()];
         sources.extend(
             self.config
                 .daemon

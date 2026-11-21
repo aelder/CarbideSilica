@@ -470,27 +470,11 @@ impl Registry {
             if let Some(id) = config.chain.system_id.get() {
                 let _ = config.daemon.control.expected.set((id.clone(), network));
             }
-            let mut apis: Vec<_> = saved
-                .apis
-                .iter()
-                .filter(|api| {
-                    api.network == network
-                        && crate::world::system_id(&api.chain, network).ok().as_ref()
-                            == config.chain.system_id.get()
-                })
-                .cloned()
-                .collect();
-            if apis.is_empty()
-                && network == Network::Mainnet
-                && config.chain.name.eq_ignore_ascii_case("VRSC")
-            {
-                apis.push(SavedApi {
-                    network,
-                    chain: config.chain.name.clone(),
-                    endpoint: config.public_api.base_url.clone(),
-                    enabled: config.public_api.fallback_enabled,
-                });
-            }
+            let apis = saved.apis.iter().filter(|api| {
+                api.network == network
+                    && crate::world::system_id(&api.chain, network).ok().as_ref()
+                        == config.chain.system_id.get()
+            });
             let mut endpoints = Vec::new();
             for api in apis {
                 let parsed = reqwest::Url::parse(&api.endpoint).context("invalid API URL")?;
@@ -510,7 +494,7 @@ impl Registry {
                     ConnectionState::Disabled
                 });
                 endpoints.push(ApiEndpoint {
-                    url: api.endpoint,
+                    url: api.endpoint.clone(),
                     control,
                     retry_after: Default::default(),
                 });
@@ -626,8 +610,6 @@ fn config_from_file(
             .set_identity_index(value == "1" || value.eq_ignore_ascii_case("true"));
     }
     config.daemon.control.set(state);
-    config.public_api.fallback_enabled = false;
-    config.public_api.fork_analysis_enabled = false;
     Ok(config)
 }
 

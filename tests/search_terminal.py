@@ -50,6 +50,8 @@ class Daemon(http.server.BaseHTTPRequestHandler):
             value = [TRANSACTION]
         elif method == 'getcurrency' and params[0] != OTHER_CURRENCY:
             value = dict(currencyid=params[0], name='VRSC', systemid=VRSC)
+        elif method in ('getblock', 'getblockheader') and params[0] == MISSING_TX:
+            error = dict(code=-5, message='Block not found')
         elif method in ('getblock', 'getblockheader'):
             block = TARGET if params[0] == TARGET else TIP
             value = dict(hash=block, height=0 if block == TARGET else 1,
@@ -78,6 +80,11 @@ def run():
             conf.write_text(f'rpcconnect=127.0.0.1\nrpcport={server.server_port}\nrpcuser=test\nrpcpassword=test\n')
             terminal = Terminal(root, conf)
             try:
+                terminal.key(b'/' + MISSING_TX.encode() + b'\r', 1)
+                screen = terminal.screen()
+                assert 'not found as a transaction' in screen, screen
+                assert 'API communication requires permission' not in screen, screen
+
                 terminal.key(b'/' + TARGET.encode() + b'\r', 1)
                 screen = terminal.screen()
                 assert 'API communication requires permission' not in screen, screen

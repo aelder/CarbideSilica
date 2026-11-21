@@ -33,8 +33,7 @@ Carbide starts on VRSC and discovers daemon configurations in the standard Verus
 
 ```sh
 ./target/release/vcarbide 4226272
-./target/release/vcarbide 'vARRR@@'
-./target/release/vcarbide -chain=vARRR
+./target/release/vcarbide -chain=VRSC 'vETH@@'
 ```
 
 Use `-testnet` for testnet or `-conf=/path/to/daemon.conf` for a nonstandard daemon configuration. For toolchain and portable build instructions, see the [build notes](BUILD.md).
@@ -64,28 +63,28 @@ Press `/`, enter a value, then press `Enter`. A search opens a new navigation ro
 | A transaction ID | Transaction overview, inputs and outputs |
 | `1788700744` or `2026-09-06 13:19:04 UTC` | Block nearest the requested time among the headers checked |
 | `2026-09-06` | Block near midnight UTC on that date |
-| `vARRR@` or its i-address | Identity, authorities, registration and activity |
+| `vETH@` or its i-address | Identity, authorities, registration and activity |
 | `RXPzH3i4fZaaPFdkVHWKRDgXDqrFXErEGz` | Transparent recipient from the walkthrough |
-| `vARRR@@` | Currency definition and state on the current chain |
+| `vETH@@` | Currency definition and state on the current chain |
 
 Use the arrows or `j`/`k` to select, `Enter` or Right to follow, and `Esc` to close or go back. Press `q` to quit. The footer lists actions for the current view. `F1` or `?` opens Help. In data views, `Shift-I` toggles names and raw identity addresses, and `Shift-D` shows dates for supported heights and timestamps.
 
 ## Identities, currencies and notarizations
 
-Open `vARRR@` and look for **Currency defined**. Press `c` to switch between the identity and its currency. The identity shows signing authorities, registration evidence and transaction history. The currency shows definition flags, launch status, state and the height and time of its last confirmed notarization.
+Open `vETH@` and look for **Currency defined**. Press `c` to switch between the identity and its currency. The identity shows signing authorities, registration evidence and transaction history. The currency shows definition flags, launch status, state and the height and time of its last confirmed notarization.
 
-![vARRR identity with primary addresses, authority information and registration evidence](docs/images/identity.png)
+![vETH identity with primary addresses, authority information and registration evidence](docs/images/identity.png)
 
 <details>
 <summary>See the associated currency definition</summary>
 
-![vARRR currency showing its launch status, notarization links and definition flags](docs/images/currency.png)
+![vETH currency showing its launch status, notarization links and definition flags](docs/images/currency.png)
 
 </details>
 
-Press `n` on the currency to browse confirmed and pending notarizations. Read the perspective above the list. In this capture, VRSC reports one confirmed and one unconfirmed vARRR notarization. **No source configured for this chain** means Carbide has no vARRR source to check the foreign proof root. With both daemons available, `Tab` switches perspectives. Open a row with `Enter`, then use `F4` in the transaction to investigate witness signatures.
+Press `n` on the currency to browse confirmed and pending notarizations. The screenshot shows the VRSC perspective on the vETH gateway, with the proof-root heights for both systems and the age of each notarization on VRSC. Open a row with `Enter`, then use `F4` in the transaction to investigate witness signatures.
 
-![VRSC perspective on vARRR notarizations showing confirmation status and both systems’ proof-root heights](docs/images/notarizations.png)
+![VRSC perspective on vETH notarizations showing confirmation status and both systems’ proof-root heights](docs/images/notarizations.png)
 
 ## Charts and time
 

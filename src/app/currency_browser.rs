@@ -115,15 +115,14 @@ pub(super) fn spawn(config: Config, tx: UnboundedSender<AppEvent>, request: u64)
         let cached =
             tokio::task::spawn_blocking(move || -> Result<Option<(Vec<Entry>, String)>> {
                 let cache = Cache::open(&cached_config.cache_path)?;
-                let sources = std::iter::once(cached_config.source_cache_key("local-daemon"))
-                    .chain(
-                        cached_config
-                            .daemon
-                            .api_pool
-                            .endpoints
-                            .iter()
-                            .map(|endpoint| crate::rpc::source_id("public-api", &endpoint.url)),
-                    );
+                let sources = std::iter::once(cached_config.daemon_cache_key()).chain(
+                    cached_config
+                        .daemon
+                        .api_pool
+                        .endpoints
+                        .iter()
+                        .map(|endpoint| crate::rpc::source_id("public-api", &endpoint.url)),
+                );
                 for source in sources {
                     if let Some(raw) = cache.raw_rpc_response(
                         &source,

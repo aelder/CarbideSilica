@@ -1301,7 +1301,7 @@ pub async fn run(
     for source in &registry.configs {
         let endpoint = format!("http://{}:{}", source.daemon.host, source.daemon.port);
         cache.register_source(
-            &source.source_cache_key("local-daemon"),
+            &source.daemon_cache_key(),
             &source.chain_cache_key(),
             &endpoint,
         )?;
@@ -3088,7 +3088,7 @@ async fn cached_rpc_response(
     params_json: &str,
 ) -> Result<Option<(Value, String)>> {
     let cache = Cache::open(&config.cache_path)?;
-    let mut sources = vec![config.source_cache_key("local-daemon")];
+    let mut sources = vec![config.daemon_cache_key()];
     sources.extend(
         config
             .daemon
@@ -12128,7 +12128,7 @@ fn render_dashboard(
 ) -> Range<usize> {
     let body = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(6), Constraint::Min(3)])
+        .constraints([Constraint::Length(5), Constraint::Min(3)])
         .split(area);
 
     let summary = Paragraph::new(vec![
@@ -12147,10 +12147,6 @@ fn render_dashboard(
                     theme.negative()
                 },
             ),
-        ]),
-        Line::from(vec![
-            Span::styled("API: ", theme.muted()),
-            Span::styled(public_api_label(config), theme.warning()),
         ]),
         Line::from("Use Up/Down or j/k to select a block. Enter/Right/l opens it."),
     ])
@@ -18004,14 +18000,6 @@ fn current_unix_timestamp() -> i64 {
     time::OffsetDateTime::now_utc().unix_timestamp()
 }
 
-fn public_api_label(config: &Config) -> String {
-    if config.public_api.fallback_enabled || config.public_api.fork_analysis_enabled {
-        format!("{} enabled as configured", config.public_api.base_url)
-    } else {
-        format!("{} configured but disabled", config.public_api.base_url)
-    }
-}
-
 fn config_file_label(config: &Config) -> String {
     config
         .daemon
@@ -18961,11 +18949,6 @@ mod tests {
                 background: false,
             },
             api_consent: true,
-            public_api: crate::config::PublicApiConfig {
-                fallback_enabled: false,
-                fork_analysis_enabled: false,
-                base_url: String::new(),
-            },
             cache_path: PathBuf::new(),
             emoji: crate::cli::EmojiMode::Off,
             poll_interval_seconds: 3,
@@ -19122,7 +19105,7 @@ mod tests {
         let cache = Cache::open(&config.cache_path).unwrap();
         cache
             .put_raw_rpc(
-                &config.source_cache_key("local-daemon"),
+                &config.daemon_cache_key(),
                 &config.chain_cache_key(),
                 "getrawtransaction",
                 "[\"pending\",1]",
@@ -19364,11 +19347,6 @@ mod tests {
                 background: false,
             },
             api_consent: true,
-            public_api: crate::config::PublicApiConfig {
-                fallback_enabled: false,
-                fork_analysis_enabled: false,
-                base_url: String::new(),
-            },
             cache_path: cache_path.clone(),
             emoji: crate::cli::EmojiMode::Off,
             poll_interval_seconds: 3,
@@ -19378,7 +19356,7 @@ mod tests {
         let cache = Cache::open(&cache_path).expect("open test cache");
         cache
             .put_raw_rpc(
-                &config.source_cache_key("local-daemon"),
+                &config.daemon_cache_key(),
                 &config.chain_cache_key(),
                 "getrawtransaction",
                 &params_json,
@@ -19561,8 +19539,8 @@ mod tests {
                 .unwrap();
             let buffer = terminal.backend().buffer();
             let midpoint = width / 2;
-            assert_eq!(buffer[(midpoint + 2, 6)].bg, theme.accent);
-            for y in 6..20 {
+            assert_eq!(buffer[(midpoint + 2, 5)].bg, theme.accent);
+            for y in 5..20 {
                 for x in midpoint - 1..midpoint + 2 {
                     let cell = &buffer[(x, y)];
                     assert_eq!(cell.symbol(), " ");
@@ -19597,7 +19575,7 @@ mod tests {
             let rail_x = width / 2 - 2;
             let gutter_x = rail_x - 1;
             let tile_x = gutter_x - 1;
-            let first_block_y = 7 + SECTION_HEADING_HEIGHT;
+            let first_block_y = 6 + SECTION_HEADING_HEIGHT;
             let first_block = state
                 .store
                 .block(&state.dashboard.recent_blocks[0])
@@ -21053,11 +21031,6 @@ mod tests {
                 background: false,
             },
             api_consent: true,
-            public_api: crate::config::PublicApiConfig {
-                fallback_enabled: false,
-                fork_analysis_enabled: false,
-                base_url: String::new(),
-            },
             cache_path: std::path::PathBuf::new(),
             emoji: crate::cli::EmojiMode::Off,
             poll_interval_seconds: 3,

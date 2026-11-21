@@ -1018,7 +1018,7 @@ async fn load_inner(
         });
     };
     let mut known_view = view.clone();
-    let mut sources = vec![config.source_cache_key("local-daemon")];
+    let mut sources = vec![config.daemon_cache_key()];
     sources.extend(
         config
             .daemon
@@ -2363,7 +2363,7 @@ mod tests {
             .daemon
             .control
             .set(crate::sources::ConnectionState::Disabled);
-        let source = config.source_cache_key("local-daemon");
+        let source = config.daemon_cache_key();
         let cache = Cache::open(&config.cache_path).unwrap();
         for height in 0..=1 {
             let raw = header(height, height * 60, height == 1);
