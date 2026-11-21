@@ -1,8 +1,10 @@
 # Storage architecture — schema 6
 
 The explorer owns one SQLite database per network: `mainnet.sqlite3` and
-`testnet.sqlite3` in the platform cache directory. System IDs qualify objects
-inside each file; the selected navigation chain never selects another network.
+`testnet.sqlite3` under `$XDG_CACHE_HOME/verus-carbide/` on Linux. If
+`XDG_CACHE_HOME` is unset, the directory is `~/.cache/verus-carbide/`. System
+IDs qualify objects inside each file. The selected navigation chain never
+selects another network.
 
 ## Ownership and writes
 

@@ -5,8 +5,8 @@
 The explorer runs against one network per process and can navigate across every known system in that network. Mainnet and testnet use separate databases, source registries, information graphs, and sessions:
 
 ```text
-~/.cache/verus-explorer-tui/mainnet.sqlite3
-~/.cache/verus-explorer-tui/testnet.sqlite3
+~/.cache/verus-carbide/mainnet.sqlite3
+~/.cache/verus-carbide/testnet.sqlite3
 ```
 
 There is no global or focused operating mode. The user selects a **current chain** at invocation and may change it explicitly. It defaults to VRSC and controls Dashboard, Mempool, Peers, other chain workspaces, the status bar, and unqualified searches. Each blockchain object separately retains its owning system. Following an object on another system never changes the current chain.

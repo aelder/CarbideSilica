@@ -10,7 +10,19 @@ Select **Stream Blocks** to watch new blocks arrive. Move down to keep a particu
 
 Carbide has only been tested on Debian 13.
 
-With Rust 1.88 or newer and a running Verus daemon, build and start Carbide from the repository root.
+On a fresh Debian installation, install the native build tools and the tools
+needed to fetch the source and install Rust.
+
+```sh
+sudo apt update
+sudo apt install build-essential ca-certificates curl git
+```
+
+Install a stable Rust toolchain with [rustup](https://rust-lang.org/tools/install/)
+if you need Rust and Cargo. Carbide requires Rust 1.88 or newer. Open a new shell
+after installing rustup so its tools are on your path.
+
+With a running Verus daemon, build and start Carbide from the repository root.
 
 ```sh
 cargo build --release --locked
@@ -96,7 +108,7 @@ Press `F9` to chart block intervals, mining or staking difficulty, PoW Ratio, or
 
 - **Daemon lookup fails.** Run `./target/release/vcarbide --probe` with the same chain and configuration arguments. In `F2` Sources, check the selected chain, config path and connection status. Enabling a daemon allows requests. Monitoring also polls its tip and mempool.
 - **A view has missing history or names.** Some lookups need an index the daemon may lack. Requests prefer the local daemon. An enabled, chain-compatible API can fill gaps. An explicit failed lookup can offer a source-selection prompt. Press `Esc` to cancel or `r` to retry.
-- **Cache or settings location.** Help shows the cache path and usage. Mainnet and testnet have separate SQLite files. On Linux, settings normally live in `~/.config/verus-explorer-tui/config.toml`. Bookmarks live separately under `~/.local/share/verus-explorer-tui/`.
+- **Cache or settings location.** Help shows the cache path and usage. On Linux, the cache holds `mainnet.sqlite3` and `testnet.sqlite3` under `~/.cache/verus-carbide/`, or `$XDG_CACHE_HOME/verus-carbide/` if set. Settings and bookmarks are stored separately. See the [explorer reference](docs/reference.md).
 - **Copying over SSH or tmux.** Run `./target/release/vcarbide --clipboard-test` and paste into another window to check the terminal clipboard path. See the [clipboard configuration guide](docs/reference.md#clipboard-testing-and-tmux).
 
 ## Further reading

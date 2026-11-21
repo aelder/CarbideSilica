@@ -91,7 +91,7 @@ def run():
             root = Path(directory)
             conf = root/"VRSC.conf"
             conf.write_text(f"rpcconnect=127.0.0.1\nrpcport={server.server_port}\nrpcuser=test\nrpcpassword=test\n")
-            path = root/"cache/verus-explorer-tui/mainnet.sqlite3"
+            path = root/"cache/verus-carbide/mainnet.sqlite3"
             def state():
                 if not path.exists(): return {}
                 with sqlite3.connect(path) as db:

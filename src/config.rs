@@ -113,7 +113,7 @@ impl Config {
                 fork_analysis_enabled: cli.fork_api,
                 base_url: "https://api.verus.services".to_string(),
             },
-            cache_path: default_cache_path(&cli.chain, network == crate::world::Network::Testnet),
+            cache_path: default_cache_path(network),
             emoji: cli.emoji,
             poll_interval_seconds,
         };
@@ -260,11 +260,12 @@ fn resolve_config_path(cli: &Cli, network: crate::world::Network) -> Result<Path
     })
 }
 
-fn default_cache_path(_chain: &str, testnet: bool) -> PathBuf {
+fn default_cache_path(network: crate::world::Network) -> PathBuf {
     BaseDirs::new()
-        .map(|dirs| dirs.cache_dir().join("verus-explorer-tui"))
+        .map(|dirs| dirs.cache_dir().to_path_buf())
         .unwrap_or_else(|| PathBuf::from(".cache"))
-        .join(crate::world::Network::from_testnet(testnet).database_name())
+        .join("verus-carbide")
+        .join(network.database_name())
 }
 
 fn default_rpc_port(chain: &str, testnet: bool) -> u16 {
