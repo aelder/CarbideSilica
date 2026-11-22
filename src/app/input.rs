@@ -1,6 +1,10 @@
 //! Normalize navigation events once, before dispatch to any screen or overlay.
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, MouseEventKind};
 
+pub(super) fn quit_pressed(event: &Event) -> bool {
+    matches!(event, Event::Key(key) if key.code == KeyCode::Char('q') && key.kind == KeyEventKind::Press)
+}
+
 pub(super) fn navigation_key(event: Event) -> Option<KeyEvent> {
     match event {
         Event::Key(key) if key.kind == KeyEventKind::Press => Some(key),

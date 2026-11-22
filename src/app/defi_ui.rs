@@ -1,6 +1,6 @@
 //! Presentation of instruction budgets and exact per-leg receipts.
 use super::*;
-use crate::defi::{Amount, LegSummary, ReceiptKind};
+use crate::defi::{Amount, LegSummary, ReceiptKind, Stage};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct AssetLink {
@@ -50,13 +50,23 @@ pub(super) fn summary_lines(
             },
             amounts_label(Some(&receipt.amounts), store),
         ),
-        None => ("Received", "unresolved".into()),
+        None => match &leg.supply_burn {
+            Some(burn) => ("Burned", amount_label(&burn.selected, store)),
+            None if leg.stage == Stage::BurnUnverified => ("Burned", "unverified".into()),
+            None => ("Received", "unresolved".into()),
+        },
     };
     lines.push(Line::from(format!(
         "    {:<12}{}   {label:<12}{result}",
         "Sent",
         amounts_label(leg.principal.as_deref(), store)
     )));
+    if let Some(burn) = &leg.supply_burn {
+        lines.push(Line::from(format!(
+            "    Batch supply reduction  {}",
+            amount_label(&burn.batch_total, store)
+        )));
+    }
     lines.push(Line::from(format!(
         "    {:<12}{}{}",
         "Fee budget",

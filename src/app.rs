@@ -15,6 +15,7 @@ mod input;
 mod json_dates;
 mod notarization_ui;
 mod peer_controls;
+mod registration_payments;
 mod reorg_ui;
 mod scroll_view;
 mod source_ui;
@@ -214,6 +215,8 @@ struct ObjectStore {
     identity_names: HashMap<String, String>,
     identity_history_complete: HashSet<String>,
     identity_evidence: HashMap<String, (u64, identity_evidence::IdentityEvidence)>,
+    registration_payments:
+        HashMap<registration_payments::Key, (Arc<()>, registration_payments::Status)>,
     loading_identity_evidence: HashSet<String>,
     loading_historical_identity_evidence: HashSet<String>,
     identities_by_primary_address: HashMap<String, AddressIdentityAssociations>,
@@ -612,6 +615,11 @@ enum ViewMode {
 #[derive(Debug)]
 enum AppEvent {
     NotarizationChanged,
+    RegistrationPayments {
+        key: registration_payments::Key,
+        request: Arc<()>,
+        report: Option<registration_payments::Report>,
+    },
     ClipboardCopied {
         label: String,
         bytes: usize,
@@ -1291,8 +1299,8 @@ struct ChainSession {
     tx: UnboundedSender<AppEvent>,
 }
 
-pub async fn run(
-    _config: Config,
+pub fn run(
+    runtime: tokio::runtime::Runtime,
     cache: Cache,
     start_object: Option<String>,
     mut registry: crate::sources::Registry,
@@ -1313,7 +1321,7 @@ pub async fn run(
             )?;
         }
     }
-    let _cache_guard = cache;
+    let runtime_context = runtime.enter();
     let route = classify_start_object(start_object.as_deref());
     let mut sessions = vec![create_session(
         config.clone(),
@@ -1356,8 +1364,20 @@ pub async fn run(
             .control
             .set(crate::sources::ConnectionState::Disabled);
     }
-    restore_terminal(&mut terminal)?;
-    result
+    // The runtime joins running blocking work before the final cache handle
+    // closes its SQLite worker. Keep the alternate screen through both waits.
+    drop(runtime_context);
+    drop(runtime);
+    let cache_notice = if result.is_ok() {
+        draw_shutdown(&mut terminal, &theme, "Closing the local cache…")
+    } else {
+        Ok(())
+    };
+    drop(cache);
+    let restored = restore_terminal(&mut terminal);
+    result?;
+    restored?;
+    cache_notice
 }
 
 fn create_session(
@@ -1682,6 +1702,7 @@ fn revision_sender(config: &Config, tx: UnboundedSender<AppEvent>) -> UnboundedS
 }
 
 fn invalidate_reorg_views(state: &mut AppState) {
+    state.store.registration_payments.clear();
     state
         .store
         .stale_identities
@@ -3494,7 +3515,35 @@ fn run_loop(
     let mut source_activity = source_ui::Activity::default();
     let mut redraw = true;
     let mut last_periodic_draw = Instant::now();
+    let mut pending_input = None;
     loop {
+        if pending_input.is_none() && event::poll(Duration::ZERO)? {
+            pending_input = Some(event::read()?);
+        }
+        if pending_input.as_ref().is_some_and(input::quit_pressed) && consent.is_none() {
+            // Use the visible layer's focus, never an editor hidden beneath it.
+            let entering_text = if investigation.is_some() {
+                false
+            } else if bookmarks.open || bookmarks.editing() {
+                bookmarks.editing()
+            } else if sources_open {
+                false
+            } else if let Some(panel) = &defi {
+                panel.height_input.is_some()
+            } else if local_permission.is_some() || links_open {
+                false
+            } else {
+                quit_input_active(&sessions[active].state)
+            };
+            if !entering_text {
+                draw_shutdown(
+                    terminal,
+                    theme,
+                    "Finishing background work and pending cache writes…",
+                )?;
+                break;
+            }
+        }
         redraw |= bookmarks.has_updates();
         if let Some((bookmark, snapshot)) = bookmarks.poll() {
             let index = match sessions
@@ -4015,7 +4064,9 @@ fn run_loop(
 
         redraw |= drain_app_events(state, rx) > 0;
         request_chain_identity_names(state, config, &tx, chain_name_requests);
-        request_current_activity_identity_names(state, config, &tx);
+        if redraw {
+            request_current_activity_identity_names(state, config, &tx);
+        }
         chart_ui::drive(state, config, &tx, &mut chart_task);
         redraw |= height_dates.drive(
             theme,
@@ -4067,6 +4118,7 @@ fn run_loop(
             if let Screen::Transaction { txid, .. } = &state.screen {
                 let txid = txid.clone();
                 request_transaction_context(state, config, &tx, &txid);
+                registration_payments::request(state, config, &tx, &txid);
             }
             request_dashboard_page_if_needed(state, config, &tx);
             request_mempool_transaction_hydration(state, config, &tx);
@@ -4107,6 +4159,12 @@ fn run_loop(
         redraw |= notarization_ui::drive(state, config, &registry.configs, &tx, body.height);
         if sources_open {
             redraw |= source_activity.poll(&config.cache_path);
+        }
+        if pending_input.is_none() && event::poll(Duration::ZERO)? {
+            pending_input = Some(event::read()?);
+            if pending_input.as_ref().is_some_and(input::quit_pressed) {
+                continue;
+            }
         }
         let dashboard_animating = matches!(state.screen, Screen::Dashboard)
             && state.auxiliary.is_none()
@@ -4249,8 +4307,7 @@ fn run_loop(
             bookmarks.start_after_draw(&registry.configs);
         }
 
-        if event::poll(Duration::from_millis(50))? {
-            let event = event::read()?;
+        if let Some(event) = pending_input.take() {
             if let Event::Resize(width, height) = event {
                 // Fullscreen draw resizes and clears both buffers without querying the cursor.
                 theme.copy_values.borrow_mut().begin(false);
@@ -4316,23 +4373,6 @@ fn run_loop(
                     let _ = prompt.reply.send(decision);
                 }
                 continue;
-            }
-            // Use the visible layer's input focus, never an editor hidden beneath it.
-            let entering_text = if investigation.is_some() {
-                false
-            } else if bookmarks.open || bookmarks.editing() {
-                bookmarks.editing()
-            } else if sources_open {
-                false
-            } else if let Some(panel) = &defi {
-                panel.height_input.is_some()
-            } else if local_permission.is_some() || links_open {
-                false
-            } else {
-                quit_input_active(state)
-            };
-            if key.code == KeyCode::Char('q') && !entering_text {
-                break;
             }
             if key.code == KeyCode::Esc {
                 let closed = if investigation.take().is_some() {
@@ -5774,6 +5814,9 @@ fn run_loop(
                 }
                 _ => {}
             }
+        } else if event::poll(Duration::from_millis(50))? {
+            // Send every key through the priority check before the next update pass.
+            pending_input = Some(event::read()?);
         }
     }
 
@@ -6805,6 +6848,20 @@ fn handle_app_event(state: &mut AppState, app_event: AppEvent) {
 fn apply_app_event(state: &mut AppState, app_event: AppEvent) {
     match app_event {
         AppEvent::NotarizationChanged => {}
+        AppEvent::RegistrationPayments {
+            key,
+            request,
+            report,
+        } => {
+            if let Some((current, status)) = state.store.registration_payments.get_mut(&key)
+                && Arc::ptr_eq(current, &request)
+            {
+                *status = report.map_or(
+                    registration_payments::Status::Unverified,
+                    registration_payments::Status::Verified,
+                );
+            }
+        }
         AppEvent::ChartSeeked { request, result } => chart_ui::apply_seek(state, request, result),
         AppEvent::ChartSeekProgress { request, message } => {
             chart_ui::seek_progress(state, request, message)
@@ -8128,25 +8185,20 @@ fn request_current_identity_dependencies(
     }
     if let Some(address) = canonical {
         if history_complete {
-            let versions = state
+            let mut versions = state
                 .store
                 .identity_heights
                 .get(&address)
-                .map(|heights| {
-                    heights
-                        .iter()
-                        .rev()
-                        .filter_map(|height| {
-                            state
-                                .store
-                                .identity_versions
-                                .get(&(address.clone(), *height))
-                                .cloned()
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            if let Some(current) = versions.first() {
+                .into_iter()
+                .flatten()
+                .rev()
+                .filter_map(|height| {
+                    state
+                        .store
+                        .identity_versions
+                        .get(&(address.clone(), *height))
+                });
+            if let Some(current) = versions.next() {
                 let height = current.block_height;
                 let already_loaded = state
                     .store
@@ -8164,7 +8216,7 @@ fn request_current_identity_dependencies(
                         tx.clone(),
                         address.clone(),
                         height,
-                        versions,
+                        std::iter::once(current).chain(versions).cloned().collect(),
                     );
                 }
             }
@@ -10775,6 +10827,45 @@ fn render_relationships(
         })
         .collect();
     scroll_view::list(frame, theme, items, list, selected);
+}
+
+fn draw_shutdown(terminal: &mut Tui, theme: &Theme, message: &str) -> Result<()> {
+    terminal.draw(|frame| render_shutdown(frame, theme, message))?;
+    Ok(())
+}
+
+fn render_shutdown(frame: &mut Frame<'_>, theme: &Theme, message: &str) {
+    let area = frame.area();
+    frame.render_widget(Block::default().style(theme.base()), area);
+    let status = Paragraph::new(vec![
+        Line::styled("Shutting down", theme.focused()),
+        Line::styled(message, theme.muted()),
+    ])
+    .style(theme.base())
+    .alignment(Alignment::Center)
+    .wrap(Wrap { trim: true });
+    if area.width < 16 || area.height < 4 {
+        frame.render_widget(Clear, area);
+        frame.render_widget(status, area);
+        return;
+    }
+    let width = area.width.saturating_sub(2).min(52);
+    let height = (status.line_count(width - 2) + 2).min(usize::from(area.height)) as u16;
+    let popup = Rect::new(
+        area.x + (area.width - width) / 2,
+        area.y + (area.height - height) / 2,
+        width,
+        height,
+    );
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        status.block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(theme.muted()),
+        ),
+        popup,
+    );
 }
 
 fn render_disabled_daemon(frame: &mut Frame<'_>, theme: &Theme, connection: &Config, footer: Rect) {
@@ -13853,6 +13944,7 @@ fn transaction_flow_selections(flows: &[TransactionFlow]) -> Vec<(usize, FlowLin
 
 fn transaction_flows(raw: &Value, store: &ObjectStore) -> Vec<TransactionFlow> {
     let mut flows = Vec::new();
+    let registration = registration_payments::report(raw, store);
     let auto_arbitrage_inputs = import_auto_arbitrage_input_indexes(raw, store);
     let marketplace_tags = raw
         .get("txid")
@@ -14034,6 +14126,11 @@ fn transaction_flows(raw: &Value, store: &ObjectStore) -> Vec<TransactionFlow> {
             .then(|| "Marketplace Offer Refund".to_string())
             .into_iter()
             .collect::<Vec<_>>();
+            annotations.extend(
+                registration
+                    .and_then(|report| report.annotation(index))
+                    .map(str::to_owned),
+            );
             if let Some(legacy) = crate::domain::legacy_notarization(output) {
                 references.links.push(crate::protocol::Link {
                     label: "Notarized VRSC block".into(),
@@ -14722,6 +14819,7 @@ fn render_transaction_view(
             Span::raw(detail),
         ]));
     }
+    header_lines.extend(registration_payments::lines(raw, &state.store, theme));
     if raw["vout"].as_array().is_some_and(|outputs| {
         outputs
             .iter()
@@ -15878,19 +15976,48 @@ fn render_identity_evidence(
     };
     let mut lines = vec![Line::from(vec![
         Span::styled("Registration and associations", theme.focused()),
-        Span::styled(
-            format!("  {} evidence links", report.links.len()),
+        Span::raw("  "),
+        theme.value(
+            "evidence link count",
+            report.links.len().to_string(),
             theme.muted(),
         ),
+        Span::styled(" evidence links", theme.muted()),
     ])];
     if let Some(input) = historical_height_input {
         lines.push(Line::from(format!("Historical reverse window ends at: {input}_  (Enter to query 1,000 blocks, Esc to cancel)")));
     }
     if let Some(registration) = &report.registration {
-        lines.push(Line::from(format!(
-            "  {}",
-            theme.height_text(registration, "")
-        )));
+        let outpoint = report
+            .links
+            .iter()
+            .find(|link| link.label == "Registration transaction");
+        lines.push(
+            if let Some((name, shortened)) = registration.rsplit_once("  tx ")
+                && let Some(link) = outpoint
+            {
+                Line::from(vec![
+                    Span::raw("  "),
+                    theme.value("registered identity", name, Style::default()),
+                    Span::raw("  tx "),
+                    theme.value_as(
+                        "registration outpoint",
+                        shortened,
+                        &link.source,
+                        Style::default(),
+                    ),
+                ])
+            } else {
+                Line::from(vec![
+                    Span::raw("  "),
+                    theme.value(
+                        "registration details",
+                        theme.height_text(registration, ""),
+                        Style::default(),
+                    ),
+                ])
+            },
+        );
     }
     let primary_count = identity_primary_addresses(version).len();
     let heading_height = lines.len() as u16;
@@ -15926,48 +16053,64 @@ fn render_identity_evidence(
             | identity_evidence::EvidenceTarget::Transaction(value) => short_id(value),
         };
         let active = selected == Some(index);
-        lines.push(
-            justified_line(
-                vec![
-                    Span::styled(link.label.clone(), theme.link()),
-                    Span::raw(format!(
-                        "  {}",
-                        truncate_middle(
-                            &evidence_detail_display(state, &theme.height_text(&link.detail, "")),
-                            if theme.heights.borrow().dates { 72 } else { 40 }
-                        )
-                    )),
-                ],
-                vec![theme.value_as(
-                    "association target",
-                    target,
-                    match &link.target {
-                        identity_evidence::EvidenceTarget::Identity(value)
-                        | identity_evidence::EvidenceTarget::Address(value)
-                        | identity_evidence::EvidenceTarget::Transaction(value) => value.as_str(),
-                    },
-                    theme.muted(),
-                )],
-                content.width,
-            )
-            .style(if active {
-                theme.focused()
-            } else {
-                theme.base()
-            }),
-        );
+        let width = usize::from(content.width);
+        let label = Span::styled(link.label.clone(), theme.link());
+        let target_width = Span::raw(target.as_str()).width();
+        let detail_width = width.saturating_sub(label.width() + target_width + 4);
+        let mut spans = vec![label];
+        if detail_width > 0 && !link.detail.is_empty() {
+            let detail = evidence_detail_display(state, &theme.height_text(&link.detail, ""));
+            let mut limit = detail_width;
+            let mut fitted = detail;
+            if Span::raw(fitted.as_str()).width() > limit {
+                let detail = fitted;
+                fitted = truncate_middle(&detail, limit);
+                while Span::raw(fitted.as_str()).width() > detail_width {
+                    limit -= 1;
+                    fitted = truncate_middle(&detail, limit);
+                }
+            }
+            let value = link
+                .detail
+                .strip_prefix("hash ")
+                .filter(|hash| is_hash_like(hash))
+                .unwrap_or(&link.detail);
+            spans.push(Span::raw("  "));
+            spans.push(theme.value_as("association detail", fitted, value, Style::default()));
+        }
+        let left_width: usize = spans.iter().map(Span::width).sum();
+        spans.push(Span::raw(
+            " ".repeat(width.saturating_sub(left_width + target_width).max(1)),
+        ));
+        spans.push(theme.value_as(
+            "association target",
+            target,
+            match &link.target {
+                identity_evidence::EvidenceTarget::Identity(value)
+                | identity_evidence::EvidenceTarget::Address(value)
+                | identity_evidence::EvidenceTarget::Transaction(value) => value.as_str(),
+            },
+            theme.muted(),
+        ));
+        lines.push(Line::from(spans).style(if active {
+            theme.focused()
+        } else {
+            theme.base()
+        }));
     }
     if report.links.is_empty() {
         lines.push(Line::from("  No additional associations to display"));
     }
     if let Some(link) = selected.and_then(|index| report.links.get(index)) {
-        lines.push(Line::from(Span::styled(
-            format!(
-                "  Source: {}",
-                truncate_middle(&link.source, usize::from(area.width.saturating_sub(10)))
+        lines.push(Line::from(vec![
+            Span::styled("  Source: ", theme.muted()),
+            theme.value_as(
+                "association source",
+                truncate_middle(&link.source, usize::from(content.width.saturating_sub(10))),
+                &link.source,
+                theme.muted(),
             ),
-            theme.muted(),
-        )));
+        ]));
     } else if let Some(note) = report
         .notes
         .iter()
@@ -16053,10 +16196,13 @@ fn identity_header_lines(
     {
         timelock = format!("locked (unlocks {})", theme.format_height(h));
     }
-    let parent = identity_authority_label(state, identity, "parent", own_address);
-    let system = identity_authority_label(state, identity, "systemid", own_address);
-    let revocation = identity_authority_label(state, identity, "revocationauthority", own_address);
-    let recovery = identity_authority_label(state, identity, "recoveryauthority", own_address);
+    let authority = |label, key| {
+        (
+            label,
+            identity_authority_label(state, identity, key, own_address),
+            identity[key].as_str(),
+        )
+    };
     let versions = state
         .store
         .identity_heights
@@ -16182,8 +16328,18 @@ fn identity_header_lines(
             timelock,
             width,
         ),
-        identity_property_pair(theme, "Parent", parent, "System", system, width),
-        identity_property_pair(theme, "Revocation", revocation, "Recovery", recovery, width),
+        identity_property_pair_as(
+            theme,
+            authority("Parent", "parent"),
+            authority("System", "systemid"),
+            width,
+        ),
+        identity_property_pair_as(
+            theme,
+            authority("Revocation", "revocationauthority"),
+            authority("Recovery", "recoveryauthority"),
+            width,
+        ),
         identity_property_line(theme, "Balances", balances),
         identity_property_line(theme, "Activity", activity),
         identity_property_line(
@@ -16282,6 +16438,20 @@ fn identity_property_pair(
     right_value: String,
     width: u16,
 ) -> Line<'static> {
+    identity_property_pair_as(
+        theme,
+        (left_label, left_value, None),
+        (right_label, right_value, None),
+        width,
+    )
+}
+
+fn identity_property_pair_as(
+    theme: &Theme,
+    (left_label, left_value, left_raw): (&str, String, Option<&str>),
+    (right_label, right_value, right_raw): (&str, String, Option<&str>),
+    width: u16,
+) -> Line<'static> {
     const GUTTER: &str = "        ";
 
     let fixed_width =
@@ -16302,10 +16472,20 @@ fn identity_property_pair(
 
     Line::from(vec![
         Span::styled(format!("{left_label}: "), theme.muted()),
-        theme.value_as(left_label, left_display, left_value, theme.base()),
+        theme.value_as(
+            left_label,
+            left_display,
+            left_raw.unwrap_or(&left_value),
+            theme.base(),
+        ),
         Span::raw(GUTTER),
         Span::styled(format!("{right_label}: "), theme.muted()),
-        theme.value_as(right_label, right_display, right_value, theme.base()),
+        theme.value_as(
+            right_label,
+            right_display,
+            right_raw.unwrap_or(&right_value),
+            theme.base(),
+        ),
     ])
 }
 
@@ -18685,6 +18865,148 @@ mod tests {
         let cursor = &terminal.backend().buffer()[(0, primary_row)];
         assert_eq!(cursor.symbol(), SELECTION_MARKER);
         assert_eq!(cursor.bg, theme.accent);
+    }
+
+    #[test]
+    fn identity_overview_copies_evidence_and_raw_authority_values() {
+        let mut state = regression_state();
+        let address = "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV";
+        let mut version = test_identity_version(address, "VRSC@", 100);
+        version.raw_json["identity"]["revocationauthority"] = json!(address);
+        state.store.insert_identity_version(address, version);
+        let hash = "b".repeat(64);
+        let txid = "a".repeat(64);
+        let source = format!("{txid}:0");
+        state.store.identity_evidence.insert(
+            address.into(),
+            (
+                100,
+                identity_evidence::IdentityEvidence {
+                    registration: Some(format!("VRSC@  tx {}:0", short_id(&txid))),
+                    links: vec![
+                        identity_evidence::EvidenceLink {
+                            label: "Name commitment".into(),
+                            detail: format!("hash {hash}"),
+                            target: identity_evidence::EvidenceTarget::Transaction(txid.clone()),
+                            source: source.clone(),
+                        },
+                        identity_evidence::EvidenceLink {
+                            label: "Registration transaction".into(),
+                            detail: "reservation output 0".into(),
+                            target: identity_evidence::EvidenceTarget::Transaction(txid.clone()),
+                            source: source.clone(),
+                        },
+                    ],
+                    ..Default::default()
+                },
+            ),
+        );
+        let theme = Theme::desert(crate::cli::EmojiMode::Off);
+        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(160, 40)).unwrap();
+        terminal
+            .draw(|frame| {
+                theme.copy_values.borrow_mut().begin(true);
+                render_identity_view(
+                    frame,
+                    &regression_config(),
+                    &theme,
+                    &state,
+                    &IdentityTarget {
+                        query: address.into(),
+                        height: None,
+                    },
+                    ActivitySelection {
+                        transaction: 0,
+                        link: Some(0),
+                    },
+                    None,
+                    frame.area(),
+                );
+                theme
+                    .copy_values
+                    .borrow_mut()
+                    .finish(frame.buffer_mut(), theme.selection_cursor());
+            })
+            .unwrap();
+        let rows = terminal
+            .backend()
+            .buffer()
+            .content
+            .chunks(160)
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>();
+        for (line, clicked, expected) in [
+            ("Name commitment", hash.as_str(), hash.as_str()),
+            ("Name commitment", short_id(&txid).as_str(), txid.as_str()),
+            ("Source:", source.as_str(), source.as_str()),
+            ("VRSC@  tx", short_id(&txid).as_str(), source.as_str()),
+            ("Revocation:", "self", address),
+        ] {
+            let (y, row) = rows
+                .iter()
+                .enumerate()
+                .find(|(_, row)| row.contains(line))
+                .unwrap();
+            let x = row.find(clicked).unwrap();
+            let hit = theme
+                .copy_values
+                .borrow_mut()
+                .select(ratatui::layout::Position::new(x as u16, y as u16));
+            assert!(
+                matches!(hit, Some(crate::copy_values::Target::Text { value, .. }) if value == expected),
+                "unexpected copy target for {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn identity_association_details_use_available_columns() {
+        let mut state = regression_state();
+        let address = "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV";
+        let version = test_identity_version(address, "VRSC@", 100);
+        let label = "Commitment control destination";
+        let detail = "decoded commitment output destination; control role may vary";
+        let target = "a".repeat(64);
+        state.store.identity_evidence.insert(
+            address.into(),
+            (
+                100,
+                identity_evidence::IdentityEvidence {
+                    links: vec![identity_evidence::EvidenceLink {
+                        label: label.into(),
+                        detail: detail.into(),
+                        target: identity_evidence::EvidenceTarget::Transaction(target.clone()),
+                        source: "synthetic".into(),
+                    }],
+                    ..Default::default()
+                },
+            ),
+        );
+        let theme = Theme::desert(crate::cli::EmojiMode::Off);
+        for (width, fits) in [(120, true), (70, false)] {
+            let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(width, 5)).unwrap();
+            terminal
+                .draw(|frame| {
+                    render_identity_evidence(
+                        frame,
+                        &theme,
+                        &state,
+                        &version,
+                        None,
+                        None,
+                        frame.area(),
+                    );
+                })
+                .unwrap();
+            let row: String = terminal.backend().buffer().content
+                [usize::from(width)..2 * usize::from(width)]
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect();
+            assert!(row.contains(label), "{row}");
+            assert_eq!(row.contains(detail), fits, "{row}");
+            assert!(row.ends_with(&short_id(&target)), "{row}");
+        }
     }
 
     #[test]

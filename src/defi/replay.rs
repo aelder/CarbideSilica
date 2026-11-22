@@ -10,16 +10,17 @@ use sha2::{Digest, Sha256};
 const SATOSHI: i128 = 100_000_000;
 const SUCCESS_FEE: i128 = 25_000;
 
-pub(super) fn amount_sats(value: &Value) -> Option<i128> {
+pub(crate) fn amount_sats(value: &Value) -> Option<i128> {
+    signed_amount_sats(value).filter(|&amount| amount >= 0)
+}
+
+pub(super) fn signed_amount_sats(value: &Value) -> Option<i128> {
     let raw = value.as_number()?.to_string();
     let (mantissa, exponent) = if let Some((m, e)) = raw.split_once(['e', 'E']) {
         (m, e.parse::<i32>().ok()?)
     } else {
         (raw.as_str(), 0)
     };
-    if mantissa.starts_with('-') {
-        return None;
-    }
     let (whole, fractional) = mantissa.split_once('.').unwrap_or((mantissa, ""));
     let digits = format!("{whole}{fractional}").parse::<i128>().ok()?;
     let scale = 8_i32
@@ -28,7 +29,7 @@ pub(super) fn amount_sats(value: &Value) -> Option<i128> {
     if scale >= 0 {
         digits.checked_mul(10_i128.checked_pow(scale as u32)?)
     } else {
-        let divisor = 10_i128.checked_pow((-scale) as u32)?;
+        let divisor = 10_i128.checked_pow(scale.unsigned_abs())?;
         (digits % divisor == 0).then_some(digits / divisor)
     }
 }
@@ -40,7 +41,10 @@ pub(super) fn conversion_fee(input: i128, conversions: i128) -> Option<i128> {
     Some((input.checked_mul(SUCCESS_FEE)? / SATOSHI * conversions).min(input))
 }
 
-fn address_payload(address: &str) -> Option<(u8, Vec<u8>)> {
+pub(crate) fn address_payload(address: &str) -> Option<(u8, Vec<u8>)> {
+    if address.len() > 35 {
+        return None;
+    }
     const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     let mut little_endian = vec![0_u8];
     for symbol in address.bytes() {

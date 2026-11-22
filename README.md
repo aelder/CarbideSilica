@@ -29,6 +29,8 @@ cargo build --release --locked
 ./target/release/vcarbide
 ```
 
+Run `./target/release/vcarbide` from the repository root, or place the executable in a directory on your `PATH` to run it as `vcarbide` from anywhere.
+
 Carbide starts on VRSC and discovers daemon configurations in the standard Verus and PBaaS directories. To open an object immediately, pass the same value you would enter in search. To start on another chain, specify its name.
 
 ```sh

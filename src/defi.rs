@@ -11,8 +11,11 @@ pub mod pool;
 mod replay;
 mod route;
 mod summary;
+mod supply_burn;
+pub(crate) use replay::{address_payload, amount_sats};
 pub use route::{SearchPlan, investigate};
 pub use summary::{Amount, LegSummary, ReceiptKind, Stage};
+pub(crate) use supply_burn::issuer_instruction;
 
 pub const IMPORT_WINDOW: u64 = 1_000;
 pub const MAX_SCAN_WINDOWS: u32 = 32;
@@ -565,8 +568,8 @@ async fn continue_from_spender(
     let Ok(client) = RpcClient::for_config(config) else {
         return stop(&mut trail, "Cannot construct source RPC client");
     };
-    let spent = match client.get_raw_transaction(&spend_id).await {
-        Ok(v) => v.result,
+    let (spent, export_source) = match client.get_raw_transaction(&spend_id).await {
+        Ok(v) => (v.result, v.source_id),
         Err(error) => {
             return stop(
                 &mut trail,
@@ -888,6 +891,63 @@ async fn continue_from_spender(
         .expect("recorded importing state")
         .source = import_source.clone();
     trail.notes.push(format!("Import declares {} generated output(s), beginning at vout {region_start}; this region can include final fee/reward outputs, while reserve-maintenance outputs after it are excluded.", region.len()));
+    if issuer_instruction(&transfer, currency, root.system_id.as_ref()).is_some() {
+        let verified = if matching_hash
+            && destination == root.system_id.as_ref()
+            && import_source.as_ref() == Some(&export_source)
+        {
+            let evidence = supply_burn::Evidence {
+                source: &export_source,
+                system: destination,
+                issuer: currency,
+                export_tx: &spent,
+                export_vout,
+                import_tx: &import_tx,
+                import_vout,
+                record: found,
+                selected: batch_offset,
+                region,
+            };
+            tokio::time::timeout(
+                std::time::Duration::from_secs(12),
+                evidence.verify(&dest_client.noninteractive()),
+            )
+            .await
+            .ok()
+            .flatten()
+        } else {
+            None
+        };
+        let Some(burn) = verified else {
+            trail.legs[0].stage = Stage::BurnUnverified;
+            return stop(
+                &mut trail,
+                "Issuer burn instruction found. Its supply reduction could not be verified from the ordered export and linked currency states.",
+            );
+        };
+        let leg = &mut trail.legs[0];
+        leg.stage = Stage::Burned;
+        leg.supply_burn = Some(burn);
+        let previous = leg
+            .execution
+            .as_ref()
+            .and_then(|execution| execution.previous.as_ref());
+        if let Some(previous) = previous {
+            trail.entries.push(entry(
+                previous,
+                "Prior currency state",
+                "Consumed notarization with the supply before the burn batch",
+            ));
+        }
+        let mut latest = import_ref;
+        latest.vout += 1;
+        trail.entries.push(entry(
+            &latest,
+            "Burn execution state",
+            "Accepted notarization records the verified supply reduction for the ordered batch",
+        ));
+        return trail;
+    }
     // Definitions are immutable; request one only for the narrow prelaunch
     // branch and require the same enabled source that supplied the import.
     let prelaunch = found["importnotarization"]["prelaunch"].as_bool() == Some(true);

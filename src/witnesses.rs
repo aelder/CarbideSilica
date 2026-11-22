@@ -688,17 +688,61 @@ fn pushes(bytes: &[u8]) -> Result<Vec<Vec<u8>>> {
     let mut r = Reader { bytes, position: 0 };
     let mut values = Vec::new();
     while r.position < bytes.len() {
-        let opcode = r.take(1)?[0];
-        let n = match opcode {
-            0..=75 => opcode as usize,
-            76 => r.take(1)?[0] as usize,
-            77 => u16::from_le_bytes(r.take(2)?.try_into()?) as usize,
-            78 => u32::from_le_bytes(r.take(4)?.try_into()?) as usize,
-            _ => bail!("Unexpected script opcode"),
-        };
-        values.push(r.take(n)?.to_vec());
+        values.push(read_push(&mut r)?.to_vec());
     }
     Ok(values)
+}
+
+fn read_push<'a>(r: &mut Reader<'a>) -> Result<&'a [u8]> {
+    let opcode = r.take(1)?[0];
+    let length = match opcode {
+        0..=75 => opcode as usize,
+        76 => r.take(1)?[0] as usize,
+        77 => u16::from_le_bytes(r.take(2)?.try_into()?) as usize,
+        78 => u32::from_le_bytes(r.take(4)?.try_into()?) as usize,
+        _ => bail!("Unexpected script opcode"),
+    };
+    r.take(length)
+}
+
+/// Read the first Verus v3 condition parameter set and its ordered data pushes.
+pub(crate) fn condition_data(
+    script: &serde_json::Value,
+    eval: u8,
+) -> Option<(Vec<Vec<u8>>, Vec<u8>)> {
+    let bytes = unhex(script["hex"].as_str()?).ok()?;
+    let mut r = Reader {
+        bytes: &bytes,
+        position: 0,
+    };
+    read_push(&mut r).ok()?;
+    if r.take(1).ok()? != [0xcc] {
+        return None;
+    }
+    let first = read_push(&mut r).ok()?;
+    let mut drops = 1;
+    while bytes.get(r.position).is_some_and(|&byte| byte != 0x75) {
+        read_push(&mut r).ok()?;
+        drops += 1;
+    }
+    if bytes.len() - r.position != drops || bytes[r.position..].iter().any(|&byte| byte != 0x75) {
+        return None;
+    }
+    let params = pushes(first).ok()?;
+    let &[3, code, quorum, count] = params.first()?.as_slice() else {
+        return None;
+    };
+    if code != eval || quorum != 1 || count != 1 {
+        return None;
+    }
+    Some((
+        params.get(1..=usize::from(count))?.to_vec(),
+        if eval == 0 {
+            Vec::new()
+        } else {
+            params.get(usize::from(count) + 1)?.clone()
+        },
+    ))
 }
 fn push(bytes: &[u8], output: &mut Vec<u8>) {
     match bytes.len() {

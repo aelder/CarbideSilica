@@ -1,9 +1,11 @@
 """q exits outside input fields; Escape closes the visible layer and never exits."""
 import http.server
+import sqlite3
 import threading
 import os
 from pathlib import Path
 import tempfile
+import time
 from bookmarks_terminal import Terminal, VRSC, daemon
 from defi_terminal import wait
 from reorg_terminal import Daemon, A2, TXID
@@ -23,10 +25,63 @@ def assert_quits(terminal):
     terminal.key(b'q', .1)
     terminal.process.wait(timeout=5)
     assert terminal.process.returncode == 0
-    terminal.read(.1)
+    assert 'Shutting down' in terminal.read(.1), 'Quit did not display a shutdown notice'
     assert b'\x1b[?1006l' in terminal.captured, 'Quit did not release terminal mouse mode'
     assert b'\x1b[?2004l' in terminal.captured, 'Quit did not release bracketed paste'
     assert b'\x1b[23;0t' in terminal.captured, 'Quit did not request title restoration'
+
+
+def run_shutdown():
+    server = daemon(VRSC)
+    balance_requested = threading.Event()
+    release_balance = threading.Event()
+
+    def balance(_):
+        balance_requested.set()
+        release_balance.wait(5)
+        return dict(balance=0, received=0)
+
+    server.rpc_handlers = {
+        'getidentity': lambda _: dict(
+            identity=dict(identityaddress=VRSC, name='VRSC', version=1),
+            fullyqualifiedname='VRSC@', blockheight=0, status='active',
+        ),
+        'getaddresstxids': lambda _: [],
+        'getaddressbalance': balance,
+    }
+    try:
+        with tempfile.TemporaryDirectory(prefix='carbide-shutdown-') as directory:
+            root = Path(directory)
+            conf = root / 'VRSC.conf'
+            conf.write_text(f'rpcconnect=127.0.0.1\nrpcport={server.server_port}\n')
+            terminal = Terminal(root, conf)
+            try:
+                wait(terminal, 'Recent Blocks')
+                cache = root / 'cache/verus-carbide/mainnet.sqlite3'
+                terminal.key(b'/VRSC@\r', .25)
+                wait(terminal, 'Primary addresses:')
+                assert balance_requested.wait(5), 'Identity balance request did not reach the daemon'
+                with sqlite3.connect(cache) as writer:
+                    writer.execute('BEGIN IMMEDIATE')
+                    release_balance.set()
+                    terminal.read(.25)
+                    screen = terminal.key(b'q', .25)
+                    assert 'Shutting down' in screen, screen
+                    assert 'background work' in screen, screen
+                    assert 'Primary addresses:' not in screen, 'Shutdown redrew the identity view'
+                    assert terminal.process.poll() is None, 'The cache write was not held open'
+                    assert b'\x1b[?1049l' not in terminal.captured, 'Terminal restored during cleanup'
+                terminal.process.wait(timeout=5)
+                screen = terminal.read(.1)
+                assert terminal.process.returncode == 0
+                assert 'Closing the local cache' in screen, screen
+                assert b'\x1b[?1049l' in terminal.captured
+            finally:
+                dispose(terminal)
+    finally:
+        release_balance.set()
+        server.shutdown()
+        server.server_close()
 
 
 def run_dashboard():
@@ -137,7 +192,10 @@ def run_dashboard():
                 assert frames <= set('|/-\\') and len(frames) > 1, frames
                 release_old_blocks.set()
                 wait(terminal, 'genesis reached')
-                screen = terminal.screen()
+                deadline = time.monotonic() + 3
+                screen = terminal.read(.1)
+                while 'loading older blocks...' in screen and time.monotonic() < deadline:
+                    screen = terminal.read(.1)
                 assert 'loading older blocks...' not in screen, screen
                 assert_quits(terminal)
             finally:
@@ -408,13 +466,16 @@ def run():
 
 if __name__ == '__main__':
     import sys
-    if '--mempool-only' in sys.argv:
+    if '--shutdown-only' in sys.argv:
+        run_shutdown()
+    elif '--mempool-only' in sys.argv:
         run_mempool()
     elif '--peers-only' in sys.argv:
         run_peers()
     elif '--dashboard-only' in sys.argv:
         run_dashboard()
     else:
+        run_shutdown()
         run()
         run_peers()
         run_mempool()

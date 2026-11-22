@@ -16,6 +16,8 @@ pub enum Stage {
     Unspent,
     Exported,
     Imported,
+    BurnUnverified,
+    Burned,
     Received,
     Forwarded,
     Refunded,
@@ -30,6 +32,8 @@ impl Stage {
             Self::Unspent => "Unspent; export unresolved",
             Self::Exported => "Exported; receipt unresolved",
             Self::Imported => "Imported; receipt unresolved",
+            Self::BurnUnverified => "Imported; supply burn unverified",
+            Self::Burned => "Supply burn verified",
             Self::Received => "Received output verified",
             Self::Forwarded => "Forwarded; next instruction verified",
             Self::Refunded => "Refunded output verified",
@@ -81,6 +85,7 @@ pub struct LegSummary {
     pub pool: Option<String>,
     pub execution: Option<Execution>,
     pub receipt: Option<Receipt>,
+    pub supply_burn: Option<super::supply_burn::SupplyBurn>,
     pub proceeds: Option<Receipt>,
 }
 
@@ -115,6 +120,7 @@ impl LegSummary {
             pool: None,
             execution: None,
             receipt: None,
+            supply_burn: None,
             proceeds: None,
         }
     }

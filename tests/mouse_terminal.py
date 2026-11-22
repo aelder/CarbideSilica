@@ -4,6 +4,7 @@ import http.server
 import json
 import os
 import re
+import sys
 from pathlib import Path
 import tempfile
 import threading
@@ -99,7 +100,19 @@ class Daemon(http.server.BaseHTTPRequestHandler):
             pass
 
 
-def run():
+def check_identity_copy(terminal):
+    terminal.key(b'/Wheel@\r', .8)
+    wait(terminal, 'Primary addresses:')
+    assert click(terminal, ADDRESS, ADDRESS) == ADDRESS
+    assert click(terminal, IDENTITY, IDENTITY) == IDENTITY
+    assert click(terminal, 'Revocation:', 'self') == IDENTITY
+    terminal.key(b'\t', .2)
+    wait(terminal, 'fullyqualifiedname:')
+    assert click(terminal, 'fullyqualifiedname:', '"Wheel@"') == 'Wheel@'
+    terminal.key(b'\t', .2)
+
+
+def run(identity_only=False):
     server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Daemon)
     threading.Thread(target=server.serve_forever,daemon=True).start()
     try:
@@ -111,6 +124,9 @@ def run():
             try:
                 assert b'\x1b[?1006h' in terminal.captured,'Mouse reporting was not enabled'
                 wait(terminal,'10/10')
+                if identity_only:
+                    check_identity_copy(terminal)
+                    return
                 wait(terminal,'Recent Blocks 1-')
                 terminal.key(DOWN,.2)  # Leave Stream Blocks for the newest block.
                 terminal.key(DOWN,.2)
@@ -158,12 +174,13 @@ def run():
                 assert click(terminal, 'z098:', '98') == '98'
                 assert next(line for line in terminal.screen().splitlines() if 'z098:' in line).startswith('>')
                 assert click(terminal, 'z099:', '99') == '99'
+                wait(terminal, 'path $.z099')
                 def json_positions():
                     rows=[(row,line[1:]) for row,line in enumerate(terminal.screen().splitlines())
-                          if re.match(r'^[ >]\s+z\d{3}:',line)]
+                          if re.match(r'^[>\s]\s+z\d{3}:',line)]
                     selected=[row for row,line in enumerate(terminal.screen().splitlines())
                               if re.match(r'^>\s+z\d{3}:',line)]
-                    assert rows and len(selected)==1,terminal.screen()
+                    assert len(rows)>1 and len(selected)==1,terminal.screen()
                     return rows,selected[0]
                 before,cursor=json_positions()
                 for key in [b'k',b'\x1b[A',UP]:
@@ -176,9 +193,7 @@ def run():
                 after,next_cursor=json_positions()
                 assert after==before and next_cursor==cursor+1
                 terminal.key(b'\t',.15)
-                terminal.key(b'/Wheel@\r',.8)
-                wait(terminal,'Primary addresses:')
-                assert click(terminal, ADDRESS, ADDRESS) == ADDRESS
+                check_identity_copy(terminal)
                 wait(terminal,'Transactions')
                 terminal.key(b'\r',.4)
                 wait(terminal,'Txid: '+TXS[-1])
@@ -213,4 +228,4 @@ def run():
 
 
 if __name__=='__main__':
-    run()
+    run(identity_only='--identity-only' in sys.argv)

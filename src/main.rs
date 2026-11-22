@@ -33,8 +33,7 @@ use config::Config;
 use rpc::RpcClient;
 use serde_json::{Value, json};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .with_writer(std::io::stderr)
@@ -57,19 +56,23 @@ async fn main() -> anyhow::Result<()> {
         );
         return Ok(());
     }
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("failed to start async runtime")?;
     if let Some(scan) = cli.scan_auto_arbitrage.as_deref() {
-        return scan_auto_arbitrage(&config, scan).await;
+        return runtime.block_on(scan_auto_arbitrage(&config, scan));
     }
     let cache = Cache::open(&config.cache_path).context("failed to open cache")?;
 
     cache.bind_network(world::Network::from_testnet(config.chain.testnet))?;
 
     if cli.probe {
-        return probe_daemon(&config, &cache).await;
+        return runtime.block_on(probe_daemon(&config, &cache));
     }
 
-    let registry = sources::Registry::load(config.clone())?;
-    app::run(config, cache, cli.requested_object(), registry).await
+    let registry = sources::Registry::load(config)?;
+    app::run(runtime, cache, cli.requested_object(), registry)
 }
 
 async fn scan_auto_arbitrage(config: &Config, scan: &[String]) -> anyhow::Result<()> {

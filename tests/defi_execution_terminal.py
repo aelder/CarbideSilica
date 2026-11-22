@@ -302,7 +302,8 @@ def run_fee_pool_checkpoint(missing_previous=False):
                 else:
                     wait(terminal,'Adjacent checkpoint delta: +200000000')
                     assert previous in terminal.screen(),terminal.screen()
-                    assert 'payout is inferred from this delta' in terminal.screen(),terminal.screen()
+                    screen = terminal.screen()
+                    assert 'payout is inferred from this delta' in ' '.join(screen.split()), screen
                 assert 'getspentinfo' not in server.calls,server.calls
             finally:
                 terminal.close()
@@ -310,7 +311,95 @@ def run_fee_pool_checkpoint(missing_previous=False):
         server.shutdown();server.server_close()
 
 
+
+def run_issuer_burn(change=None):
+    prior, second, third, hash_transfers = (key * 64 for key in "1234")
+    source_transfer = dict(version=1, flags=129, burnchangeprice=True,
+        currencyvalues={CURRENCY: 0.6}, destinationcurrencyid=CURRENCY,
+        feecurrencyid=VRSC, fees=0.0002, destination=dict(type=4, address=CURRENCY))
+    second_transfer = dict(source_transfer, currencyvalues={CURRENCY: 0.1})
+    third_transfer = dict(source_transfer, currencyvalues={CURRENCY: 0.3})
+    custody = {CURRENCY: 1, VRSC: 0.0006}
+    export = dict(version=1, flags=128, firstinput=0, numinputs=3,
+        sourcesystemid=VRSC, destinationsystemid=VRSC, destinationcurrencyid=CURRENCY,
+        sourceheightstart=8, sourceheightend=9, hashtransfers=hash_transfers,
+        totalamounts=custody)
+    imported = dict(version=1, flags=12, sourcesystemid=VRSC, sourceheight=9,
+        importcurrencyid=CURRENCY, exporttxid=EXPORT, exporttxout=0,
+        hashtransfers=hash_transfers, numoutputs=1, tokensout={}, valuein=custody)
+    state = dict(version=1, flags=48, currencyid=CURRENCY, launchcurrencies=[],
+        initialsupply=0, emitted=0, supply=10, preconvertedout=0,
+        primarycurrencyfees=0, primarycurrencyconversionfees=0, primarycurrencyout=-1)
+    before = dict(currencyid=CURRENCY, notarizationheight=7,
+                  currencystate=dict(state, supply=11))
+    after = dict(currencyid=CURRENCY, notarizationheight=9, prevheight=7,
+        prevnotarizationtxid=prior, prevnotarizationout=0, currencystate=state)
+
+    def tx(txid, height, inputs, outputs):
+        return dict(txid=txid, height=height, confirmations=11-height,
+                    blockhash=BLOCK, vin=inputs, vout=outputs)
+
+    def output(n, value=0, **script):
+        return dict(n=n, value=value, scriptPubKey=script)
+
+    selected = output(0, 0.0002, reservetransfer=source_transfer)
+    selected.update(spentTxId=EXPORT, spentIndex=0, spentHeight=10)
+    txs = {
+        SOURCE: tx(SOURCE, 8, [], [selected]),
+        second: tx(second, 9, [], [output(0, 0.0002, reservetransfer=second_transfer)]),
+        third: tx(third, 9, [], [output(0, 0.0002, reservetransfer=third_transfer)]),
+        EXPORT: tx(EXPORT, 10, [dict(txid=id, vout=0) for id in (SOURCE, second, third)], [
+            output(0, crosschainexport=export),
+            output(1, 0.0006, reservedeposit=dict(controllingcurrencyid=CURRENCY,
+                                                currencyvalues=custody))]),
+        prior: tx(prior, 8, [], [output(0, acceptednotarization=before)]),
+        IMPORT: tx(IMPORT, 10, [dict(txid=prior, vout=0), dict(txid=EXPORT, vout=1)], [
+            output(0, crosschainimport=imported), output(1, acceptednotarization=after),
+            output(2, 0.0001, type="pubkeyhash", spendableoutput=True)]),
+    }
+    record = dict(importheight=10, importtxid=IMPORT, importvout=0, importnotarization=after,
+                  transfers=[source_transfer, second_transfer, third_transfer], **{"import": imported})
+    if change == "batch":
+        record["transfers"] = [source_transfer, third_transfer, second_transfer]
+    elif change == "prior state":
+        before["currencystate"]["supply"] = 10
+    elif change == "hash":
+        record["import"] = dict(imported, hashtransfers="5" * 64)
+    server = daemon(VRSC, 10, txs, 10, record)
+    server.currency_definitions = {CURRENCY: dict(name="Token", currencyid=CURRENCY,
+        options=40, proofprotocol=1, systemid=VRSC, launchsystemid=VRSC)}
+    try:
+        with tempfile.TemporaryDirectory(prefix="carbide-issuer-burn-") as directory:
+            root = Path(directory)
+            conf = root / "VRSC.conf"
+            conf.write_text(f"rpcconnect=127.0.0.1\nrpcport={server.server_port}\nrpcuser=test\nrpcpassword=test\n")
+            terminal = Terminal(root, conf)
+            try:
+                terminal.key(b"/" + SOURCE.encode() + b"\r", 0.6)
+                wait(terminal, "Txid: " + SOURCE)
+                terminal.key(b"\x1b[19~", 0.2)
+                terminal.key(b"\r", 0.6)
+                if change:
+                    wait(terminal, "Its supply reduction could not be verified")
+                    screen = terminal.screen()
+                    assert "Imported; supply burn unverified" in screen, screen
+                    assert "Received" not in screen, screen
+                else:
+                    wait(terminal, "Supply burn verified")
+                    screen = terminal.screen()
+                    assert "Burned" in screen and "0.6 Token" in screen, screen
+                    assert "Batch supply reduction  1 Token" in screen, screen
+                    assert "Received" not in screen and "Burn execution state" in screen, screen
+            finally:
+                terminal.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+
 if __name__=='__main__':
+    run_issuer_burn()
+    for change in ('batch', 'prior state', 'hash'):
+        run_issuer_burn(change)
     run_fee_pool_checkpoint()
     run_fee_pool_checkpoint(missing_previous=True)
     run_local_gateway_fallback()
