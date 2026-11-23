@@ -3,6 +3,13 @@ import http.server
 import sqlite3
 import threading
 import os
+import pty
+import select
+import shlex
+import struct
+import subprocess
+import termios
+import fcntl
 from pathlib import Path
 import tempfile
 import time
@@ -43,7 +50,7 @@ def run_shutdown():
 
     server.rpc_handlers = {
         'getidentity': lambda _: dict(
-            identity=dict(identityaddress=VRSC, name='VRSC', version=1),
+            identity=dict(identityaddress=VRSC, name='VRSC', version=1, flags=1),
             fullyqualifiedname='VRSC@', blockheight=0, status='active',
         ),
         'getaddresstxids': lambda _: [],
@@ -65,6 +72,13 @@ def run_shutdown():
                     writer.execute('BEGIN IMMEDIATE')
                     release_balance.set()
                     terminal.read(.25)
+                    assert "identity VRSC@ at height" in terminal.key(b'\t', .25)
+                    assert "Primary addresses:" in terminal.key(b'\t', .25)
+                    assert "Enter submit search" in terminal.key(b'/', .25)
+                    assert "/ orderedq" in terminal.key(b'orderedq', .25)
+                    assert "Primary addresses:" in terminal.key(ESC, .25)
+                    assert "Loading currency data" in terminal.key(b'c', .25)
+                    assert "Primary addresses:" in terminal.key(ESC, .25)
                     screen = terminal.key(b'q', .25)
                     assert 'Shutting down' in screen, screen
                     assert 'background work' in screen, screen
@@ -83,6 +97,152 @@ def run_shutdown():
         server.shutdown()
         server.server_close()
 
+
+
+def run_tmux():
+    server = daemon(VRSC)
+    server.rpc_handlers = {
+        'getidentity': lambda _: dict(
+            identity=dict(identityaddress=VRSC, name='VRSC', version=1, flags=1),
+            fullyqualifiedname='VRSC@', blockheight=0, status='active',
+        ),
+        'getaddresstxids': lambda _: [],
+        'getaddressbalance': lambda _: dict(balance=0, received=0),
+    }
+    try:
+        with tempfile.TemporaryDirectory(prefix='carbide-tmux-input-') as directory:
+            root = Path(directory)
+            conf = root / 'VRSC.conf'
+            conf.write_text(f'rpcconnect=127.0.0.1\nrpcport={server.server_port}\n')
+            trace = root / 'ui-timing.log'
+            env = {key: value for key, value in os.environ.items() if not key.startswith('TMUX')}
+            env.update(TERM='xterm-256color', HOME=str(root),
+                       XDG_CONFIG_HOME=str(root / 'config'), XDG_CACHE_HOME=str(root / 'cache'),
+                       XDG_DATA_HOME=str(root / 'data'), VCARBIDE_UI_TIMING=str(trace))
+            tmux = ['tmux', '-S', str(root / 'socket'), '-f', '/dev/null']
+
+            def command(*args):
+                return subprocess.check_output([*tmux, *args], env=env, text=True, timeout=5).strip()
+
+            pane = command('new-session', '-d', '-s', 'carbide', '-x', '130', '-y', '36',
+                           '-P', '-F', '#{pane_id}', shlex.join([
+                               str(Path('target/debug/vcarbide').resolve()), '--conf', str(conf),
+                               '--poll-interval', '1', '--emoji', 'off',
+                           ]))
+            master, slave = pty.openpty()
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 36, 130, 0, 0))
+            client = subprocess.Popen([*tmux, 'attach-session', '-t', 'carbide'],
+                                      stdin=slave, stdout=slave, stderr=slave, env=env)
+            os.close(slave)
+            try:
+                command('set-option', '-g', 'focus-events', 'on')
+                other = command('split-window', '-h', '-d', '-p', '25', '-t', pane,
+                                '-P', '-F', '#{pane_id}', 'cat')
+
+                def await_screen(needle, seconds=4):
+                    deadline = time.monotonic() + seconds
+                    while True:
+                        if select.select([master], [], [], 0)[0]:
+                            os.read(master, 65536)
+                        screen = command('capture-pane', '-p', '-t', pane)
+                        if needle in screen:
+                            return
+                        assert time.monotonic() < deadline, screen
+                        time.sleep(.015)
+
+                await_screen('Recent Blocks')
+                command('send-keys', '-t', pane, '-l', '/VRSC@')
+                command('send-keys', '-t', pane, 'Enter')
+                await_screen('Primary addresses:')
+                before = server.calls.count('getblockchaininfo')
+                for _ in range(3):
+                    command('select-pane', '-t', other)
+                    time.sleep(1.05)
+                    command('select-pane', '-t', pane)
+                    command('send-keys', '-t', pane, 'Tab')
+                    await_screen('identity VRSC@ at height', .25)
+                    command('send-keys', '-t', pane, 'Tab')
+                    await_screen('Primary addresses:', .25)
+                assert server.calls.count('getblockchaininfo') > before
+                command('send-keys', '-t', pane, '-l', '/orderedq')
+                await_screen('/ orderedq', .25)
+                command('send-keys', '-t', pane, 'Escape')
+                await_screen('Search block height', .25)
+                samples = [line.split() for line in trace.read_text().splitlines()]
+                assert any(stage == 'input_dispatch' for stage, _ in samples)
+                assert all(stage in {'input_dispatch', 'input_queue', 'ui_update', 'redraw',
+                                     'terminal_read', 'terminal_wait', 'background_event',
+                                     'reconciliation', 'transaction_update', 'daemon_observation',
+                                     'identity_update'} and duration.endswith('us')
+                           and duration[:-2].isdigit() for stage, duration in samples)
+                command('send-keys', '-t', pane, 'q')
+                deadline = time.monotonic() + 4
+                while pane in command('list-panes', '-F', '#{pane_id}').splitlines():
+                    assert time.monotonic() < deadline, 'Carbide did not quit after tmux focus changes'
+                    time.sleep(.02)
+            finally:
+                command('kill-server')
+                client.wait(timeout=5)
+                os.close(master)
+    finally:
+        server.shutdown()
+        server.server_close()
+    print('tmux pane switching, repeated refresh, ordered input and timing checks passed.')
+
+
+def run_job_control():
+    with tempfile.TemporaryDirectory(prefix='carbide-job-control-') as directory:
+        root = Path(directory)
+        conf = root / 'VRSC.conf'
+        conf.write_text('rpcconnect=127.0.0.1\nrpcport=9\n')
+        env = os.environ.copy()
+        env.update(TERM='xterm-256color', HOME=str(root), PS1='carbide-test-shell> ',
+                   XDG_CONFIG_HOME=str(root / 'config'), XDG_CACHE_HOME=str(root / 'cache'))
+        shell, master = pty.fork()
+        if shell == 0:
+            os.execvpe('bash', ['bash', '--noprofile', '--norc', '-i'], env)
+        fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', 34, 140, 0, 0))
+        captured = bytearray()
+
+        def until(needle, since=0, limit=5):
+            deadline = time.monotonic() + limit
+            while needle not in captured[since:] and time.monotonic() < deadline:
+                if select.select([master], [], [], .05)[0]:
+                    try:
+                        captured.extend(os.read(master, 65536))
+                    except OSError:
+                        break
+            assert needle in captured[since:], bytes(captured[-1000:])
+
+        def send(keys):
+            mark = len(captured)
+            os.write(master, keys)
+            return mark
+
+        try:
+            until(b'carbide-test-shell> ')
+            command = shlex.join(['target/debug/vcarbide', '--conf', str(conf), '--emoji', 'off'])
+            until(b'Recent Blocks', send(command.encode() + b'\n'))
+            # With no paste end, normal key events cannot reach the dispatcher.
+            send(b'\x1b[200~q/')
+            time.sleep(.15)
+            mark = send(b'\x1a')
+            until(b'Stopped', mark, 2)
+            until(b'carbide-test-shell> ', mark, 2)
+            assert b'\x1b[?1049l' in captured[mark:]
+            mark = send(b'fg\n')
+            # The parser may still be waiting for the paste end after fg.
+            time.sleep(.15)
+            send(b'\x1b[201~')
+            until(b'\x1b[?1049h', mark, 2)
+            mark = send(b'q')
+            until(b'Shutting down', mark, 2)
+            until(b'carbide-test-shell> ', mark)
+            send(b'exit\n')
+        finally:
+            os.close(master)
+            os.waitpid(shell, 0)
+    print('Ctrl-Z reached the shell during a stalled input parser, and fg restored Carbide.')
 
 def run_dashboard():
     server = daemon(VRSC)
@@ -466,7 +626,11 @@ def run():
 
 if __name__ == '__main__':
     import sys
-    if '--shutdown-only' in sys.argv:
+    if '--job-control' in sys.argv:
+        run_job_control()
+    elif '--tmux' in sys.argv:
+        run_tmux()
+    elif '--shutdown-only' in sys.argv:
         run_shutdown()
     elif '--mempool-only' in sys.argv:
         run_mempool()

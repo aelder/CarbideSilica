@@ -242,6 +242,7 @@ impl Panel {
                 .blocks_by_hash
                 .entry(row.hash.clone())
                 .or_insert(BlockRecord {
+                    prepared_transactions: Default::default(),
                     summary,
                     raw_json,
                     detail_loaded: false,
@@ -461,6 +462,7 @@ mod tests {
         let config = regression_config();
         let raw = json!({"hash":"orphan","height":10,"time":123,"tx":[]});
         let block = BlockRecord {
+            prepared_transactions: Default::default(),
             summary: serde_json::from_value(raw.clone()).unwrap(),
             raw_json: raw.clone(),
             detail_loaded: true,

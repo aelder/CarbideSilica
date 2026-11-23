@@ -112,6 +112,8 @@ Press `F9` to chart block intervals, mining or staking difficulty, PoW Ratio, or
 - **Cache or settings location.** Help shows the cache path and usage. On Linux, the cache holds `mainnet.sqlite3` and `testnet.sqlite3` under `~/.cache/verus-carbide/`, or `$XDG_CACHE_HOME/verus-carbide/` if set. Settings and bookmarks are stored separately. See the [explorer reference](docs/reference.md).
 - **Copying over SSH or tmux.** Run `./target/release/vcarbide --clipboard-test` and paste into another window to check the terminal clipboard path. See the [clipboard configuration guide](docs/reference.md#clipboard-testing-and-tmux).
 
+- **Diagnosing a slow or stalled UI.** Set `VCARBIDE_UI_TIMING` to a new file path when launching Carbide, for example `VCARBIDE_UI_TIMING=/tmp/carbide-ui-timing.log ./target/release/vcarbide`. The file records stage names and durations in microseconds, including input dispatch and slow updates or redraws. It omits key contents, searches, identities, and RPC payloads.
+
 ## Further reading
 
 - [Explorer reference](docs/reference.md) — full key bindings, chart metrics, DeFi tracing, witness evidence and bookmarks.

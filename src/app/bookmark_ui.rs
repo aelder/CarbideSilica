@@ -986,6 +986,7 @@ pub(super) fn install(
             let summary: BlockSummary = serde_json::from_value(snapshot.raw.clone())?;
             let target = BlockTarget::Hash(summary.hash.clone());
             state.store.insert_block(BlockRecord {
+                prepared_transactions: Default::default(),
                 summary,
                 raw_json: snapshot.raw,
                 detail_loaded: false,

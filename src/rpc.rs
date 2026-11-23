@@ -204,6 +204,7 @@ impl RpcClient {
                 Err(error)
                     if pinned_source == Some(local_id.as_str())
                         || error.is::<StorageFailure>()
+                        || identity_not_found(&error)
                         || matches!(method, "getrawmempool" | "getpeerinfo") =>
                 {
                     return Err(error);
@@ -253,7 +254,7 @@ impl RpcClient {
                         return Ok((value, raw, source_id("public-api", &endpoint.url), receipt));
                     }
                     Err(error) => {
-                        if error.is::<StorageFailure>() {
+                        if error.is::<StorageFailure>() || identity_not_found(&error) {
                             return Err(error);
                         }
                         if pinned_source.is_none()
@@ -908,6 +909,22 @@ impl RpcClient {
     }
 }
 
+/// A normal negative lookup from a daemon that answered the request.
+pub(crate) fn identity_not_found(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<ApplicationError>()
+        .is_some_and(|error| {
+            error.method == "getidentity"
+                && error.value["code"].as_i64() == Some(-5)
+                && error.value["message"].as_str().is_some_and(|message| {
+                    message
+                        .trim()
+                        .trim_end_matches('.')
+                        .eq_ignore_ascii_case("Identity not found")
+                })
+        })
+}
+
 #[derive(Debug, Clone)]
 pub enum BlockId {
     Height(u64),
@@ -1110,8 +1127,17 @@ mod tests {
         let server = Server::start_response(
             serde_json::json!({"result":null,"error":{"code":-5,"message":"Identity not found"}}),
         );
-        let client = RpcClient::with_endpoint(server.url.clone(), None, None).unwrap();
-        assert!(client.get_identity("missing", None).await.is_err());
+        let api = Server::start(serde_json::json!({"source":"api"}));
+        let mut client = client(ApiPool::new(
+            "chain".into(),
+            vec![endpoint(&api.url, ConnectionState::Enabled)],
+            None,
+        ));
+        client.url = server.url.clone();
+        client.control.set(ConnectionState::Enabled);
+        let error = client.get_identity("missing", None).await.unwrap_err();
+        assert!(identity_not_found(&error));
+        assert_eq!(api.hits.load(Ordering::Acquire), 0);
         let status = client.control.communication();
         assert_eq!(
             status.outcome,

@@ -124,7 +124,9 @@ numeric JSON previews.
 
 Carbide sends **Verus Carbide** as a title hint when its terminal UI starts or
 resumes. On Unix, terminals with an xterm-style title stack can restore the
-previous title when Carbide exits or suspends.
+previous title when Carbide exits or suspends. In a Unix shell with job
+control, Ctrl-Z suspends Carbide through the terminal driver, including
+while its UI is busy. Use `fg` to resume.
 
 In tmux the hint sets the pane title when `allow-set-title` is enabled.
 Use `#{pane_title}` or `#T` in a tmux format to display it. To use the

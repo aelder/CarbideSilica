@@ -12,6 +12,7 @@ mod defi_ui;
 mod height_ui;
 mod identity_evidence;
 mod input;
+mod job_control;
 mod json_dates;
 mod notarization_ui;
 mod peer_controls;
@@ -19,6 +20,7 @@ mod registration_payments;
 mod reorg_ui;
 mod scroll_view;
 mod source_ui;
+mod ui_timing;
 mod witness_ui;
 use std::fs;
 use std::io::{self, Stdout};
@@ -116,6 +118,7 @@ struct BlockRecord {
     summary: BlockSummary,
     raw_json: Value,
     detail_loaded: bool,
+    prepared_transactions: HashMap<Txid, Arc<PreparedTransaction>>,
 }
 
 #[derive(Debug, Clone)]
@@ -126,6 +129,50 @@ struct TransactionRecord {
     block_hash: Option<BlockHash>,
     block_height: Option<u64>,
     block_time: u64,
+    prepared: Option<Arc<PreparedTransaction>>,
+}
+
+#[derive(Debug)]
+struct PreparedTransaction {
+    tags: Vec<TransactionTag>,
+    identities: BTreeSet<String>,
+    parents: Vec<Txid>,
+    currencies: Vec<String>,
+    currency_names: HashMap<String, String>,
+    proof_funders: Vec<Txid>,
+    marketplace_spender: Option<Txid>,
+}
+
+impl PreparedTransaction {
+    fn new(summary: &TransactionSummary, raw: &Value) -> Self {
+        let mut identities = BTreeSet::new();
+        collect_identity_references(raw, &mut identities);
+        let mut currency_names = HashMap::new();
+        collect_currency_name_hints(raw, &mut currency_names);
+        let proof_funders = if contains_marketplace_offer_proof(raw) {
+            raw["vin"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|input| input["vout"].as_u64() == Some(1))
+                .filter_map(|input| input["txid"].as_str().map(str::to_owned))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let marketplace_spender = transaction_output(raw, 0)
+            .and_then(|output| output["spentTxId"].as_str())
+            .map(str::to_owned);
+        Self {
+            tags: summary.tags(),
+            identities,
+            parents: source_transaction_ids(raw),
+            currencies: defi_currency_ids(raw),
+            currency_names,
+            proof_funders,
+            marketplace_spender,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -200,6 +247,7 @@ struct ObjectStore {
     workspace_system: Option<crate::world::SystemId>,
     stale_identities: HashSet<String>,
     transaction_inclusions: HashMap<Txid, HashSet<BlockHash>>,
+    transactions_by_inclusion: HashMap<BlockHash, HashSet<Txid>>,
     stale_addresses: HashSet<String>,
     reverse_relationships: HashMap<Txid, Vec<crate::relationships::Link>>,
     chain: ChainState,
@@ -224,6 +272,8 @@ struct ObjectStore {
     currency_references: BTreeSet<String>,
     currency_name_hints: HashMap<String, String>,
     marketplace_tags_by_txid: HashMap<Txid, BTreeSet<MarketplaceTag>>,
+    marketplace_proofs: HashMap<Txid, HashSet<Txid>>,
+    marketplace_spends: HashMap<Txid, HashSet<Txid>>,
     identity_offers: HashMap<String, IdentityOffersState>,
 }
 
@@ -646,7 +696,7 @@ enum AppEvent {
         generation: u64,
         event: Box<AppEvent>,
     },
-    Reconciled(Result<crate::reconciliation::Change, String>),
+    Reconciled(Result<Arc<crate::chain_state::PreparedBranch>, String>),
     Guarded {
         control: Arc<crate::sources::Control>,
         generation: u64,
@@ -764,6 +814,10 @@ enum AppEvent {
 #[derive(Debug)]
 enum SearchResolution {
     Estimate(crate::block_forecast::Estimate),
+    Identity {
+        query: String,
+        version: IdentityVersionRecord,
+    },
     Block(BlockRecord),
     TimeBlock {
         block: BlockRecord,
@@ -860,29 +914,22 @@ impl ObjectStore {
 
         if should_replace_block {
             for tx in &block.summary.tx {
-                self.transaction_inclusions
-                    .entry(tx.txid.clone())
-                    .or_default()
-                    .insert(hash.clone());
+                self.note_inclusion(&tx.txid, &hash);
                 let Some(raw_json) = tx.raw.clone() else {
                     continue;
                 };
-                self.learn_currency_data(&raw_json);
-                self.transactions_by_txid.insert(
-                    tx.txid.clone(),
-                    TransactionRecord {
-                        source_id: None,
-                        summary: tx.clone(),
-                        raw_json,
-                        block_hash: Some(hash.clone()),
-                        block_height: Some(block.summary.height),
-                        block_time: block.summary.time,
-                    },
-                );
+                self.replace_transaction(TransactionRecord {
+                    source_id: None,
+                    summary: tx.clone(),
+                    raw_json,
+                    block_hash: Some(hash.clone()),
+                    block_height: Some(block.summary.height),
+                    block_time: block.summary.time,
+                    prepared: block.prepared_transactions.get(&tx.txid).cloned(),
+                });
             }
 
             self.blocks_by_hash.insert(hash.clone(), block);
-            self.refresh_marketplace_tags();
         }
 
         hash
@@ -892,12 +939,18 @@ impl ObjectStore {
         self.blocks_by_hash.get(hash)
     }
 
+    fn block_hash_at_height(&self, height: u64) -> Option<&BlockHash> {
+        if let Some(branch) = &self.chain.reconciled {
+            return branch.canonical.get(&height).map(|header| &header.hash);
+        }
+        self.block_hash_by_height.get(&height)
+    }
+
     fn block_for_target(&self, target: &BlockTarget) -> Option<&BlockRecord> {
         match target {
             BlockTarget::Hash(hash) => self.block(hash),
             BlockTarget::Height(height) => self
-                .block_hash_by_height
-                .get(height)
+                .block_hash_at_height(*height)
                 .and_then(|hash| self.block(hash)),
         }
     }
@@ -907,12 +960,8 @@ impl ObjectStore {
     }
 
     fn insert_transaction(&mut self, mut transaction: TransactionRecord) {
-        self.learn_currency_data(&transaction.raw_json);
         if let Some(hash) = &transaction.block_hash {
-            self.transaction_inclusions
-                .entry(transaction.summary.txid.clone())
-                .or_default()
-                .insert(hash.clone());
+            self.note_inclusion(&transaction.summary.txid, hash);
         }
         if let Some(block_hash) = transaction.block_hash.as_deref()
             && transaction.block_height.is_none()
@@ -923,29 +972,114 @@ impl ObjectStore {
                 .map(|block| block.summary.height);
         }
         let txid = transaction.summary.txid.clone();
-        for block in self.blocks_by_hash.values_mut() {
-            if let Some(summary) = block
-                .summary
-                .tx
-                .iter_mut()
-                .find(|summary| summary.txid == txid)
+        for hash in self.transaction_inclusions.get(&txid).into_iter().flatten() {
+            if let Some(block) = self.blocks_by_hash.get_mut(hash)
+                && let Some(summary) = block
+                    .summary
+                    .tx
+                    .iter_mut()
+                    .find(|summary| summary.txid == txid)
             {
                 summary.raw = Some(transaction.raw_json.clone());
             }
         }
-        let entry = self.transactions_by_txid.entry(txid);
-        match entry {
-            std::collections::hash_map::Entry::Occupied(mut entry)
-                if entry.get().block_hash.is_none() && transaction.block_hash.is_some() =>
-            {
-                entry.insert(transaction);
-            }
-            std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(transaction);
-            }
-            _ => {}
+        if self
+            .transactions_by_txid
+            .get(&txid)
+            .is_none_or(|current| current.block_hash.is_none() && transaction.block_hash.is_some())
+        {
+            self.replace_transaction(transaction);
+        } else if let Some(prepared) = transaction.prepared {
+            self.learn_prepared_currency_data(&prepared);
         }
-        self.refresh_marketplace_tags();
+    }
+
+    fn learn_prepared_currency_data(&mut self, prepared: &PreparedTransaction) {
+        self.currency_references
+            .extend(prepared.currencies.iter().cloned());
+        for (id, name) in &prepared.currency_names {
+            self.currency_name_hints.insert(id.clone(), name.clone());
+        }
+    }
+
+    fn replace_transaction(&mut self, mut transaction: TransactionRecord) {
+        let txid = transaction.summary.txid.clone();
+        let prepared = transaction.prepared.get_or_insert_with(|| {
+            Arc::new(PreparedTransaction::new(
+                &transaction.summary,
+                &transaction.raw_json,
+            ))
+        });
+        self.learn_prepared_currency_data(prepared);
+        for funding in &prepared.proof_funders {
+            self.marketplace_proofs
+                .entry(funding.clone())
+                .or_default()
+                .insert(txid.clone());
+        }
+        if let Some(spender) = &prepared.marketplace_spender {
+            self.marketplace_spends
+                .entry(spender.clone())
+                .or_default()
+                .insert(txid.clone());
+        }
+        self.transactions_by_txid.insert(txid, transaction);
+    }
+
+    fn note_inclusion(&mut self, txid: &str, hash: &str) {
+        if self
+            .transaction_inclusions
+            .entry(txid.into())
+            .or_default()
+            .insert(hash.into())
+        {
+            self.transactions_by_inclusion
+                .entry(hash.into())
+                .or_default()
+                .insert(txid.into());
+        }
+    }
+
+    fn project_transaction_inclusions(
+        &mut self,
+        branch: &crate::chain_state::PreparedBranch,
+        incremental: bool,
+    ) {
+        fn project(
+            branch: &crate::chain_state::PreparedBranch,
+            inclusions: &HashSet<BlockHash>,
+            record: &mut TransactionRecord,
+        ) {
+            if let Some(header) = inclusions
+                .iter()
+                .filter_map(|hash| branch.canonical_block(hash))
+                .min_by_key(|header| header.height)
+            {
+                record.block_hash = Some(header.hash.clone());
+                record.block_height = Some(header.height);
+                record.block_time = header.time;
+            }
+        }
+        if incremental {
+            for hash in &branch.changed_hashes {
+                for txid in self
+                    .transactions_by_inclusion
+                    .get(hash)
+                    .into_iter()
+                    .flatten()
+                {
+                    if let Some(record) = self.transactions_by_txid.get_mut(txid) {
+                        project(branch, &self.transaction_inclusions[txid], record);
+                    }
+                }
+            }
+        } else {
+            for (txid, inclusions) in &self.transaction_inclusions {
+                if let Some(record) = self.transactions_by_txid.get_mut(txid) {
+                    project(branch, inclusions, record);
+                }
+            }
+        }
     }
 
     fn contains_block(&self, hash: &str) -> bool {
@@ -1114,89 +1248,61 @@ impl ObjectStore {
             .insert(tag);
     }
 
-    fn marketplace_tags(&self, txid: &str) -> impl Iterator<Item = MarketplaceTag> + '_ {
-        self.marketplace_tags_by_txid
-            .get(txid)
-            .into_iter()
-            .flatten()
-            .copied()
+    fn marketplace_proof_matches(&self, proof: &str, funding: &str) -> bool {
+        self.transaction(proof)
+            .and_then(|tx| tx.prepared.as_deref())
+            .is_some_and(|data| data.proof_funders.iter().any(|id| id == funding))
+            && self
+                .transaction(funding)
+                .is_some_and(|tx| marketplace_funding_shape(&tx.raw_json))
     }
 
-    fn refresh_marketplace_tags(&mut self) {
-        let mut discovered = Vec::new();
-        for (proof_txid, proof) in &self.transactions_by_txid {
-            if !contains_marketplace_offer_proof(&proof.raw_json) {
-                continue;
-            }
-            for input in proof
-                .raw_json
-                .get("vin")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-            {
-                let (Some(source_txid), Some(index)) = (
-                    input.get("txid").and_then(Value::as_str),
-                    input.get("vout").and_then(Value::as_u64),
-                ) else {
-                    continue;
-                };
-                if index == 1
-                    && self
-                        .transaction(source_txid)
-                        .is_some_and(|source| marketplace_funding_shape(&source.raw_json))
-                {
-                    discovered.push((source_txid.to_string(), MarketplaceTag::Offer));
-                    discovered.push((proof_txid.clone(), MarketplaceTag::OfferProof));
-                }
-            }
-        }
-
-        let funding_txids = self
-            .marketplace_tags_by_txid
-            .iter()
-            .filter(|(_, tags)| tags.contains(&MarketplaceTag::Offer))
-            .map(|(txid, _)| txid.clone())
-            .chain(
-                discovered
+    fn marketplace_offer(&self, txid: &str) -> bool {
+        self.marketplace_tags_by_txid
+            .get(txid)
+            .is_some_and(|tags| tags.contains(&MarketplaceTag::Offer))
+            || self.marketplace_proofs.get(txid).is_some_and(|proofs| {
+                proofs
                     .iter()
-                    .filter(|(_, tag)| *tag == MarketplaceTag::Offer)
-                    .map(|(txid, _)| txid.clone()),
-            )
-            .collect::<BTreeSet<_>>();
-        for funding_txid in funding_txids {
-            let Some(spender_txid) = self
-                .transaction(&funding_txid)
-                .and_then(|funding| transaction_output(&funding.raw_json, 0))
-                .and_then(|output| output.get("spentTxId"))
-                .and_then(Value::as_str)
-                .map(str::to_string)
-            else {
-                continue;
-            };
-            let Some(spender) = self.transaction(&spender_txid) else {
-                continue;
-            };
-            let input_count = spender
-                .raw_json
-                .get("vin")
-                .and_then(Value::as_array)
-                .map(Vec::len)
-                .unwrap_or_default();
-            let tag = if input_count > 1 {
-                MarketplaceTag::OfferTaken
-            } else {
-                MarketplaceTag::OfferClosed
-            };
-            discovered.push((spender_txid, tag));
-        }
+                    .any(|proof| self.marketplace_proof_matches(proof, txid))
+            })
+    }
 
-        for (txid, tag) in discovered {
-            self.marketplace_tags_by_txid
-                .entry(txid)
-                .or_default()
-                .insert(tag);
+    fn marketplace_tags(&self, txid: &str) -> impl Iterator<Item = MarketplaceTag> {
+        let mut tags = self
+            .marketplace_tags_by_txid
+            .get(txid)
+            .cloned()
+            .unwrap_or_default();
+        if self.marketplace_offer(txid) {
+            tags.insert(MarketplaceTag::Offer);
         }
+        if let Some(tx) = self.transaction(txid) {
+            if tx.prepared.as_deref().is_some_and(|data| {
+                data.proof_funders
+                    .iter()
+                    .any(|funding| self.marketplace_proof_matches(txid, funding))
+            }) {
+                tags.insert(MarketplaceTag::OfferProof);
+            }
+            if self.marketplace_spends.get(txid).is_some_and(|funders| {
+                funders.iter().any(|funding| {
+                    self.transaction(funding)
+                        .and_then(|tx| tx.prepared.as_deref())
+                        .and_then(|data| data.marketplace_spender.as_deref())
+                        == Some(txid)
+                        && self.marketplace_offer(funding)
+                })
+            }) {
+                let count = tx.raw_json["vin"].as_array().map_or(0, Vec::len);
+                tags.insert(if count > 1 {
+                    MarketplaceTag::OfferTaken
+                } else {
+                    MarketplaceTag::OfferClosed
+                });
+            }
+        }
+        tags.into_iter()
     }
 }
 
@@ -1225,8 +1331,11 @@ fn contains_marketplace_offer_proof(raw: &Value) -> bool {
 }
 
 fn op_return_starts_with_transaction_proof(script_hex: &str) -> bool {
-    extract_op_return_payload(script_hex)
-        .is_some_and(|payload| payload.starts_with(&[5, 0, 0, 0, 3]))
+    script_hex
+        .get(..2)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("6a"))
+        && extract_op_return_payload(script_hex)
+            .is_some_and(|payload| payload.starts_with(&[5, 0, 0, 0, 3]))
 }
 
 fn extract_op_return_payload(script_hex: &str) -> Option<Vec<u8>> {
@@ -1355,8 +1464,16 @@ pub fn run(
         .visible
         .store(true, std::sync::atomic::Ordering::Release);
     let theme = Theme::desert(config.emoji);
+    let terminal_settings = job_control::TerminalSettings::capture();
     let mut terminal = setup_terminal()?;
-    let result = run_loop(&mut terminal, &theme, &mut sessions, &mut registry);
+    let job_control = terminal_settings.and_then(|settings| settings.start().ok());
+    let result = run_loop(
+        &mut terminal,
+        &theme,
+        &mut sessions,
+        &mut registry,
+        job_control.as_ref(),
+    );
     for session in &sessions {
         session
             .config
@@ -1369,12 +1486,28 @@ pub fn run(
     drop(runtime_context);
     drop(runtime);
     let cache_notice = if result.is_ok() {
-        draw_shutdown(&mut terminal, &theme, "Closing the local cache…")
+        (|| {
+            if job_control
+                .as_ref()
+                .is_some_and(job_control::JobControl::take_resume)
+            {
+                resume_terminal(&mut terminal, false)?;
+            }
+            draw_shutdown(&mut terminal, &theme, "Closing the local cache…")
+        })()
     } else {
         Ok(())
     };
     drop(cache);
-    let restored = restore_terminal(&mut terminal);
+    let restored = if job_control
+        .as_ref()
+        .is_some_and(job_control::JobControl::take_resume)
+    {
+        // The worker already left the alternate screen for the shell.
+        disable_raw_mode().map_err(Into::into)
+    } else {
+        restore_terminal(&mut terminal)
+    };
     result?;
     restored?;
     cache_notice
@@ -1387,30 +1520,66 @@ fn create_session(
     route_label: String,
 ) -> ChainSession {
     let (tx, rx) = unbounded_channel();
-    let (observation_tx, mut observation_rx) = unbounded_channel();
+    let (observation_tx, mut observation_rx) = unbounded_channel::<RpcObservation>();
     config.daemon.observations = Some(observation_tx);
     store.workspace_system = config.chain.system_id.get().cloned();
     store.chain.reconciled = Some(Default::default());
     store.chain.reconciling = true;
     let event_tx = tx.clone();
     tokio::spawn(async move {
-        while let Some(observation) = observation_rx.recv().await {
-            if event_tx.send(AppEvent::Observation(observation)).is_err() {
+        let mut lookahead = None;
+        loop {
+            let mut snapshot = match lookahead.take() {
+                Some(observation) => observation,
+                None => match observation_rx.recv().await {
+                    Some(observation) => observation,
+                    None => break,
+                },
+            };
+            // Keep ordering boundaries intact. Only consecutive scalar
+            // snapshots from the same source and branch can be collapsed.
+            for _ in 0..APP_EVENT_BATCH_LIMIT - 1 {
+                let Ok(next) = observation_rx.try_recv() else {
+                    break;
+                };
+                if snapshot.same_scalar_snapshot(&next) {
+                    if next.order >= snapshot.order {
+                        snapshot = next;
+                    }
+                } else {
+                    lookahead = Some(next);
+                    break;
+                }
+            }
+            if event_tx.send(AppEvent::Observation(snapshot)).is_err() {
                 break;
             }
         }
     });
-    if let Ok(cache) = Cache::open(&config.cache_path)
-        && let Ok(definitions) = cache.currency_definitions(&config.chain_cache_key())
-    {
-        for (currency_id, name, definition_json) in definitions {
-            store.insert_currency_definition(CurrencyDefinitionRecord {
-                currency_id,
-                name,
-                definition_json,
-            });
+    let cache_path = config.cache_path.clone();
+    let system = config.chain_cache_key();
+    let event_tx = tx.clone();
+    tokio::task::spawn_blocking(move || {
+        if let Ok(cache) = Cache::open(&cache_path)
+            && let Ok(definitions) = cache.currency_definitions(&system)
+        {
+            for (currency_id, name, definition_json) in definitions {
+                if event_tx
+                    .send(AppEvent::CurrencyDefinitions {
+                        requested: Vec::new(),
+                        records: vec![CurrencyDefinitionRecord {
+                            currency_id,
+                            name,
+                            definition_json,
+                        }],
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
         }
-    }
+    });
     spawn_dashboard_poller(config.clone(), tx.clone());
     let geoip_directory = geoip::database_directory(&config.cache_path);
     let geoip_status = geoip::status(&geoip_directory);
@@ -1599,6 +1768,7 @@ fn spawn_dashboard_poller(mut config: Config, tx: UnboundedSender<AppEvent>) {
     tokio::spawn(async move {
         let mut failures = 0u32;
         let mut reconciler = None;
+        let mut published: Option<Arc<crate::chain_state::PreparedBranch>> = None;
         loop {
             if !config.daemon.control.polling() {
                 tokio::time::sleep(Duration::from_millis(250)).await;
@@ -1637,6 +1807,32 @@ fn spawn_dashboard_poller(mut config: Config, tx: UnboundedSender<AppEvent>) {
                     error: reconciled.as_ref().err().cloned(),
                 },
             );
+            let reconciled = match reconciled {
+                Ok(change)
+                    if published.as_ref().is_some_and(|branch| {
+                        change.attached.is_empty()
+                            && change.detached.is_empty()
+                            && change.state.revision == branch.revision
+                            && change.state.tip() == branch.tip()
+                    }) =>
+                {
+                    Ok(published.as_ref().unwrap().clone())
+                }
+                Ok(change) => {
+                    match tokio::task::spawn_blocking(move || {
+                        Arc::new(crate::chain_state::PreparedBranch::from(change))
+                    })
+                    .await
+                    {
+                        Ok(branch) => {
+                            published = Some(branch.clone());
+                            Ok(branch)
+                        }
+                        Err(error) => Err(error.to_string()),
+                    }
+                }
+                Err(error) => Err(error),
+            };
             let _ = tx.send(AppEvent::Guarded {
                 control: config.daemon.control.clone(),
                 generation,
@@ -1798,15 +1994,28 @@ fn spawn_transaction_loader(config: Config, tx: UnboundedSender<AppEvent>, reque
         for requested in requested.chunks(TRANSACTION_LOAD_BATCH_SIZE) {
             let requested = requested.to_vec();
             let (records, failed) = load_transactions_bounded(&config, &requested).await;
-            if tx
-                .send(AppEvent::Transactions {
-                    requested,
-                    records,
-                    failed,
-                })
-                .is_err()
+            for record in records {
+                if tx
+                    .send(AppEvent::Transactions {
+                        requested: vec![record.summary.txid.clone()],
+                        records: vec![record],
+                        failed: Vec::new(),
+                    })
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            if !failed.is_empty()
+                && tx
+                    .send(AppEvent::Transactions {
+                        requested: failed.clone(),
+                        records: Vec::new(),
+                        failed,
+                    })
+                    .is_err()
             {
-                break;
+                return;
             }
         }
     });
@@ -2329,6 +2538,7 @@ async fn resolve_search(config: &Config, route: ObjectRoute) -> Result<SearchRes
         if let Some(raw_json) = cached_block {
             let block = BlockRecord {
                 summary: serde_json::from_value(raw_json.clone())?,
+                prepared_transactions: HashMap::new(),
                 raw_json,
                 detail_loaded: false,
             };
@@ -2372,6 +2582,18 @@ async fn resolve_search(config: &Config, route: ObjectRoute) -> Result<SearchRes
             Ok(SearchResolution::Block(
                 load_block_detail(config, BlockTarget::Height(height), None).await?,
             ))
+        }
+        ObjectRoute::Identity(query) => {
+            let client = RpcClient::for_config(config)?;
+            let lookup =
+                load_identity_version_with_client(config, &client, &query, None, false).await;
+            match lookup {
+                Ok((version, _)) => Ok(SearchResolution::Identity { query, version }),
+                Err(error) if crate::rpc::identity_not_found(&error) => {
+                    anyhow::bail!("Identity not found: {query}")
+                }
+                Err(error) => Err(error),
+            }
         }
         ObjectRoute::Hash(hash) => {
             // A transaction miss is expected for a block hash. Exhaust local
@@ -2513,6 +2735,7 @@ async fn load_block_summary(config: &Config, block: BlockId) -> Result<BlockReco
         let summary = serde_json::from_value(raw_json.clone())
             .context("cached getblock result did not match the expected block shape")?;
         return Ok(BlockRecord {
+            prepared_transactions: prepare_embedded_transactions(&summary),
             summary,
             raw_json,
             detail_loaded: false,
@@ -2527,6 +2750,7 @@ async fn fetch_block_summary(config: &Config, block: BlockId) -> Result<BlockRec
     let output = client.get_block(block, 1).await?;
     let raw_json = rpc_result_value(&output.response_json)?;
     Ok(BlockRecord {
+        prepared_transactions: prepare_embedded_transactions(&output.result),
         summary: output.result,
         raw_json,
         detail_loaded: false,
@@ -2542,15 +2766,38 @@ async fn load_block_detail(
         Some(block) => block,
         None => load_block_summary(config, target.to_block_id()).await?,
     };
-    enrich_block_transactions(config, &mut block.summary).await;
+    enrich_block_transactions(config, &mut block).await;
     block.detail_loaded = true;
     Ok(block)
 }
 
-async fn enrich_block_transactions(config: &Config, block: &mut BlockSummary) {
+fn prepare_embedded_transactions(
+    summary: &BlockSummary,
+) -> HashMap<Txid, Arc<PreparedTransaction>> {
+    summary
+        .tx
+        .iter()
+        .filter_map(|tx| {
+            Some((
+                tx.txid.clone(),
+                Arc::new(PreparedTransaction::new(tx, tx.raw.as_ref()?)),
+            ))
+        })
+        .collect()
+}
+
+async fn enrich_block_transactions(config: &Config, block: &mut BlockRecord) {
     let config = &config.noninteractive();
-    for transaction in &mut block.tx {
-        if transaction.raw.as_ref().is_some_and(has_transaction_size) {
+    for transaction in &mut block.summary.tx {
+        if let Some(raw) = transaction
+            .raw
+            .as_ref()
+            .filter(|raw| has_transaction_size(raw))
+        {
+            block
+                .prepared_transactions
+                .entry(transaction.txid.clone())
+                .or_insert_with(|| Arc::new(PreparedTransaction::new(transaction, raw)));
             continue;
         }
 
@@ -2558,6 +2805,11 @@ async fn enrich_block_transactions(config: &Config, block: &mut BlockSummary) {
             continue;
         };
         transaction.raw = Some(record.raw_json);
+        if let Some(prepared) = record.prepared {
+            block
+                .prepared_transactions
+                .insert(transaction.txid.clone(), prepared);
+        }
     }
 }
 
@@ -2843,16 +3095,19 @@ fn transaction_record(txid: &str, raw_json: Value) -> TransactionRecord {
         .and_then(Value::as_u64)
         .unwrap_or_default();
     let block_height = raw_json.get("height").and_then(Value::as_u64);
+    let summary = TransactionSummary {
+        txid: txid.to_string(),
+        raw: Some(raw_json.clone()),
+    };
+    let prepared = Some(Arc::new(PreparedTransaction::new(&summary, &raw_json)));
     TransactionRecord {
         source_id: None,
-        summary: TransactionSummary {
-            txid: txid.to_string(),
-            raw: Some(raw_json.clone()),
-        },
+        summary,
         raw_json,
         block_hash,
         block_height,
         block_time,
+        prepared,
     }
 }
 
@@ -3482,11 +3737,17 @@ fn defi_controls(panel: &DefiPanel) -> &'static str {
         "j/k select | Enter/Right/l investigate/open | c currencies | p pool | v pool states | g destination height | [/] adjacent window | s scan 32 older windows | F5/r refresh | F8/Esc close | q quit"
     }
 }
+fn read_terminal_event(timing: &ui_timing::Timing) -> Result<(Event, Instant)> {
+    let _measurement = timing.measure("terminal_read");
+    Ok((event::read()?, Instant::now()))
+}
+
 fn run_loop(
     terminal: &mut Tui,
     theme: &Theme,
     sessions: &mut Vec<ChainSession>,
     registry: &mut crate::sources::Registry,
+    job_control: Option<&job_control::JobControl>,
 ) -> Result<()> {
     let mut mouse_capture = true;
     let mut active = 0;
@@ -3516,11 +3777,30 @@ fn run_loop(
     let mut redraw = true;
     let mut last_periodic_draw = Instant::now();
     let mut pending_input = None;
+    let mut input_needs_draw = false;
+    let mut activity_needs_update = true;
+    let mut background_cursor = 0;
+    let timing = ui_timing::Timing::open()?;
     loop {
-        if pending_input.is_none() && event::poll(Duration::ZERO)? {
-            pending_input = Some(event::read()?);
+        if let Some(job) = job_control {
+            if job.suspended() {
+                std::thread::sleep(Duration::from_millis(10));
+                continue;
+            }
+            if job.take_resume() {
+                resume_terminal(terminal, mouse_capture)?;
+                pending_input = None;
+                redraw = true;
+            }
         }
-        if pending_input.as_ref().is_some_and(input::quit_pressed) && consent.is_none() {
+        if pending_input.is_none() && event::poll(Duration::ZERO)? {
+            pending_input = Some(read_terminal_event(&timing)?);
+        }
+        if pending_input
+            .as_ref()
+            .is_some_and(|(event, _)| input::quit_pressed(event))
+            && consent.is_none()
+        {
             // Use the visible layer's focus, never an editor hidden beneath it.
             let entering_text = if investigation.is_some() {
                 false
@@ -3544,770 +3824,22 @@ fn run_loop(
                 break;
             }
         }
-        redraw |= bookmarks.has_updates();
-        if let Some((bookmark, snapshot)) = bookmarks.poll() {
-            let index = match sessions
-                .iter()
-                .position(|s| s.config.chain.system_id.get() == Some(&bookmark.system_id))
-            {
-                Some(index) => index,
-                None => {
-                    // A cached object remains navigable after its source configuration is removed.
-                    // This placeholder has no usable transport and grants no permissions.
-                    let mut config = sessions[0].config.clone();
-                    config.chain.name = bookmark.system_id.to_string();
-                    config.chain.system_id =
-                        Arc::new(std::sync::OnceLock::from(bookmark.system_id.clone()));
-                    config.daemon.config_file = None;
-                    config.daemon.user = None;
-                    config.daemon.password = None;
-                    config.daemon.host = "127.0.0.1".into();
-                    config.daemon.port = 0;
-                    config.daemon.control = Arc::default();
-                    config
-                        .daemon
-                        .control
-                        .set(crate::sources::ConnectionState::Disabled);
-                    let _ = config.daemon.control.expected.set((
-                        bookmark.system_id.clone(),
-                        crate::world::Network::from_testnet(config.chain.testnet),
-                    ));
-                    config.daemon.api_pool = Arc::default();
-                    config.daemon.observations = None;
-                    registry.configs.push(config.clone());
-                    sessions.push(create_session(
-                        config,
-                        ObjectStore::default(),
-                        Screen::Dashboard,
-                        bookmark.system_id.to_string(),
-                    ));
-                    sessions.len() - 1
-                }
+        if !input_needs_draw && let Some((event, received)) = pending_input.take() {
+            timing.record("input_queue", received.elapsed());
+            let _timing = timing.measure("input_dispatch");
+            input_needs_draw = true;
+            activity_needs_update = true;
+            let session_links = if links_open {
+                session_relationships(sessions, active)
+            } else {
+                Vec::new()
             };
-            let destination = &mut sessions[index];
-            let depth = destination.state.screen_stack.len();
-            match bookmark_ui::install(
-                &mut destination.state,
-                &destination.config,
-                &registry.configs,
-                &bookmark,
-                snapshot,
-            ) {
-                Ok(()) => {
-                    if let Screen::Currency(view) = &destination.state.screen {
-                        currency_ui::spawn_cached(
-                            destination.config.clone(),
-                            destination.tx.clone(),
-                            view.query.clone(),
-                        );
-                    }
-                    if active != index {
-                        cross_history.push((active, index, depth + 1));
-                    }
-                    sessions[active]
-                        .config
-                        .daemon
-                        .control
-                        .visible
-                        .store(false, std::sync::atomic::Ordering::Release);
-                    active = index;
-                    sessions[active]
-                        .config
-                        .daemon
-                        .control
-                        .visible
-                        .store(true, std::sync::atomic::Ordering::Release);
-                }
-                Err(error) => {
-                    bookmarks.show_error(error.to_string());
-                }
-            }
-            redraw = true;
-        }
-        if let Some(panel) = &mut defi
-            && let Some(receiver) = &mut panel.receiver
-            && let Ok(report) = receiver.try_recv()
-        {
-            let complete = !report.searching;
-            panel.report = Some(report);
-            if complete {
-                panel.task = None;
-                panel.receiver = None;
-            }
-            redraw = true;
-        }
-        if let Some(panel) = &mut defi
-            && let Some(receiver) = &mut panel.pool_receiver
-            && let Ok(result) = receiver.try_recv()
-        {
-            panel.pool_comparison = Some(result);
-            panel.pool_receiver = None;
-            panel.pool_task = None;
-            redraw = true;
-        }
-        if consent
-            .as_ref()
-            .is_some_and(|request| request.reply.is_closed())
-        {
-            consent = None;
-            redraw = true;
-        }
-        if let Some((target, once)) = pending_link.take() {
-            let open_trail = pending_trail.as_ref() == Some(&target);
-            if let Some(index) = registry
-                .configs
-                .iter()
-                .position(|config| config.chain.system_id.get() == Some(&target.system_id))
-            {
-                let cached = sessions[index]
-                    .state
-                    .store
-                    .transaction(&target.txid)
-                    .is_some();
-                let connection = &registry.configs[index];
-                if !cached
-                    && !open_trail
-                    && !once
-                    && connection.daemon.config_file.is_some()
-                    && connection.daemon.control.state()
-                        == crate::sources::ConnectionState::Disabled
-                {
-                    local_permission = Some((index, target));
-                } else {
-                    pending_output_focus.insert(index, target.clone());
-                    let destination = &mut sessions[index];
-                    let depth = destination.state.screen_stack.len();
-                    let mut screen = transaction_screen(target.txid.clone());
-                    if let Screen::Transaction { notarization, .. } = &mut screen {
-                        *notarization = pending_notarization
-                            .take()
-                            .filter(|context| context.target == target);
-                    }
-                    push_screen(&mut destination.state, screen);
-                    if !cached {
-                        let mut request_config = if open_trail {
-                            destination.config.noninteractive()
-                        } else {
-                            destination.config.clone()
-                        };
-                        if once {
-                            request_config.daemon.control = Arc::default();
-                            if let Some(id) = request_config.chain.system_id.get() {
-                                let _ = request_config.daemon.control.expected.set((
-                                    id.clone(),
-                                    crate::world::Network::from_testnet(
-                                        request_config.chain.testnet,
-                                    ),
-                                ));
-                            }
-                        }
-                        destination
-                            .state
-                            .loading_transactions
-                            .insert(target.txid.clone());
-                        spawn_transaction_loader(
-                            request_config,
-                            destination.tx.clone(),
-                            vec![target.txid],
-                        );
-                    }
-                    if active != index {
-                        cross_history.push((active, index, depth + 1));
-                    }
-                    sessions[active]
-                        .config
-                        .daemon
-                        .control
-                        .visible
-                        .store(false, std::sync::atomic::Ordering::Release);
-                    active = index;
-                    // Viewing a foreign object permits on-demand work, never monitoring.
-                    sessions[active]
-                        .config
-                        .daemon
-                        .control
-                        .visible
-                        .store(true, std::sync::atomic::Ordering::Release);
-                    links_open = false;
-                }
-            } else {
-                source_message = format!(
-                    "No connection configured for {}. Reference retained.",
-                    target.system_id
-                );
-            }
-            redraw = true;
-        }
-
-        if let Some((system, hash)) = pending_protocol_block.take()
-            && let Some(index) = registry.configs.iter().position(|c| {
-                c.chain.testnet == sessions[active].config.chain.testnet
-                    && c.chain_cache_key() == system
-            })
-        {
-            let destination = &mut sessions[index];
-            let depth = destination.state.screen_stack.len();
-            let target = BlockTarget::Hash(hash);
-            push_screen(&mut destination.state, block_screen(target.clone()));
-            request_block_detail(
-                &mut destination.state,
-                &destination.config.noninteractive(),
-                &destination.tx,
-                target,
-            );
-            if active != index {
-                cross_history.push((active, index, depth + 1));
-                sessions[active]
-                    .config
-                    .daemon
-                    .control
-                    .visible
-                    .store(false, Ordering::Release);
-                active = index;
-                sessions[active]
-                    .config
-                    .daemon
-                    .control
-                    .visible
-                    .store(true, Ordering::Release);
-            }
-            redraw = true;
-        }
-
-        if let Some(link) = pending_currency.take() {
-            if let Some(index) = registry
-                .configs
-                .iter()
-                .position(|config| config.chain.system_id.get() == Some(&link.system))
-            {
-                let destination = &mut sessions[index];
-                let depth = destination.state.screen_stack.len();
-                push_screen(
-                    &mut destination.state,
-                    currency_ui::screen(
-                        link.currency.clone(),
-                        destination.config.chain_cache_key(),
-                    ),
-                );
-                let request_config = destination.config.noninteractive();
-                if let Some(height) = link.height {
-                    let request = currency_ui::request_id();
-                    if let Screen::Currency(view) = &mut destination.state.screen {
-                        view.history_request = Some(request);
-                    }
-                    currency_ui::spawn_at_height(
-                        request_config,
-                        destination.tx.clone(),
-                        link.currency,
-                        height,
-                        request,
-                    );
-                } else {
-                    currency_ui::spawn_load(
-                        request_config,
-                        destination.tx.clone(),
-                        link.currency,
-                        false,
-                    );
-                }
-                if active != index {
-                    cross_history.push((active, index, depth + 1));
-                }
-                sessions[active]
-                    .config
-                    .daemon
-                    .control
-                    .visible
-                    .store(false, Ordering::Release);
-                active = index;
-                sessions[active]
-                    .config
-                    .daemon
-                    .control
-                    .visible
-                    .store(true, Ordering::Release);
-                defi = None;
-            } else if let Some(panel) = &mut defi {
-                panel.message = Some(format!("No source configured for {}", link.system));
-            }
-            redraw = true;
-        }
-
-        if let Some((system, address)) = pending_destination.take() {
-            let witness_signer = matches!(sessions[active].state.screen, Screen::Witnesses(_));
-            if let Some(index) = registry
-                .configs
-                .iter()
-                .position(|config| config.chain.system_id.get() == Some(&system))
-            {
-                let target = identity_screen(address.clone(), None);
-                let has_identity = matches!(&target, Screen::Identity { target, .. }
-                    if sessions[index].state.store.identity_for_target(target).is_some());
-                if witness_signer
-                    && !has_identity
-                    && registry.configs[index].daemon.control.state()
-                        == crate::sources::ConnectionState::Disabled
-                {
-                    if let Screen::Witnesses(view) = &mut sessions[active].state.screen {
-                        view.navigation_message = Some(format!(
-                            "Signer identity unavailable. Enable the {} daemon in F2 Sources.",
-                            registry.configs[index].chain.name
-                        ));
-                    }
-                    redraw = true;
-                    continue;
-                }
-                let destination = &mut sessions[index];
-                let depth = destination.state.screen_stack.len();
-                let screen = if witness_signer || address.starts_with('i') {
-                    target
-                } else {
-                    address_screen(address.clone())
-                };
-                push_screen(&mut destination.state, screen);
-                if !witness_signer && !address.starts_with('i') {
-                    request_address_detail(
-                        &mut destination.state,
-                        &destination.config.noninteractive(),
-                        &destination.tx,
-                        &address,
-                    );
-                }
-                if active != index {
-                    cross_history.push((active, index, depth + 1));
-                }
-                sessions[active]
-                    .config
-                    .daemon
-                    .control
-                    .visible
-                    .store(false, Ordering::Release);
-                active = index;
-                sessions[active]
-                    .config
-                    .daemon
-                    .control
-                    .visible
-                    .store(true, Ordering::Release);
-            } else if let Screen::Witnesses(view) = &mut sessions[active].state.screen {
-                view.navigation_message = Some(format!(
-                    "Signer identity unavailable. No source is configured for {system}."
-                ));
-            } else {
-                sessions[active].state.notice = Some(TransientNotice {
-                    message: format!(
-                        "No configured source for {system}; destination remains available in JSON"
-                    ),
-                    until: Instant::now() + Duration::from_secs(8),
-                });
-            }
-            redraw = true;
-        }
-
-        for session in sessions.iter_mut() {
-            if session.config.daemon.control.state() == crate::sources::ConnectionState::Monitored
-                && !session.state.mempool.loading
-                && session
-                    .state
-                    .mempool
-                    .last_refresh
-                    .is_none_or(|last| last.elapsed() >= Duration::from_secs(5))
-            {
-                session.state.mempool.loading = true;
-                let mut background = session.config.clone();
-                background.daemon.background = true;
-                spawn_mempool_loader(background, session.tx.clone(), false);
-            }
-            redraw |= drain_app_events(&mut session.state, &mut session.rx) > 0;
-        }
-        pending_output_focus.retain(|index, target| {
-            let session = &mut sessions[*index];
+            let session = &mut sessions[active];
             let config = &session.config;
             let state = &mut session.state;
-            let Screen::Transaction {
-                txid,
-                selected_flow,
-                ..
-            } = &mut state.screen
-            else {
-                return false;
-            };
-            if *txid != target.txid {
-                return false;
-            }
-            let Some(transaction) = state.store.transaction(txid) else {
-                return state.loading_transactions.contains(txid);
-            };
-            let flows = transaction_flows(&transaction.raw_json, &state.store);
-            if let Some(selection) = output_selection(&flows, target.vout) {
-                *selected_flow = selection;
-            } else {
-                state.notice = Some(TransientNotice {
-                    message: format!(
-                        "Referenced output {} is absent from this transaction",
-                        target.vout
-                    ),
-                    until: Instant::now() + Duration::from_secs(6),
-                });
-            }
-            if pending_trail.as_ref() == Some(target) {
-                if let Some(mut panel) = DefiPanel::for_output(&transaction.raw_json, target.vout) {
-                    panel.start(config, &registry.configs, state);
-                    defi = Some(panel);
-                } else {
-                    state.notice = Some(TransientNotice {
-                        message: format!(
-                            "Output {} is not a reserve transfer; no trail started",
-                            target.vout
-                        ),
-                        until: Instant::now() + Duration::from_secs(8),
-                    });
-                }
-                pending_trail = None;
-            }
-            redraw = true;
-            false
-        });
-        if pending_trail.as_ref().is_some_and(|target| {
-            !pending_output_focus
-                .values()
-                .any(|pending| pending == target)
-        }) {
-            pending_trail = None;
-        }
-        if consent.is_none() {
-            consent = registry
-                .consent_rx
-                .try_recv()
-                .ok()
-                .map(api_permission_ui::Prompt::new);
-            if consent.is_some() {
-                redraw = true;
-            }
-        }
-        let session_links = if links_open {
-            session_relationships(sessions, active)
-        } else {
-            Vec::new()
-        };
-        let relationship_statuses: Vec<_> = session_links
-            .iter()
-            .map(|link| {
-                sessions
-                    .iter()
-                    .find(|session| {
-                        session.config.chain.system_id.get() == Some(&link.target.system_id)
-                    })
-                    .map(|session| {
-                        let source = &sessions[active];
-                        let Screen::Transaction { txid, .. } = &source.state.screen else {
-                            return "Unresolved";
-                        };
-                        let Some(carrier) = source.state.store.transaction(txid) else {
-                            return "Unresolved";
-                        };
-                        crate::relationships::link_status(
-                            link,
-                            source.config.chain.system_id.get().unwrap(),
-                            &carrier.raw_json,
-                            &link.target.system_id,
-                            session
-                                .state
-                                .store
-                                .transaction(&link.target.txid)
-                                .map(|tx| &tx.raw_json),
-                        )
-                    })
-                    .unwrap_or("No connection configured")
-            })
-            .collect();
-        let source_names = source_chain_display_names(&registry.configs, sessions);
-        let chain_name_requests = registry
-            .configs
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| sources_open || *index == active)
-            .filter_map(|(_, config)| config.chain.system_id.get())
-            .filter(|id| {
-                !sessions
-                    .iter()
-                    .any(|session| session.state.store.identity_name(id.as_ref()).is_some())
-            })
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        let current_config = sessions[current].config.clone();
-        let current_tip = sessions[current].state.tip.clone();
-        redraw |= update_witness_view(sessions, active);
-        let witness_path = cross_history
-            .last()
-            .and_then(|&(origin, destination, depth)| {
-                (destination == active)
-                    .then(|| {
-                        witness_breadcrumb(
-                            &sessions[origin].state,
-                            &sessions[active].state,
-                            theme,
-                            depth,
-                        )
-                    })
-                    .flatten()
-            });
-        let date_tips: HashMap<_, _> = sessions
-            .iter()
-            .filter_map(|s| s.state.tip.height.map(|h| (s.config.chain_cache_key(), h)))
-            .collect();
-        let session = &mut sessions[active];
-        let config = &session.config;
-        let state = &mut session.state;
-        let rx = &mut session.rx;
-        let tx = session.tx.clone();
-
-        redraw |= drain_app_events(state, rx) > 0;
-        request_chain_identity_names(state, config, &tx, chain_name_requests);
-        if redraw {
-            request_current_activity_identity_names(state, config, &tx);
-        }
-        chart_ui::drive(state, config, &tx, &mut chart_task);
-        redraw |= height_dates.drive(
-            theme,
-            config,
-            state.tip.height,
-            &registry.configs,
-            &date_tips,
-        );
-        if let Some(panel) = &mut investigation {
-            let (changed, action) = panel.poll(state);
-            redraw |= changed;
-            if let Some(reorg_ui::Action::Open(row, raw)) = action {
-                panel.open(state, config, &tx, row, raw);
-                investigation = None;
-            }
-        }
-        if config.daemon.control.state() != crate::sources::ConnectionState::Disabled {
-            initialize_identity_json(state);
-            update_marketplace_sort(state);
-            request_marketplace_age_context(state, config, &tx);
-            request_identity_offers(state, config, &tx);
-            let observed_height = match &state.screen {
-                Screen::Block { target, .. } => state
-                    .store
-                    .block_for_target(target)
-                    .map(|b| b.summary.height),
-                Screen::Transaction { txid, .. } => {
-                    state.store.transaction(txid).and_then(|t| t.block_height)
-                }
-                _ => None,
-            };
-            if let Some(height) = observed_height
-                && state
-                    .store
-                    .chain
-                    .reconciled
-                    .as_ref()
-                    .is_some_and(|s| !s.canonical.contains_key(&height))
-            {
-                config
-                    .daemon
-                    .control
-                    .reconciliation_heights
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .insert(height);
-            }
-            request_current_transaction_refresh(state, config, &tx);
-            if let Screen::Transaction { txid, .. } = &state.screen {
-                let txid = txid.clone();
-                request_transaction_context(state, config, &tx, &txid);
-                registration_payments::request(state, config, &tx, &txid);
-            }
-            request_dashboard_page_if_needed(state, config, &tx);
-            request_mempool_transaction_hydration(state, config, &tx);
-            request_currency_definitions(state, config, &tx);
-            if let Some(report) = defi.as_ref().and_then(|panel| panel.report.as_ref()) {
-                let ids = report
-                    .entries
-                    .iter()
-                    .flat_map(|entry| entry.detail.split(|c: char| !c.is_ascii_alphanumeric()))
-                    .chain(
-                        report
-                            .notes
-                            .iter()
-                            .flat_map(|note| note.split(|c: char| !c.is_ascii_alphanumeric())),
-                    )
-                    .filter(|id| looks_like_identity_address(id))
-                    .map(str::to_string)
-                    .chain(report.legs.iter().flat_map(|leg| leg.currency_ids()))
-                    .collect();
-                request_currency_ids(state, config, &tx, ids);
-            }
-            request_current_identity_dependencies(state, config, &tx);
-            request_current_evidence_identity_names(state, config, &tx);
-            request_current_address_identities(state, config, &tx);
-            request_current_address_balance(state, config, &tx);
-            request_current_address_utxos(state, config, &tx);
-            request_current_address_transactions(state, config, &tx);
-            request_current_address_history(state, config, &tx);
-            request_current_address_output_states(state, config, &tx);
-            request_mempool_refresh_if_needed(state, config, &tx);
-            request_marketplace_refresh_if_needed(state, config, &tx);
-            request_peer_refresh_if_needed(state, config, &tx);
-            request_log_refresh_if_needed(state, &tx);
-        }
-
-        let size = terminal.size()?;
-        let body = main_layout(state, theme, size.into(), mouse_capture)[3];
-        redraw |= notarization_ui::drive(state, config, &registry.configs, &tx, body.height);
-        if sources_open {
-            redraw |= source_activity.poll(&config.cache_path);
-        }
-        if pending_input.is_none() && event::poll(Duration::ZERO)? {
-            pending_input = Some(event::read()?);
-            if pending_input.as_ref().is_some_and(input::quit_pressed) {
-                continue;
-            }
-        }
-        let dashboard_animating = matches!(state.screen, Screen::Dashboard)
-            && state.auxiliary.is_none()
-            && (!state.dashboard.transactions_focused || body.width >= 72)
-            && state.dashboard.loading_older_since.is_some();
-        let draw_interval = if dashboard_animating {
-            DASHBOARD_LOADING_FRAME
-        } else {
-            Duration::from_secs(1)
-        };
-        if redraw || last_periodic_draw.elapsed() >= draw_interval {
-            clamp_scroll_positions(
-                state,
-                config,
-                theme,
-                Rect::new(0, 0, size.width, size.height),
-                mouse_capture,
-            );
-            let mut dashboard_transactions = None;
-            terminal.draw(|frame| {
-                let can_copy = mouse_capture
-                    && !text_input_active(state)
-                    && !links_open
-                    && local_permission.is_none()
-                    && defi.is_none()
-                    && bookmarks.can_copy()
-                    && investigation.is_none()
-                    && consent.is_none()
-                    && state.save_prompt.is_none()
-                    && state.cache_clear_prompt.is_none()
-                    && state.peers.controls.prompt.is_none();
-                theme.copy_values.borrow_mut().begin(can_copy);
-                dashboard_transactions = render(frame, config, theme, state, mouse_capture);
-                if active != current {
-                    let area = frame.area();
-                    frame.render_widget(
-                        Clear,
-                        Rect::new(area.x, area.y, area.width, area.height.min(2)),
-                    );
-                    frame.render_widget(
-                        Paragraph::new(header_line(
-                            &current_config,
-                            &source_names[current],
-                            theme,
-                            &current_tip,
-                            current_unix_timestamp(),
-                            area.width,
-                        ))
-                        .style(theme.header()),
-                        Rect::new(area.x, area.y, area.width, 1),
-                    );
-                    frame.render_widget(
-                        Paragraph::new(format!(
-                            "Object system: {} ({})",
-                            config.chain.name,
-                            config.chain_cache_key()
-                        ))
-                        .style(theme.base()),
-                        Rect::new(area.x, area.y + 1, area.width, 1),
-                    );
-                }
-                if let Some(path) = &witness_path {
-                    let area = frame.area();
-                    let breadcrumb = Rect::new(area.x, area.y + 1, area.width, 1);
-                    frame.render_widget(Clear, breadcrumb);
-                    frame.render_widget(
-                        Paragraph::new(breadcrumb_text(theme, path, area.width))
-                            .style(theme.base()),
-                        breadcrumb,
-                    );
-                }
-                if links_open {
-                    render_relationships(
-                        frame,
-                        theme,
-                        &session_links,
-                        &relationship_statuses,
-                        link_selection,
-                        &source_message,
-                    );
-                }
-
-                if let Some(panel) = &defi {
-                    render_scrolling_panel(
-                        frame,
-                        theme,
-                        "DeFi trail — F8",
-                        defi_lines(panel, &state.store, theme),
-                        panel.scroll,
-                        defi_controls(panel),
-                    );
-                }
-                if sources_open {
-                    source_ui::render(
-                        frame,
-                        theme,
-                        registry,
-                        &source_names,
-                        current,
-                        source_selection,
-                        &source_message,
-                        &mut source_activity,
-                    );
-                }
-                if bookmarks.open {
-                    bookmarks.render(
-                        frame,
-                        theme,
-                        mouse_capture,
-                        &registry.configs,
-                        &source_names,
-                    );
-                } else if bookmarks.editing() {
-                    let layout = main_layout(state, theme, frame.area(), mouse_capture);
-                    bookmarks.render_add_popup(frame, theme, layout[3], layout[4]);
-                }
-                if let Some(panel) = &investigation {
-                    panel.render(frame, theme);
-                }
-                if let Some((index, _)) = &local_permission {
-                    let footer = main_layout(state, theme, frame.area(), mouse_capture)[4];
-                    render_disabled_daemon(frame, theme, &registry.configs[*index], footer);
-                }
-                if let Some(request) = &consent {
-                    let footer = main_layout(state, theme, frame.area(), mouse_capture)[4];
-                    request.render(frame, theme, footer);
-                }
-                theme
-                    .copy_values
-                    .borrow_mut()
-                    .finish(frame.buffer_mut(), theme.selection_cursor());
-            })?;
-            if let Some(visible) = dashboard_transactions
-                && config.daemon.control.state() != crate::sources::ConnectionState::Disabled
-            {
-                request_dashboard_transaction_hydration(state, config, &tx, visible);
-            }
-            redraw = false;
-            last_periodic_draw = Instant::now();
-            bookmarks.start_after_draw(&registry.configs);
-        }
-
-        if let Some(event) = pending_input.take() {
+            let tx = session.tx.clone();
+            let size = terminal.size()?;
+            let body = main_layout(state, theme, size.into(), mouse_capture)[3];
             if let Event::Resize(width, height) = event {
                 // Fullscreen draw resizes and clears both buffers without querying the cursor.
                 theme.copy_values.borrow_mut().begin(false);
@@ -4364,6 +3896,13 @@ fn run_loop(
             let Some(key) = input::navigation_key(event) else {
                 continue;
             };
+            if key.code == KeyCode::Char('z')
+                && key.modifiers.contains(KeyModifiers::CONTROL)
+                && let Some(job) = job_control
+            {
+                job.suspend()?;
+                continue;
+            }
             theme.copy_values.borrow_mut().clear_selection();
             redraw = true;
             if let Some(prompt) = &mut consent {
@@ -5814,9 +5353,813 @@ fn run_loop(
                 }
                 _ => {}
             }
-        } else if event::poll(Duration::from_millis(50))? {
-            // Send every key through the priority check before the next update pass.
-            pending_input = Some(event::read()?);
+            continue;
+        }
+        let foreground_turn = input_needs_draw;
+        let _updates = timing.measure("ui_update");
+        let mut backlog = false;
+        redraw |= bookmarks.has_updates();
+        if let Some((bookmark, snapshot)) = bookmarks.poll() {
+            let index = match sessions
+                .iter()
+                .position(|s| s.config.chain.system_id.get() == Some(&bookmark.system_id))
+            {
+                Some(index) => index,
+                None => {
+                    // A cached object remains navigable after its source configuration is removed.
+                    // This placeholder has no usable transport and grants no permissions.
+                    let mut config = sessions[0].config.clone();
+                    config.chain.name = bookmark.system_id.to_string();
+                    config.chain.system_id =
+                        Arc::new(std::sync::OnceLock::from(bookmark.system_id.clone()));
+                    config.daemon.config_file = None;
+                    config.daemon.user = None;
+                    config.daemon.password = None;
+                    config.daemon.host = "127.0.0.1".into();
+                    config.daemon.port = 0;
+                    config.daemon.control = Arc::default();
+                    config
+                        .daemon
+                        .control
+                        .set(crate::sources::ConnectionState::Disabled);
+                    let _ = config.daemon.control.expected.set((
+                        bookmark.system_id.clone(),
+                        crate::world::Network::from_testnet(config.chain.testnet),
+                    ));
+                    config.daemon.api_pool = Arc::default();
+                    config.daemon.observations = None;
+                    registry.configs.push(config.clone());
+                    sessions.push(create_session(
+                        config,
+                        ObjectStore::default(),
+                        Screen::Dashboard,
+                        bookmark.system_id.to_string(),
+                    ));
+                    sessions.len() - 1
+                }
+            };
+            let destination = &mut sessions[index];
+            let depth = destination.state.screen_stack.len();
+            match bookmark_ui::install(
+                &mut destination.state,
+                &destination.config,
+                &registry.configs,
+                &bookmark,
+                snapshot,
+            ) {
+                Ok(()) => {
+                    if let Screen::Currency(view) = &destination.state.screen {
+                        currency_ui::spawn_cached(
+                            destination.config.clone(),
+                            destination.tx.clone(),
+                            view.query.clone(),
+                        );
+                    }
+                    if active != index {
+                        cross_history.push((active, index, depth + 1));
+                    }
+                    sessions[active]
+                        .config
+                        .daemon
+                        .control
+                        .visible
+                        .store(false, std::sync::atomic::Ordering::Release);
+                    active = index;
+                    sessions[active]
+                        .config
+                        .daemon
+                        .control
+                        .visible
+                        .store(true, std::sync::atomic::Ordering::Release);
+                }
+                Err(error) => {
+                    bookmarks.show_error(error.to_string());
+                }
+            }
+            redraw = true;
+        }
+        if let Some(panel) = &mut defi
+            && let Some(receiver) = &mut panel.receiver
+            && let Ok(report) = receiver.try_recv()
+        {
+            let complete = !report.searching;
+            panel.report = Some(report);
+            if complete {
+                panel.task = None;
+                panel.receiver = None;
+            }
+            redraw = true;
+        }
+        if let Some(panel) = &mut defi
+            && let Some(receiver) = &mut panel.pool_receiver
+            && let Ok(result) = receiver.try_recv()
+        {
+            panel.pool_comparison = Some(result);
+            panel.pool_receiver = None;
+            panel.pool_task = None;
+            redraw = true;
+        }
+        if consent
+            .as_ref()
+            .is_some_and(|request| request.reply.is_closed())
+        {
+            consent = None;
+            redraw = true;
+        }
+        if let Some((target, once)) = pending_link.take() {
+            let open_trail = pending_trail.as_ref() == Some(&target);
+            if let Some(index) = registry
+                .configs
+                .iter()
+                .position(|config| config.chain.system_id.get() == Some(&target.system_id))
+            {
+                let cached = sessions[index]
+                    .state
+                    .store
+                    .transaction(&target.txid)
+                    .is_some();
+                let connection = &registry.configs[index];
+                if !cached
+                    && !open_trail
+                    && !once
+                    && connection.daemon.config_file.is_some()
+                    && connection.daemon.control.state()
+                        == crate::sources::ConnectionState::Disabled
+                {
+                    local_permission = Some((index, target));
+                } else {
+                    pending_output_focus.insert(index, target.clone());
+                    let destination = &mut sessions[index];
+                    let depth = destination.state.screen_stack.len();
+                    let mut screen = transaction_screen(target.txid.clone());
+                    if let Screen::Transaction { notarization, .. } = &mut screen {
+                        *notarization = pending_notarization
+                            .take()
+                            .filter(|context| context.target == target);
+                    }
+                    push_screen(&mut destination.state, screen);
+                    if !cached {
+                        let mut request_config = if open_trail {
+                            destination.config.noninteractive()
+                        } else {
+                            destination.config.clone()
+                        };
+                        if once {
+                            request_config.daemon.control = Arc::default();
+                            if let Some(id) = request_config.chain.system_id.get() {
+                                let _ = request_config.daemon.control.expected.set((
+                                    id.clone(),
+                                    crate::world::Network::from_testnet(
+                                        request_config.chain.testnet,
+                                    ),
+                                ));
+                            }
+                        }
+                        destination
+                            .state
+                            .loading_transactions
+                            .insert(target.txid.clone());
+                        spawn_transaction_loader(
+                            request_config,
+                            destination.tx.clone(),
+                            vec![target.txid],
+                        );
+                    }
+                    if active != index {
+                        cross_history.push((active, index, depth + 1));
+                    }
+                    sessions[active]
+                        .config
+                        .daemon
+                        .control
+                        .visible
+                        .store(false, std::sync::atomic::Ordering::Release);
+                    active = index;
+                    // Viewing a foreign object permits on-demand work, never monitoring.
+                    sessions[active]
+                        .config
+                        .daemon
+                        .control
+                        .visible
+                        .store(true, std::sync::atomic::Ordering::Release);
+                    links_open = false;
+                }
+            } else {
+                source_message = format!(
+                    "No connection configured for {}. Reference retained.",
+                    target.system_id
+                );
+            }
+            redraw = true;
+        }
+
+        if let Some((system, hash)) = pending_protocol_block.take()
+            && let Some(index) = registry.configs.iter().position(|c| {
+                c.chain.testnet == sessions[active].config.chain.testnet
+                    && c.chain_cache_key() == system
+            })
+        {
+            let destination = &mut sessions[index];
+            let depth = destination.state.screen_stack.len();
+            let target = BlockTarget::Hash(hash);
+            push_screen(&mut destination.state, block_screen(target.clone()));
+            request_block_detail(
+                &mut destination.state,
+                &destination.config.noninteractive(),
+                &destination.tx,
+                target,
+            );
+            if active != index {
+                cross_history.push((active, index, depth + 1));
+                sessions[active]
+                    .config
+                    .daemon
+                    .control
+                    .visible
+                    .store(false, Ordering::Release);
+                active = index;
+                sessions[active]
+                    .config
+                    .daemon
+                    .control
+                    .visible
+                    .store(true, Ordering::Release);
+            }
+            redraw = true;
+        }
+
+        if let Some(link) = pending_currency.take() {
+            if let Some(index) = registry
+                .configs
+                .iter()
+                .position(|config| config.chain.system_id.get() == Some(&link.system))
+            {
+                let destination = &mut sessions[index];
+                let depth = destination.state.screen_stack.len();
+                push_screen(
+                    &mut destination.state,
+                    currency_ui::screen(
+                        link.currency.clone(),
+                        destination.config.chain_cache_key(),
+                    ),
+                );
+                let request_config = destination.config.noninteractive();
+                if let Some(height) = link.height {
+                    let request = currency_ui::request_id();
+                    if let Screen::Currency(view) = &mut destination.state.screen {
+                        view.history_request = Some(request);
+                    }
+                    currency_ui::spawn_at_height(
+                        request_config,
+                        destination.tx.clone(),
+                        link.currency,
+                        height,
+                        request,
+                    );
+                } else {
+                    currency_ui::spawn_load(
+                        request_config,
+                        destination.tx.clone(),
+                        link.currency,
+                        false,
+                    );
+                }
+                if active != index {
+                    cross_history.push((active, index, depth + 1));
+                }
+                sessions[active]
+                    .config
+                    .daemon
+                    .control
+                    .visible
+                    .store(false, Ordering::Release);
+                active = index;
+                sessions[active]
+                    .config
+                    .daemon
+                    .control
+                    .visible
+                    .store(true, Ordering::Release);
+                defi = None;
+            } else if let Some(panel) = &mut defi {
+                panel.message = Some(format!("No source configured for {}", link.system));
+            }
+            redraw = true;
+        }
+
+        if let Some((system, address)) = pending_destination.take() {
+            let witness_signer = matches!(sessions[active].state.screen, Screen::Witnesses(_));
+            if let Some(index) = registry
+                .configs
+                .iter()
+                .position(|config| config.chain.system_id.get() == Some(&system))
+            {
+                let target = identity_screen(address.clone(), None);
+                let has_identity = matches!(&target, Screen::Identity { target, .. }
+                    if sessions[index].state.store.identity_for_target(target).is_some());
+                if witness_signer
+                    && !has_identity
+                    && registry.configs[index].daemon.control.state()
+                        == crate::sources::ConnectionState::Disabled
+                {
+                    if let Screen::Witnesses(view) = &mut sessions[active].state.screen {
+                        view.navigation_message = Some(format!(
+                            "Signer identity unavailable. Enable the {} daemon in F2 Sources.",
+                            registry.configs[index].chain.name
+                        ));
+                    }
+                    redraw = true;
+                    continue;
+                }
+                let destination = &mut sessions[index];
+                let depth = destination.state.screen_stack.len();
+                let screen = if witness_signer || address.starts_with('i') {
+                    target
+                } else {
+                    address_screen(address.clone())
+                };
+                push_screen(&mut destination.state, screen);
+                if !witness_signer && !address.starts_with('i') {
+                    request_address_detail(
+                        &mut destination.state,
+                        &destination.config.noninteractive(),
+                        &destination.tx,
+                        &address,
+                    );
+                }
+                if active != index {
+                    cross_history.push((active, index, depth + 1));
+                }
+                sessions[active]
+                    .config
+                    .daemon
+                    .control
+                    .visible
+                    .store(false, Ordering::Release);
+                active = index;
+                sessions[active]
+                    .config
+                    .daemon
+                    .control
+                    .visible
+                    .store(true, Ordering::Release);
+            } else if let Screen::Witnesses(view) = &mut sessions[active].state.screen {
+                view.navigation_message = Some(format!(
+                    "Signer identity unavailable. No source is configured for {system}."
+                ));
+            } else {
+                sessions[active].state.notice = Some(TransientNotice {
+                    message: format!(
+                        "No configured source for {system}; destination remains available in JSON"
+                    ),
+                    until: Instant::now() + Duration::from_secs(8),
+                });
+            }
+            redraw = true;
+        }
+
+        if !foreground_turn {
+            let started = Instant::now();
+            for offset in 0..sessions.len() {
+                let index = (background_cursor + offset) % sessions.len();
+                let session = &mut sessions[index];
+                if session.config.daemon.control.state()
+                    == crate::sources::ConnectionState::Monitored
+                    && !session.state.mempool.loading
+                    && session
+                        .state
+                        .mempool
+                        .last_refresh
+                        .is_none_or(|last| last.elapsed() >= Duration::from_secs(5))
+                {
+                    session.state.mempool.loading = true;
+                    let mut background = session.config.clone();
+                    background.daemon.background = true;
+                    spawn_mempool_loader(background, session.tx.clone(), false);
+                }
+                redraw |= drain_app_events_until(
+                    &mut session.state,
+                    &mut session.rx,
+                    started,
+                    &timing,
+                    || event::poll(Duration::ZERO).unwrap_or(true),
+                ) > 0;
+                if started.elapsed() >= APP_EVENT_BUDGET || event::poll(Duration::ZERO)? {
+                    background_cursor = (index + 1) % sessions.len();
+                    break;
+                }
+            }
+            if event::poll(Duration::ZERO)? {
+                pending_input = Some(read_terminal_event(&timing)?);
+                continue;
+            }
+        }
+        backlog |= sessions.iter().any(|session| !session.rx.is_empty());
+        pending_output_focus.retain(|index, target| {
+            let session = &mut sessions[*index];
+            let config = &session.config;
+            let state = &mut session.state;
+            let Screen::Transaction {
+                txid,
+                selected_flow,
+                ..
+            } = &mut state.screen
+            else {
+                return false;
+            };
+            if *txid != target.txid {
+                return false;
+            }
+            let Some(transaction) = state.store.transaction(txid) else {
+                return state.loading_transactions.contains(txid);
+            };
+            let flows = transaction_flows(&transaction.raw_json, &state.store);
+            if let Some(selection) = output_selection(&flows, target.vout) {
+                *selected_flow = selection;
+            } else {
+                state.notice = Some(TransientNotice {
+                    message: format!(
+                        "Referenced output {} is absent from this transaction",
+                        target.vout
+                    ),
+                    until: Instant::now() + Duration::from_secs(6),
+                });
+            }
+            if pending_trail.as_ref() == Some(target) {
+                if let Some(mut panel) = DefiPanel::for_output(&transaction.raw_json, target.vout) {
+                    panel.start(config, &registry.configs, state);
+                    defi = Some(panel);
+                } else {
+                    state.notice = Some(TransientNotice {
+                        message: format!(
+                            "Output {} is not a reserve transfer; no trail started",
+                            target.vout
+                        ),
+                        until: Instant::now() + Duration::from_secs(8),
+                    });
+                }
+                pending_trail = None;
+            }
+            redraw = true;
+            false
+        });
+        if pending_trail.as_ref().is_some_and(|target| {
+            !pending_output_focus
+                .values()
+                .any(|pending| pending == target)
+        }) {
+            pending_trail = None;
+        }
+        if consent.is_none() {
+            consent = registry
+                .consent_rx
+                .try_recv()
+                .ok()
+                .map(api_permission_ui::Prompt::new);
+            if consent.is_some() {
+                redraw = true;
+            }
+        }
+        let session_links = if links_open {
+            session_relationships(sessions, active)
+        } else {
+            Vec::new()
+        };
+        let relationship_statuses: Vec<_> = session_links
+            .iter()
+            .map(|link| {
+                sessions
+                    .iter()
+                    .find(|session| {
+                        session.config.chain.system_id.get() == Some(&link.target.system_id)
+                    })
+                    .map(|session| {
+                        let source = &sessions[active];
+                        let Screen::Transaction { txid, .. } = &source.state.screen else {
+                            return "Unresolved";
+                        };
+                        let Some(carrier) = source.state.store.transaction(txid) else {
+                            return "Unresolved";
+                        };
+                        crate::relationships::link_status(
+                            link,
+                            source.config.chain.system_id.get().unwrap(),
+                            &carrier.raw_json,
+                            &link.target.system_id,
+                            session
+                                .state
+                                .store
+                                .transaction(&link.target.txid)
+                                .map(|tx| &tx.raw_json),
+                        )
+                    })
+                    .unwrap_or("No connection configured")
+            })
+            .collect();
+        let source_names = source_chain_display_names(&registry.configs, sessions);
+        let chain_name_requests = registry
+            .configs
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| sources_open || *index == active)
+            .filter_map(|(_, config)| config.chain.system_id.get())
+            .filter(|id| {
+                !sessions
+                    .iter()
+                    .any(|session| session.state.store.identity_name(id.as_ref()).is_some())
+            })
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let current_config = sessions[current].config.clone();
+        let current_tip = sessions[current].state.tip.clone();
+        redraw |= update_witness_view(sessions, active);
+        let witness_path = cross_history
+            .last()
+            .and_then(|&(origin, destination, depth)| {
+                (destination == active)
+                    .then(|| {
+                        witness_breadcrumb(
+                            &sessions[origin].state,
+                            &sessions[active].state,
+                            theme,
+                            depth,
+                        )
+                    })
+                    .flatten()
+            });
+        let date_tips: HashMap<_, _> = sessions
+            .iter()
+            .filter_map(|s| s.state.tip.height.map(|h| (s.config.chain_cache_key(), h)))
+            .collect();
+        let session = &mut sessions[active];
+        let config = &session.config;
+        let state = &mut session.state;
+        let tx = session.tx.clone();
+
+        if !foreground_turn {
+            request_chain_identity_names(state, config, &tx, chain_name_requests);
+            let activity_changed = std::mem::take(&mut activity_needs_update);
+            if redraw || activity_changed {
+                request_current_activity_identity_names(state, config, &tx);
+            }
+            chart_ui::drive(state, config, &tx, &mut chart_task);
+            redraw |= height_dates.drive(
+                theme,
+                config,
+                state.tip.height,
+                &registry.configs,
+                &date_tips,
+            );
+            if let Some(panel) = &mut investigation {
+                let (changed, action) = panel.poll(state);
+                redraw |= changed;
+                if let Some(reorg_ui::Action::Open(row, raw)) = action {
+                    panel.open(state, config, &tx, row, raw);
+                    investigation = None;
+                }
+            }
+            if config.daemon.control.state() != crate::sources::ConnectionState::Disabled {
+                initialize_identity_json(state);
+                update_marketplace_sort(state);
+                request_marketplace_age_context(state, config, &tx);
+                request_identity_offers(state, config, &tx);
+                let observed_height = match &state.screen {
+                    Screen::Block { target, .. } => state
+                        .store
+                        .block_for_target(target)
+                        .map(|b| b.summary.height),
+                    Screen::Transaction { txid, .. } => {
+                        state.store.transaction(txid).and_then(|t| t.block_height)
+                    }
+                    _ => None,
+                };
+                if let Some(height) = observed_height
+                    && state
+                        .store
+                        .chain
+                        .reconciled
+                        .as_ref()
+                        .is_some_and(|s| !s.canonical.contains_key(&height))
+                {
+                    config
+                        .daemon
+                        .control
+                        .reconciliation_heights
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .insert(height);
+                }
+                request_current_transaction_refresh(state, config, &tx);
+                if let Screen::Transaction { txid, .. } = &state.screen {
+                    let txid = txid.clone();
+                    request_transaction_context(state, config, &tx, &txid);
+                    registration_payments::request(state, config, &tx, &txid);
+                }
+                request_dashboard_page_if_needed(state, config, &tx);
+                request_mempool_transaction_hydration(state, config, &tx);
+                request_currency_definitions(state, config, &tx);
+                if let Some(report) = defi.as_ref().and_then(|panel| panel.report.as_ref()) {
+                    let ids = report
+                        .entries
+                        .iter()
+                        .flat_map(|entry| entry.detail.split(|c: char| !c.is_ascii_alphanumeric()))
+                        .chain(
+                            report
+                                .notes
+                                .iter()
+                                .flat_map(|note| note.split(|c: char| !c.is_ascii_alphanumeric())),
+                        )
+                        .filter(|id| looks_like_identity_address(id))
+                        .map(str::to_string)
+                        .chain(report.legs.iter().flat_map(|leg| leg.currency_ids()))
+                        .collect();
+                    request_currency_ids(state, config, &tx, ids);
+                }
+                request_current_identity_dependencies(state, config, &tx);
+                request_current_evidence_identity_names(state, config, &tx);
+                request_current_address_identities(state, config, &tx);
+                request_current_address_balance(state, config, &tx);
+                request_current_address_utxos(state, config, &tx);
+                request_current_address_transactions(state, config, &tx);
+                request_current_address_history(state, config, &tx);
+                request_current_address_output_states(state, config, &tx);
+                request_mempool_refresh_if_needed(state, config, &tx);
+                request_marketplace_refresh_if_needed(state, config, &tx);
+                request_peer_refresh_if_needed(state, config, &tx);
+                request_log_refresh_if_needed(state, &tx);
+            }
+        }
+
+        let size = terminal.size()?;
+        let body = main_layout(state, theme, size.into(), mouse_capture)[3];
+        redraw |= notarization_ui::drive(state, config, &registry.configs, &tx, body.height);
+        if sources_open {
+            redraw |= source_activity.poll(&config.cache_path);
+        }
+        if !foreground_turn && event::poll(Duration::ZERO)? {
+            pending_input = Some(read_terminal_event(&timing)?);
+            continue;
+        }
+        drop(_updates);
+        let dashboard_animating = matches!(state.screen, Screen::Dashboard)
+            && state.auxiliary.is_none()
+            && (!state.dashboard.transactions_focused || body.width >= 72)
+            && state.dashboard.loading_older_since.is_some();
+        let draw_interval = if dashboard_animating {
+            DASHBOARD_LOADING_FRAME
+        } else {
+            Duration::from_secs(1)
+        };
+        if last_periodic_draw.elapsed() >= draw_interval
+            || redraw
+                && (foreground_turn
+                    || !backlog
+                    || last_periodic_draw.elapsed() >= Duration::from_millis(16))
+        {
+            let _timing = timing.measure("redraw");
+            clamp_scroll_positions(
+                state,
+                config,
+                theme,
+                Rect::new(0, 0, size.width, size.height),
+                mouse_capture,
+            );
+            let mut dashboard_transactions = None;
+            terminal.draw(|frame| {
+                let can_copy = mouse_capture
+                    && !text_input_active(state)
+                    && !links_open
+                    && local_permission.is_none()
+                    && defi.is_none()
+                    && bookmarks.can_copy()
+                    && investigation.is_none()
+                    && consent.is_none()
+                    && state.save_prompt.is_none()
+                    && state.cache_clear_prompt.is_none()
+                    && state.peers.controls.prompt.is_none();
+                theme.copy_values.borrow_mut().begin(can_copy);
+                dashboard_transactions = render(frame, config, theme, state, mouse_capture);
+                if active != current {
+                    let area = frame.area();
+                    frame.render_widget(
+                        Clear,
+                        Rect::new(area.x, area.y, area.width, area.height.min(2)),
+                    );
+                    frame.render_widget(
+                        Paragraph::new(header_line(
+                            &current_config,
+                            &source_names[current],
+                            theme,
+                            &current_tip,
+                            current_unix_timestamp(),
+                            area.width,
+                        ))
+                        .style(theme.header()),
+                        Rect::new(area.x, area.y, area.width, 1),
+                    );
+                    frame.render_widget(
+                        Paragraph::new(format!(
+                            "Object system: {} ({})",
+                            config.chain.name,
+                            config.chain_cache_key()
+                        ))
+                        .style(theme.base()),
+                        Rect::new(area.x, area.y + 1, area.width, 1),
+                    );
+                }
+                if let Some(path) = &witness_path {
+                    let area = frame.area();
+                    let breadcrumb = Rect::new(area.x, area.y + 1, area.width, 1);
+                    frame.render_widget(Clear, breadcrumb);
+                    frame.render_widget(
+                        Paragraph::new(breadcrumb_text(theme, path, area.width))
+                            .style(theme.base()),
+                        breadcrumb,
+                    );
+                }
+                if links_open {
+                    render_relationships(
+                        frame,
+                        theme,
+                        &session_links,
+                        &relationship_statuses,
+                        link_selection,
+                        &source_message,
+                    );
+                }
+
+                if let Some(panel) = &defi {
+                    render_scrolling_panel(
+                        frame,
+                        theme,
+                        "DeFi trail — F8",
+                        defi_lines(panel, &state.store, theme),
+                        panel.scroll,
+                        defi_controls(panel),
+                    );
+                }
+                if sources_open {
+                    source_ui::render(
+                        frame,
+                        theme,
+                        registry,
+                        &source_names,
+                        current,
+                        source_selection,
+                        &source_message,
+                        &mut source_activity,
+                    );
+                }
+                if bookmarks.open {
+                    bookmarks.render(
+                        frame,
+                        theme,
+                        mouse_capture,
+                        &registry.configs,
+                        &source_names,
+                    );
+                } else if bookmarks.editing() {
+                    let layout = main_layout(state, theme, frame.area(), mouse_capture);
+                    bookmarks.render_add_popup(frame, theme, layout[3], layout[4]);
+                }
+                if let Some(panel) = &investigation {
+                    panel.render(frame, theme);
+                }
+                if let Some((index, _)) = &local_permission {
+                    let footer = main_layout(state, theme, frame.area(), mouse_capture)[4];
+                    render_disabled_daemon(frame, theme, &registry.configs[*index], footer);
+                }
+                if let Some(request) = &consent {
+                    let footer = main_layout(state, theme, frame.area(), mouse_capture)[4];
+                    request.render(frame, theme, footer);
+                }
+                theme
+                    .copy_values
+                    .borrow_mut()
+                    .finish(frame.buffer_mut(), theme.selection_cursor());
+            })?;
+            if let Some(visible) = dashboard_transactions
+                && config.daemon.control.state() != crate::sources::ConnectionState::Disabled
+            {
+                request_dashboard_transaction_hydration(state, config, &tx, visible);
+            }
+            redraw = false;
+            last_periodic_draw = Instant::now();
+            bookmarks.start_after_draw(&registry.configs);
+        }
+
+        input_needs_draw = false;
+        // An input frame is followed immediately by polling, so pending navigation
+        // can schedule its work on the next idle turn.
+        let _timing = timing.measure("terminal_wait");
+        if pending_input.is_none()
+            && event::poll(if backlog || foreground_turn {
+                Duration::ZERO
+            } else {
+                Duration::from_millis(50)
+            })?
+        {
+            pending_input = Some(read_terminal_event(&timing)?);
         }
     }
 
@@ -6702,9 +7045,27 @@ fn submit_search(state: &mut AppState, config: &Config, event_tx: &UnboundedSend
             request_address_detail(state, config, event_tx, &address);
         }
         ObjectRoute::Identity(identity) => {
-            state.search.active = false;
-            state.search.status = None;
-            set_navigation_root(state, identity_screen(identity, None));
+            let target = IdentityTarget {
+                query: identity.clone(),
+                height: None,
+            };
+            if state
+                .store
+                .identity_for_target(&target)
+                .is_some_and(|version| {
+                    !state
+                        .store
+                        .stale_identities
+                        .contains(&version.identity_address)
+                })
+            {
+                cancel_search(state);
+                state.search.active = false;
+                state.search.status = None;
+                set_navigation_root(state, identity_screen(identity, None));
+            } else {
+                start_daemon_search(state, config, event_tx, ObjectRoute::Identity(identity));
+            }
         }
         ObjectRoute::BlockHeight(height) => {
             let target = BlockTarget::Height(height);
@@ -6790,30 +7151,77 @@ fn push_transaction_search_result(state: &mut AppState, txid: Txid) {
 }
 
 /// Leave queued updates for the next UI turn so input and drawing get time.
+#[cfg(test)]
 fn drain_app_events(state: &mut AppState, rx: &mut UnboundedReceiver<AppEvent>) -> usize {
-    let started = Instant::now();
+    drain_app_events_until(
+        state,
+        rx,
+        Instant::now(),
+        &ui_timing::Timing::default(),
+        || false,
+    )
+}
+
+fn drain_app_events_until(
+    state: &mut AppState,
+    rx: &mut UnboundedReceiver<AppEvent>,
+    started: Instant,
+    timing: &ui_timing::Timing,
+    mut input_ready: impl FnMut() -> bool,
+) -> usize {
     let mut processed = 0;
     for _ in 0..APP_EVENT_BATCH_LIMIT {
-        let Ok(event) = rx.try_recv() else {
-            break;
-        };
-        handle_app_event(state, event);
-        processed += 1;
-        if started.elapsed() >= APP_EVENT_BUDGET {
+        if started.elapsed() >= APP_EVENT_BUDGET || input_ready() {
             break;
         }
+        let Ok(update) = rx.try_recv() else { break };
+        let _timing = timing.measure(background_stage(&update));
+        handle_app_event(state, update);
+        processed += 1;
     }
     processed
+}
+
+fn background_stage(event: &AppEvent) -> &'static str {
+    match event {
+        AppEvent::Guarded { event, .. } | AppEvent::RevisionGuarded { event, .. } => {
+            background_stage(event)
+        }
+        AppEvent::Reconciled(_) => "reconciliation",
+        AppEvent::Transactions { .. } | AppEvent::TransactionRefresh { .. } => "transaction_update",
+        AppEvent::Observation(_) => "daemon_observation",
+        AppEvent::IdentityDetail { .. } | AppEvent::IdentityEvidence { .. } => "identity_update",
+        _ => "background_event",
+    }
+}
+
+fn can_change_flow_links(event: &AppEvent) -> bool {
+    match event {
+        AppEvent::Guarded { event, .. } | AppEvent::RevisionGuarded { event, .. } => {
+            can_change_flow_links(event)
+        }
+        AppEvent::BlockDetail { .. }
+        | AppEvent::Transactions { .. }
+        | AppEvent::TransactionRefresh { .. }
+        | AppEvent::DashboardRefresh(_)
+        | AppEvent::DashboardPage { .. }
+        | AppEvent::IdentityDetail { .. }
+        | AppEvent::IdentityEvidence { .. }
+        | AppEvent::MarketplaceRefresh { .. }
+        | AppEvent::StoredRelationships { .. } => true,
+        _ => false,
+    }
 }
 
 fn handle_app_event(state: &mut AppState, app_event: AppEvent) {
     // Hydrating a preceding input can add address links. Keep the selected link
     // on its original flow instead of letting the flattened index move it.
-    let selection = if let Screen::Transaction {
-        txid,
-        selected_flow,
-        ..
-    } = &state.screen
+    let selection = if can_change_flow_links(&app_event)
+        && let Screen::Transaction {
+            txid,
+            selected_flow,
+            ..
+        } = &state.screen
     {
         state.store.transaction(txid).and_then(|record| {
             let flows = transaction_flows(&record.raw_json, &state.store);
@@ -6888,47 +7296,50 @@ fn apply_app_event(state: &mut AppState, app_event: AppEvent) {
                     == epoch
             {
                 apply_app_event(state, *event);
-            } else if let AppEvent::DashboardPage { started, .. } = *event
-                && state.dashboard.loading_older_since == Some(started)
-            {
-                state.dashboard.loading_older_since = None;
-            }
-        }
-        AppEvent::Reconciled(Ok(change)) => {
-            let reorg = !change.detached.is_empty();
-            state.store.chain.apply_reconciliation(&change);
-            state.store.block_hash_by_height = change
-                .state
-                .canonical
-                .iter()
-                .map(|(height, h)| (*height, BlockHash::from(h.hash.clone())))
-                .collect();
-            let canonical_by_hash: HashMap<_, _> = change
-                .state
-                .canonical
-                .values()
-                .map(|header| (header.hash.as_str(), header))
-                .collect();
-            for (txid, inclusions) in &state.store.transaction_inclusions {
-                if let Some(header) = inclusions
-                    .iter()
-                    .filter_map(|hash| canonical_by_hash.get(hash.as_str()).copied())
-                    .min_by_key(|header| header.height)
-                    && let Some(record) = state.store.transactions_by_txid.get_mut(txid)
-                {
-                    record.block_hash = Some(header.hash.clone());
-                    record.block_height = Some(header.height);
-                    record.block_time = header.time;
+            } else {
+                match *event {
+                    AppEvent::DashboardPage { started, .. }
+                        if state.dashboard.loading_older_since == Some(started) =>
+                    {
+                        state.dashboard.loading_older_since = None;
+                    }
+                    AppEvent::SearchResolved { request_id, .. }
+                        if state.search.pending_request == Some(request_id) =>
+                    {
+                        state.search.pending_request = None;
+                        state.search.task = None;
+                        state.search.status = Some(SearchStatus {
+                            message: "Source changed during search; try again".into(),
+                            error: true,
+                        });
+                    }
+                    _ => {}
                 }
             }
+        }
+        AppEvent::Reconciled(Ok(branch)) => {
+            let previous = state.store.chain.reconciled.as_ref();
+            let unchanged = previous.is_some_and(|current| Arc::ptr_eq(current, &branch));
+            let incremental = previous.is_some_and(|current| {
+                current.tip().is_some()
+                    && current.revision.checked_add(1) == Some(branch.revision)
+                    && !branch.changed_hashes.is_empty()
+            });
+            state.store.chain.apply_reconciliation(branch.clone());
+            if unchanged {
+                return;
+            }
+            let reorg = branch.detached_count != 0;
+            state
+                .store
+                .project_transaction_inclusions(&branch, incremental);
             if reorg {
                 invalidate_reorg_views(state);
                 rebuild_dashboard_transactions(state);
                 state.notice = Some(TransientNotice {
                     message: format!(
                         "Reorg: {} blocks detached, {} adopted",
-                        change.detached.len(),
-                        change.attached.len()
+                        branch.detached_count, branch.attached_count
                     ),
                     until: Instant::now() + Duration::from_secs(15),
                 });
@@ -7101,7 +7512,6 @@ fn apply_app_event(state: &mut AppState, app_event: AppEvent) {
                             .store
                             .add_marketplace_tag(offer.txid.clone(), MarketplaceTag::Offer);
                     }
-                    state.store.refresh_marketplace_tags();
                     state.marketplace.selected = selected_txid
                         .and_then(|txid| {
                             state
@@ -7521,6 +7931,16 @@ fn apply_app_event(state: &mut AppState, app_event: AppEvent) {
             state.search.pending_request = None;
             state.search.task = None;
             match result {
+                Ok(SearchResolution::Identity { query, version }) => {
+                    state
+                        .store
+                        .stale_identities
+                        .remove(&version.identity_address);
+                    state.store.insert_identity_version(&query, version);
+                    state.identity_load_attempted.remove(&query);
+                    state.search.status = None;
+                    set_navigation_root(state, identity_screen(query, None));
+                }
                 Ok(SearchResolution::Estimate(estimate)) => {
                     state.search.status = None;
                     push_screen(state, Screen::Estimate(Box::new(estimate)));
@@ -7677,7 +8097,7 @@ fn merge_dashboard_blocks(state: &mut AppState, blocks: Vec<BlockRecord>) {
         let height = block.summary.height;
         let hash = state.store.insert_block(block);
         if state.store.chain.reconciled.is_none()
-            || state.store.block_hash_by_height.get(&height) == Some(&hash)
+            || state.store.block_hash_at_height(height) == Some(&hash)
         {
             hashes_by_height.insert(height, hash);
         }
@@ -7848,7 +8268,7 @@ fn transaction_refresh_target(state: &AppState) -> Option<(Txid, BlockHash)> {
                 state
                     .tip
                     .height
-                    .and_then(|height| state.store.block_hash_by_height.get(&height))
+                    .and_then(|height| state.store.block_hash_at_height(height))
             }
         })?;
     if state.transaction_verified_tip.get(txid) == Some(tip) {
@@ -8403,12 +8823,7 @@ fn request_current_activity_identity_names(
             return;
         };
         let mut references = BTreeSet::new();
-        collect_identity_references(&transaction.raw_json, &mut references);
-        for source_txid in source_transaction_ids(&transaction.raw_json) {
-            if let Some(source) = state.store.transaction(&source_txid) {
-                collect_identity_references(&source.raw_json, &mut references);
-            }
-        }
+        extend_transaction_identity_references(&state.store, transaction, &mut references);
         request_identity_names(state, config, tx, references);
         return;
     }
@@ -8437,14 +8852,28 @@ fn request_current_activity_identity_names(
         .iter()
         .filter_map(|txid| state.store.transaction(txid))
     {
-        collect_identity_references(&transaction.raw_json, &mut references);
-        for source_txid in source_transaction_ids(&transaction.raw_json) {
-            if let Some(source) = state.store.transaction(&source_txid) {
-                collect_identity_references(&source.raw_json, &mut references);
+        extend_transaction_identity_references(&state.store, transaction, &mut references);
+    }
+    request_identity_names(state, config, tx, references);
+}
+
+fn extend_transaction_identity_references(
+    store: &ObjectStore,
+    transaction: &TransactionRecord,
+    references: &mut BTreeSet<String>,
+) {
+    if let Some(prepared) = transaction.prepared.as_deref() {
+        references.extend(prepared.identities.iter().cloned());
+        for parent in prepared
+            .parents
+            .iter()
+            .filter_map(|txid| store.transaction(txid))
+        {
+            if let Some(data) = parent.prepared.as_deref() {
+                references.extend(data.identities.iter().cloned());
             }
         }
     }
-    request_identity_names(state, config, tx, references);
 }
 
 /// Resolve configured system identities through the already permitted source.
@@ -13519,7 +13948,14 @@ fn transaction_tag_spans(theme: &Theme, tags: &[String]) -> Vec<Span<'static>> {
 }
 
 fn transaction_tags(tx: &TransactionSummary, store: &ObjectStore) -> Vec<TransactionTag> {
-    let mut tags = tx.tags();
+    let mut tags = if tx.raw.is_some() {
+        store
+            .transaction(&tx.txid)
+            .and_then(|record| record.prepared.as_deref())
+            .map_or_else(|| tx.tags(), |data| data.tags.clone())
+    } else {
+        Vec::new()
+    };
     // Keep DeFi badges after the other protocol badges on transaction summaries.
     tags.sort_by_key(|tag| {
         matches!(
@@ -16557,23 +16993,24 @@ fn render_address_activity(
         .iter()
         .filter(|txid| state.store.contains_transaction(txid))
         .count();
-    let tile_heights = record
-        .transaction_ids
-        .iter()
-        .map(|txid| {
-            state
-                .store
-                .transaction(txid)
-                .map(|transaction| {
-                    address_transaction_tile_height(transaction, &state.store, content.width)
-                })
-                .unwrap_or(ADDRESS_TRANSACTION_TILE_MIN_HEIGHT)
-        })
-        .collect::<Vec<_>>();
+    let mut tile_heights = vec![None; listed_count];
     let available_height = area.height.saturating_sub(SECTION_HEADING_HEIGHT);
-    let viewport_anchor = selected_tx.unwrap_or_default();
-    let (first, last) =
-        variable_height_visible_range(&tile_heights, viewport_anchor, available_height);
+    let (first, last) = visible_range_by_height(
+        listed_count,
+        selected_tx.unwrap_or_default(),
+        available_height,
+        |index| {
+            *tile_heights[index].get_or_insert_with(|| {
+                state
+                    .store
+                    .transaction(&record.transaction_ids[index])
+                    .map(|transaction| {
+                        address_transaction_tile_height(transaction, &state.store, content.width)
+                    })
+                    .unwrap_or(ADDRESS_TRANSACTION_TILE_MIN_HEIGHT)
+            })
+        },
+    );
     let heading_label = if !record.history_complete && listed_count == 0 {
         format!("0 recent ({})", address_history_status(state, address))
     } else if !record.history_complete {
@@ -16634,6 +17071,7 @@ fn render_address_activity(
             tile_heights[first..last]
                 .iter()
                 .copied()
+                .flatten()
                 .map(Constraint::Length)
                 .collect::<Vec<_>>(),
         )
@@ -16780,30 +17218,48 @@ fn variable_height_visible_range(
     selected: usize,
     available_height: u16,
 ) -> (usize, usize) {
-    if heights.is_empty() {
+    visible_range_by_height(heights.len(), selected, available_height, |i| heights[i])
+}
+
+fn visible_range_by_height(
+    count: usize,
+    selected: usize,
+    available_height: u16,
+    mut height_at: impl FnMut(usize) -> u16,
+) -> (usize, usize) {
+    if count == 0 {
         return (0, 0);
     }
-
-    let selected = selected.min(heights.len() - 1);
+    let selected = selected.min(count - 1);
     let mut first = selected;
     let mut last = selected + 1;
-    let mut used = heights[selected];
+    let mut used = height_at(selected);
     let mut before_budget = available_height.saturating_sub(used) / 2;
-
-    while first > 0 && heights[first - 1] <= before_budget {
+    while first > 0 {
+        let height = height_at(first - 1);
+        if height > before_budget {
+            break;
+        }
         first -= 1;
-        used = used.saturating_add(heights[first]);
-        before_budget = before_budget.saturating_sub(heights[first]);
+        used = used.saturating_add(height);
+        before_budget -= height;
     }
-    while last < heights.len() && used.saturating_add(heights[last]) <= available_height {
-        used += heights[last];
+    while last < count {
+        let height = height_at(last);
+        if used.saturating_add(height) > available_height {
+            break;
+        }
+        used = used.saturating_add(height);
         last += 1;
     }
-    while first > 0 && used.saturating_add(heights[first - 1]) <= available_height {
+    while first > 0 {
+        let height = height_at(first - 1);
+        if used.saturating_add(height) > available_height {
+            break;
+        }
         first -= 1;
-        used += heights[first];
+        used = used.saturating_add(height);
     }
-
     (first, last)
 }
 
@@ -19071,6 +19527,28 @@ mod tests {
     }
 
     #[test]
+    fn background_drain_leaves_ordered_events_queued_when_input_arrives() {
+        let mut state = regression_state();
+        let (tx, mut rx) = unbounded_channel();
+        for _ in 0..1000 {
+            tx.send(AppEvent::ReconciliationStarted).unwrap();
+        }
+        let mut checks = 0;
+        let processed = drain_app_events_until(
+            &mut state,
+            &mut rx,
+            Instant::now(),
+            &ui_timing::Timing::default(),
+            || {
+                checks += 1;
+                checks > 3
+            },
+        );
+        assert_eq!(processed, 3);
+        assert_eq!(rx.len(), 997);
+    }
+
+    #[test]
     fn reconciliation_of_large_history_keeps_ui_work_bounded() {
         let mut state = regression_state();
         let canonical = (0..40_000_u64)
@@ -19105,11 +19583,14 @@ mod tests {
             ancestor: None,
         };
         let started = Instant::now();
-        apply_app_event(&mut state, AppEvent::Reconciled(Ok(change)));
+        apply_app_event(
+            &mut state,
+            AppEvent::Reconciled(Ok(Arc::new(change.into()))),
+        );
         let elapsed = started.elapsed();
         eprintln!("40,000 headers / 512 transactions applied in {elapsed:?}");
         assert!(
-            elapsed < Duration::from_secs(3),
+            elapsed < Duration::from_millis(250),
             "UI reconciliation stalled for {elapsed:?}"
         );
         assert!(
@@ -20520,6 +21001,7 @@ mod tests {
         let mut store = ObjectStore::default();
         store.insert_block(test_block(1, &shared_hash, "block-transaction"));
         store.insert_transaction(TransactionRecord {
+            prepared: None,
             source_id: None,
             summary: TransactionSummary {
                 txid: shared_hash.clone(),
@@ -20543,6 +21025,7 @@ mod tests {
         assert_eq!(block.summary.production_label(), "mined");
 
         let staked = BlockRecord {
+            prepared_transactions: HashMap::new(),
             summary: BlockSummary {
                 blocktype: Some("stake".to_string()),
                 ..block.summary.clone()
@@ -21153,6 +21636,7 @@ mod tests {
     #[test]
     fn address_tiles_include_and_prioritize_private_flows() {
         let transaction = TransactionRecord {
+            prepared: None,
             source_id: None,
             summary: TransactionSummary {
                 txid: "private".to_string(),
@@ -21239,6 +21723,7 @@ mod tests {
             }]
         });
         store.insert_transaction(TransactionRecord {
+            prepared: None,
             source_id: None,
             summary: TransactionSummary {
                 txid: "previous".to_string(),
@@ -21400,6 +21885,7 @@ mod tests {
     #[test]
     fn address_flows_put_the_viewed_address_first() {
         let transaction = TransactionRecord {
+            prepared: None,
             source_id: None,
             summary: TransactionSummary {
                 txid: "current".to_string(),
@@ -23029,6 +23515,7 @@ mod tests {
 
     fn test_transaction(txid: &str, raw_json: Value) -> TransactionRecord {
         TransactionRecord {
+            prepared: None,
             source_id: None,
             summary: TransactionSummary {
                 txid: txid.to_string(),
@@ -23043,6 +23530,7 @@ mod tests {
 
     fn test_block(height: u64, hash: &str, txid: &str) -> BlockRecord {
         BlockRecord {
+            prepared_transactions: HashMap::new(),
             summary: BlockSummary {
                 hash: hash.to_string(),
                 height,

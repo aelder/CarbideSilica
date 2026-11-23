@@ -29,6 +29,8 @@ class Daemon(http.server.BaseHTTPRequestHandler):
             value = 1
         elif method == 'getblockchaininfo':
             value = dict(blocks=1, bestblockhash=TIP)
+        elif method == 'getidentity' and params[0] == 'Missing-fixture@':
+            error = dict(code=-5, message='Identity not found')
         elif method == 'getidentity' and len(params) == 1:
             name = 'Other' if params[0] == 'Other@' else 'Test'
             identity = OTHER_CURRENCY if name == 'Other' else IDENTITY
@@ -91,6 +93,11 @@ def run():
                 assert any(method == 'getblock' and params[0] == TARGET for method, params in server.calls), server.calls
                 assert TARGET in screen, screen
                 assert ('getrawtransaction', [TARGET, 1]) in server.calls, server.calls
+                terminal.key(b'/Missing-fixture@\r', .8)
+                screen = terminal.screen()
+                assert 'Identity not found: Missing-fixture@' in screen, screen
+                assert 'Loading identity' not in screen and 'API communication requires permission' not in screen, screen
+                assert TARGET in screen, 'Failed lookup replaced the current block view'
                 terminal.key(b'/Test@\r', 1)
                 screen = terminal.screen()
                 assert 'API communication requires permission' not in screen, screen

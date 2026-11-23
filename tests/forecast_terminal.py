@@ -122,7 +122,7 @@ def run():
                 screen=terminal.screen()
                 assert 'est.' in next(line for line in screen.splitlines() if 'expiryheight:' in line),screen
                 for label in ['height:', 'blocktime:', 'confirmations:']:
-                    assert actual in next(line for line in screen.splitlines() if line.lstrip(' >▾▸').startswith(label)),screen
+                    assert actual in next(line for line in screen.splitlines() if line.lstrip(' \u00a0>▾▸').startswith(label)),screen
                 assert f'tip {TIP}/' in screen.splitlines()[0],screen
                 # Disabling the preview restores the exact raw scalar values.
                 terminal.key(b'D', .2)
@@ -141,7 +141,7 @@ def run():
                 terminal.key(b'\t', .2)
                 screen=terminal.screen()
                 for label in ['height:', 'time:', 'confirmations:']:
-                    assert date in next(line for line in screen.splitlines() if line.lstrip(' >▾▸').startswith(label)),screen
+                    assert date in next(line for line in screen.splitlines() if line.lstrip(' \u00a0>▾▸').startswith(label)),screen
                 assert f'tip {TIP}/' in screen.splitlines()[0],screen
                 assert f'Bk {TIP-100}' in screen.splitlines()[1],screen
                 assert date not in screen.splitlines()[1],screen
@@ -184,7 +184,7 @@ def run():
                 terminal.key(b'\t', .2)
                 wait(terminal, 'friendlyname:')
                 wait(terminal, AUTHORITY_NAME)
-                field=lambda name: next(line for line in terminal.screen().splitlines() if line.lstrip(' >▾▸').startswith(name+':'))
+                field=lambda name: next(line for line in terminal.screen().splitlines() if line.lstrip(' \u00a0>▾▸').startswith(name+':'))
                 assert STAKER_NAME in field('friendlyname') and '.VRSC' not in field('friendlyname'),terminal.screen()
                 assert STAKER_NAME[:-1]+'.VRSC@' in field('fullyqualifiedname'),terminal.screen()
                 assert STAKER in field('identityaddress'),terminal.screen()

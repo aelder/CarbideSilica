@@ -11,6 +11,25 @@ pub struct RpcObservation {
     pub result: Value,
 }
 
+impl RpcObservation {
+    pub fn same_scalar_snapshot(&self, other: &Self) -> bool {
+        self.method == other.method
+            && match self.method.as_str() {
+                "getblockcount" => self.result.is_u64() && other.result.is_u64(),
+                "getbestblockhash" => self.result.is_string() && other.result.is_string(),
+                _ => false,
+            }
+            && match (&self.authorization, &other.authorization) {
+                (Some((left, generation, epoch)), Some((right, other_generation, other_epoch))) => {
+                    std::sync::Arc::ptr_eq(left, right)
+                        && generation == other_generation
+                        && epoch == other_epoch
+                }
+                _ => false,
+            }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusBadge {
     ChainTip,
@@ -48,11 +67,68 @@ pub struct ObservedBlock {
     order: u64,
 }
 
+/// Immutable branch indexes prepared by the reconciliation worker.
+#[derive(Debug, Default)]
+pub struct PreparedBranch {
+    pub state: crate::reconciliation::State,
+    canonical_by_hash: HashMap<String, ObservedBlock>,
+    pub detached_count: usize,
+    pub attached_count: usize,
+    pub changed_hashes: Vec<String>,
+}
+
+impl From<crate::reconciliation::Change> for PreparedBranch {
+    fn from(change: crate::reconciliation::Change) -> Self {
+        let canonical_by_hash = change
+            .state
+            .canonical
+            .values()
+            .map(|header| {
+                (
+                    header.hash.clone(),
+                    ObservedBlock {
+                        hash: header.hash.clone(),
+                        height: header.height,
+                        time: header.time,
+                        previous: header.parent.clone(),
+                        order: 0,
+                    },
+                )
+            })
+            .collect();
+        Self {
+            state: change.state,
+            canonical_by_hash,
+            detached_count: change.detached.len(),
+            attached_count: change.attached.len(),
+            changed_hashes: change
+                .attached
+                .iter()
+                .chain(&change.detached)
+                .map(|header| header.hash.clone())
+                .collect(),
+        }
+    }
+}
+
+impl std::ops::Deref for PreparedBranch {
+    type Target = crate::reconciliation::State;
+
+    fn deref(&self) -> &Self::Target {
+        &self.state
+    }
+}
+
+impl PreparedBranch {
+    pub fn canonical_block(&self, hash: &str) -> Option<&ObservedBlock> {
+        self.canonical_by_hash.get(hash)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ChainState {
-    pub reconciled: Option<crate::reconciliation::State>,
+    pub reconciled: Option<std::sync::Arc<PreparedBranch>>,
     pub reconciling: bool,
-    detached: HashSet<String>,
     pub height: Option<u64>,
     pub longest: Option<u64>,
     pub online: bool,
@@ -87,47 +163,26 @@ impl ChainState {
             order: 0,
         });
     }
-    pub fn apply_reconciliation(&mut self, change: &crate::reconciliation::Change) {
-        self.detached = change.state.detached.keys().cloned().collect();
-        self.canonical = change
-            .state
-            .canonical
-            .iter()
-            .map(|(height, h)| (*height, h.hash.clone()))
-            .collect();
-        for h in change
-            .state
-            .canonical
-            .values()
-            .chain(change.state.detached.values())
+    pub fn apply_reconciliation(&mut self, branch: std::sync::Arc<PreparedBranch>) {
+        if self
+            .reconciled
+            .as_ref()
+            .is_none_or(|old| !std::sync::Arc::ptr_eq(old, &branch))
         {
-            self.blocks.insert(
-                h.hash.clone(),
-                ObservedBlock {
-                    hash: h.hash.clone(),
-                    height: h.height,
-                    time: h.time,
-                    previous: h.parent.clone(),
-                    order: 0,
-                },
-            );
+            if branch.detached_count != 0 {
+                self.mempool.clear();
+            }
+            if let Some(tip) = branch.tip() {
+                self.height = Some(tip.height);
+                self.tip_hash = Some(tip.hash.clone());
+                self.last_tip = Some(tip.hash.clone());
+                self.last_block_time = Some(tip.time);
+            }
+            let old = self.reconciled.replace(branch);
+            if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+                runtime.spawn_blocking(move || drop(old));
+            }
         }
-        for h in &change.detached {
-            self.detached.insert(h.hash.clone());
-        }
-        for h in &change.attached {
-            self.detached.remove(&h.hash);
-        }
-        if !change.detached.is_empty() {
-            self.mempool.clear();
-        }
-        if let Some(tip) = change.state.tip() {
-            self.height = Some(tip.height);
-            self.tip_hash = Some(tip.hash.clone());
-            self.last_tip = Some(tip.hash.clone());
-            self.last_block_time = Some(tip.time);
-        }
-        self.reconciled = Some(change.state.clone());
         self.reconciling = false;
         self.online = true;
     }
@@ -163,11 +218,13 @@ impl ChainState {
         }) {
             return;
         }
-        if self.reconciled.is_some() && method != "getrawmempool" {
+        if let Some(branch) = &self.reconciled
+            && method != "getrawmempool"
+        {
             if method == "getrawtransaction" {
                 let active = result["blockhash"]
                     .as_str()
-                    .is_some_and(|hash| self.canonical.values().any(|h| h == hash));
+                    .is_some_and(|hash| branch.canonical_block(hash).is_some());
                 if active
                     && let Some(txid) = result["txid"].as_str()
                     && order >= *self.membership_order.get(txid).unwrap_or(&0)
@@ -179,7 +236,7 @@ impl ChainState {
             if method == "getblock"
                 && result["hash"]
                     .as_str()
-                    .is_some_and(|hash| self.canonical.values().any(|h| h == hash))
+                    .is_some_and(|hash| branch.canonical_block(hash).is_some())
             {
                 for tx in result["tx"].as_array().into_iter().flatten() {
                     if let Some(id) = tx.as_str().or_else(|| tx["txid"].as_str())
@@ -477,32 +534,35 @@ impl ChainState {
     pub fn tip(&self) -> Option<&ObservedBlock> {
         self.tip_hash
             .as_ref()
-            .and_then(|hash| self.blocks.get(hash))
+            .and_then(|hash| {
+                self.reconciled
+                    .as_ref()
+                    .and_then(|branch| branch.canonical_block(hash))
+                    .or_else(|| self.blocks.get(hash))
+            })
             .filter(|block| Some(block.height) == self.height)
     }
 
     pub fn block_badge(&self, hash: &str) -> Option<StatusBadge> {
-        if self.reconciled.is_some() {
+        if let Some(branch) = &self.reconciled {
             if self.reconciling {
                 return Some(StatusBadge::Unverified);
             }
-            if self.detached.contains(hash) {
+            if branch.detached.contains_key(hash) {
                 return Some(StatusBadge::Orphaned);
             }
-            let active = self
-                .blocks
-                .get(hash)
-                .is_some_and(|h| self.canonical.get(&h.height).is_some_and(|id| id == hash));
-            if !active
-                && self
-                    .blocks
-                    .get(hash)
-                    .is_some_and(|h| self.canonical.contains_key(&h.height))
-            {
-                return Some(StatusBadge::Orphaned);
-            }
-            if !active {
-                return Some(StatusBadge::Unverified);
+            if branch.canonical_block(hash).is_none() {
+                return Some(
+                    if self
+                        .blocks
+                        .get(hash)
+                        .is_some_and(|header| branch.canonical.contains_key(&header.height))
+                    {
+                        StatusBadge::Orphaned
+                    } else {
+                        StatusBadge::Unverified
+                    },
+                );
             }
             if !self.online {
                 return Some(if self.last_tip.as_deref() == Some(hash) {
@@ -530,6 +590,12 @@ impl ChainState {
     pub fn confirmations(&self, hash: &str) -> Option<u64> {
         if !self.online || self.reconciling {
             return None;
+        }
+        if let Some(branch) = &self.reconciled {
+            return self
+                .height?
+                .checked_sub(branch.canonical_block(hash)?.height)?
+                .checked_add(1);
         }
         let block = self.blocks.get(hash)?;
         if self.canonical.get(&block.height)? != hash {
@@ -778,7 +844,7 @@ mod tests {
             ancestor: None,
         };
         let mut state = ChainState::default();
-        state.apply_reconciliation(&change);
+        state.apply_reconciliation(std::sync::Arc::new(change.into()));
         observe(&mut state, 1, "getrawmempool", json!(["tx"]));
         assert!(state.in_mempool("tx"));
         observe(
