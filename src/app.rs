@@ -20,6 +20,7 @@ mod registration_payments;
 mod reorg_ui;
 mod scroll_view;
 mod source_ui;
+mod token_control;
 mod ui_timing;
 mod witness_ui;
 use std::fs;
@@ -265,6 +266,7 @@ struct ObjectStore {
     identity_evidence: HashMap<String, (u64, identity_evidence::IdentityEvidence)>,
     registration_payments:
         HashMap<registration_payments::Key, (Arc<()>, registration_payments::Status)>,
+    token_control: HashMap<String, token_control::Lookup>,
     loading_identity_evidence: HashSet<String>,
     loading_historical_identity_evidence: HashSet<String>,
     identities_by_primary_address: HashMap<String, AddressIdentityAssociations>,
@@ -669,6 +671,11 @@ enum AppEvent {
         key: registration_payments::Key,
         request: Arc<()>,
         report: Option<registration_payments::Report>,
+    },
+    TokenControl {
+        identity: String,
+        request: Arc<()>,
+        status: token_control::Status,
     },
     ClipboardCopied {
         label: String,
@@ -1899,6 +1906,7 @@ fn revision_sender(config: &Config, tx: UnboundedSender<AppEvent>) -> UnboundedS
 
 fn invalidate_reorg_views(state: &mut AppState) {
     state.store.registration_payments.clear();
+    state.store.token_control.clear();
     state
         .store
         .stale_identities
@@ -5918,6 +5926,7 @@ fn run_loop(
                     investigation = None;
                 }
             }
+            redraw |= token_control::request_current(state, config, &tx);
             if config.daemon.control.state() != crate::sources::ConnectionState::Disabled {
                 initialize_identity_json(state);
                 update_marketplace_sort(state);
@@ -7256,6 +7265,17 @@ fn handle_app_event(state: &mut AppState, app_event: AppEvent) {
 fn apply_app_event(state: &mut AppState, app_event: AppEvent) {
     match app_event {
         AppEvent::NotarizationChanged => {}
+        AppEvent::TokenControl {
+            identity,
+            request,
+            status,
+        } => {
+            if let Some(lookup) = state.store.token_control.get_mut(&identity)
+                && Arc::ptr_eq(&lookup.request, &request)
+            {
+                lookup.status = status;
+            }
+        }
         AppEvent::RegistrationPayments {
             key,
             request,
@@ -8753,14 +8773,17 @@ fn request_current_evidence_identity_names(
     let Some(identity) = state.store.identity_for_target(target) else {
         return;
     };
-    let Some((_, report)) = state
+    let mut references = state
         .store
         .identity_evidence
         .get(&identity.identity_address)
-    else {
-        return;
-    };
-    let references = evidence_identity_references(report);
+        .map(|(_, report)| evidence_identity_references(report))
+        .unwrap_or_default();
+    if let Some(address) = identity_token_holder(&state.store, identity)
+        && looks_like_identity_address(address)
+    {
+        references.insert(address.to_owned());
+    }
     request_identity_names(state, config, tx, references);
 }
 
@@ -9336,7 +9359,7 @@ fn address_view_item_counts(state: &AppState) -> (usize, usize) {
                 return (0, 0);
             };
             (
-                identity_primary_addresses(version).len()
+                identity_header_item_count(version)
                     + state
                         .store
                         .identity_evidence
@@ -9422,11 +9445,31 @@ fn open_selected_address_transaction(
                 request_address_detail(state, config, event_tx, &address);
                 return;
             }
-            let Some(link) = state
-                .store
-                .identity_evidence
-                .get(&version.identity_address)
-                .and_then(|(_, report)| report.links.get(selected.saturating_sub(addresses.len())))
+            if token_control::enabled(version) && *selected == addresses.len() {
+                let identity = version.identity_address.clone();
+                if let Some(address) =
+                    identity_token_holder(&state.store, version).map(str::to_owned)
+                {
+                    if looks_like_identity_address(&address) {
+                        push_screen(state, identity_screen(address, None));
+                    } else {
+                        push_screen(state, address_screen(address.clone()));
+                        request_address_detail(state, config, event_tx, &address);
+                    }
+                } else {
+                    token_control::request(state, config, event_tx, &identity, true);
+                }
+                return;
+            }
+            let Some(link) = selected
+                .checked_sub(identity_header_item_count(version))
+                .and_then(|index| {
+                    state
+                        .store
+                        .identity_evidence
+                        .get(&version.identity_address)
+                        .and_then(|(_, report)| report.links.get(index))
+                })
             else {
                 return;
             };
@@ -16455,7 +16498,7 @@ fn render_identity_evidence(
             },
         );
     }
-    let primary_count = identity_primary_addresses(version).len();
+    let header_count = identity_header_item_count(version);
     let heading_height = lines.len() as u16;
     let links_area = Rect::new(
         area.x,
@@ -16468,7 +16511,7 @@ fn render_identity_evidence(
         links_area,
         report.links.len() > visible,
     ));
-    let selected = selected_link.and_then(|index| index.checked_sub(primary_count));
+    let selected = selected_link.and_then(|index| index.checked_sub(header_count));
     let first = selected
         .unwrap_or_default()
         .saturating_sub(visible / 2)
@@ -16584,6 +16627,92 @@ fn identity_has_currency(version: &IdentityVersionRecord) -> bool {
         .get("flags")
         .and_then(Value::as_u64)
         .is_some_and(|flags| flags & 1 != 0)
+}
+
+fn identity_header_item_count(version: &IdentityVersionRecord) -> usize {
+    identity_primary_addresses(version).len() + usize::from(token_control::enabled(version))
+}
+
+fn identity_token_holder<'a>(
+    store: &'a ObjectStore,
+    version: &IdentityVersionRecord,
+) -> Option<&'a str> {
+    if !token_control::enabled(version) {
+        return None;
+    }
+    match &store.token_control.get(&version.identity_address)?.status {
+        token_control::Status::Unspent(_, Some(address)) => Some(address),
+        _ => None,
+    }
+}
+
+fn identity_token_control_line(
+    theme: &Theme,
+    state: &AppState,
+    version: &IdentityVersionRecord,
+    selected: bool,
+) -> Line<'static> {
+    use token_control::Status;
+    let label = Span::styled("Current token holder: ", theme.muted());
+    let status = state
+        .store
+        .token_control
+        .get(&version.identity_address)
+        .map(|lookup| &lookup.status);
+    let detail = match status {
+        Some(Status::Unspent(frontier, Some(address))) => {
+            return Line::from(vec![
+                label,
+                theme.value_as(
+                    "control token holder",
+                    identity_display_value(&state.store, address, state.unmask_identity_addresses),
+                    address,
+                    theme.link(),
+                ),
+                Span::styled(
+                    format!("  ·  {} hops checked", frontier.hops),
+                    theme.muted(),
+                ),
+            ])
+            .style(if selected {
+                theme.focused()
+            } else {
+                theme.base()
+            });
+        }
+        Some(Status::Unspent(frontier, None)) => {
+            format!(
+                "Unspent output has no single holder address  ·  {} hops checked",
+                frontier.hops
+            )
+        }
+        Some(Status::Paused(frontier)) => format!(
+            "{} hops checked  ·  Enter follows up to {} more",
+            frontier.hops,
+            token_control::HOPS_PER_PASS
+        ),
+        Some(Status::Unresolved(Some(frontier), reason)) => {
+            format!(
+                "{} hops checked  ·  {reason}  ·  Enter retries",
+                frontier.hops
+            )
+        }
+        Some(Status::Unresolved(None, reason)) => format!("{reason}  ·  Enter retries"),
+        Some(Status::Loading) => "Checking…".to_owned(),
+        None if state
+            .store
+            .stale_identities
+            .contains(&version.identity_address) =>
+        {
+            "Waiting for refreshed identity data…".to_owned()
+        }
+        None => "Enter checks the control token".to_owned(),
+    };
+    Line::from(vec![label, Span::raw(detail)]).style(if selected {
+        theme.focused()
+    } else {
+        theme.base()
+    })
 }
 
 fn identity_header_lines(
@@ -16717,6 +16846,15 @@ fn identity_header_lines(
             Span::styled("c opens currency definition and activity", theme.link()),
         ]));
     }
+    let tokenized = token_control::enabled(version);
+    if tokenized {
+        lines.push(Line::from(Span::styled(
+            " Tokenized Control ",
+            theme.status_badge(),
+        )));
+    } else if identity["flags"].as_u64() == Some(0) {
+        lines.push(Line::from(Span::styled("No flags set", theme.muted())));
+    }
     let offer_labels = identity_offer_labels(state, own_address);
     if !offer_labels.is_empty() {
         lines.insert(
@@ -16733,7 +16871,7 @@ fn identity_header_lines(
         "Primary addresses:",
         theme.muted(),
     )));
-    let selected_line = selected_primary_address
+    let mut selected_line = selected_primary_address
         .filter(|&index| index < primary_addresses.len())
         .map(|index| lines.len() + index);
     if primary_addresses.is_empty() {
@@ -16754,6 +16892,13 @@ fn identity_header_lines(
                     )
                 }),
         );
+    }
+    if tokenized {
+        let selected = selected_primary_address == Some(primary_addresses.len());
+        if selected {
+            selected_line = Some(lines.len());
+        }
+        lines.push(identity_token_control_line(theme, state, version, selected));
     }
     lines.extend(vec![
         identity_property_pair(

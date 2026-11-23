@@ -624,6 +624,106 @@ def run():
     print('Navigation PTY checks passed: q exits 13 interface contexts, input q stays text, Escape closes one layer and keeps roots open, terminal modes restored.')
 
 
+def run_token_control():
+    # A synthetic identity and NFT launch, followed by more spends than one pass.
+    from hashlib import sha256
+
+    payload = bytes([102]) + bytes([239]) * 20
+    checksum = sha256(sha256(payload).digest()).digest()[:4]
+    number = int.from_bytes(payload + checksum, 'big')
+    alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    currency = ''
+    while number:
+        number, digit = divmod(number, 58)
+        currency = alphabet[digit] + currency
+    definition = dict(currencyid=currency, name='FixtureToken', options=0x820,
+                      definitiontxid='d' * 64, definitiontxout=0, startblock=13)
+    import_data = dict(importcurrencyid=currency, numoutputs=1)
+    transaction_ids = [format(i, '064x') for i in range(1, 19)]
+    points = [(txid, 2 if i == 0 else 0) for i, txid in enumerate(transaction_ids)]
+    tip = (transaction_ids[-1], 0)
+    token_script = dict(reserveoutput=dict(currencyvalues={currency: 0.00000001}),
+                        reqSigs=1, addresses=[VRSC], hex='cc01')
+    transactions = {
+        definition['definitiontxid']: dict(
+            txid=definition['definitiontxid'], vin=[], height=12,
+            vout=[dict(n=0, scriptPubKey=dict(currencydefinition=definition))],
+        ),
+    }
+    for i, (txid, output_number) in enumerate(points):
+        output = dict(n=output_number, scriptPubKey=token_script)
+        if i + 1 < len(points) and i % 2 == 0:
+            output.update(spentTxId=points[i + 1][0], spentIndex=0)
+        if i == 0:
+            vout = [dict(n=0, scriptPubKey=dict(crosschainimport=import_data)),
+                    dict(n=1, scriptPubKey=dict(acceptednotarization={})), output]
+            vin = []
+        else:
+            vout = [output]
+            vin = [dict(txid=points[i - 1][0], vout=points[i - 1][1])]
+        transactions[txid] = dict(txid=txid, vin=vin, vout=vout)
+
+    def identity(params):
+        fixture = params[0] in ('FixtureToken@', 'FixtureToken', currency)
+        name, address, flags = ('FixtureToken', currency, 5) if fixture else ('VRSC', VRSC, 0)
+        return dict(identity=dict(identityaddress=address, name=name, version=3, flags=flags),
+                    fullyqualifiedname=name + '@', blockheight=0, status='active')
+
+    def spender(params):
+        point = (params[0]['txid'], params[0]['index'])
+        return dict(txid=points[points.index(point) + 1][0], index=0)
+
+    launch = dict(importtxid=points[0][0], importvout=0, importheight=13,
+                  **{'import': import_data},
+                  importnotarization=dict(launchcleared=True, launchconfirmed=True,
+                                          currencystate=dict(currencyid=currency, flags=24)))
+    server = daemon(VRSC)
+    server.rpc_handlers = {
+        'getidentity': identity,
+        'getaddresstxids': lambda _: [],
+        'getaddressbalance': lambda _: dict(balance=0, received=0),
+        'getcurrency': lambda params: definition if params[0] == currency
+        else dict(currencyid=VRSC, name='VRSC', systemid=VRSC),
+        'getblockcount': lambda _: 100,
+        'getimports': lambda _: [launch],
+        'getrawtransaction': lambda params: transactions.get(params[0]),
+        'gettxout': lambda params: dict(scriptPubKey=dict(hex='cc01')) if tuple(params[:2]) == tip else None,
+        'getspentinfo': spender,
+    }
+    try:
+        with tempfile.TemporaryDirectory(prefix='carbide-token-control-') as directory:
+            root = Path(directory)
+            conf = root / 'VRSC.conf'
+            conf.write_text(f'rpcconnect=127.0.0.1\nrpcport={server.server_port}\n')
+            terminal = Terminal(root, conf)
+            try:
+                wait(terminal, 'Recent Blocks')
+                terminal.key(b'/FixtureToken@\r')
+                wait(terminal, '16 hops checked')
+                screen = terminal.read(.5)
+                assert 'Tokenized Control' in screen
+                assert 'Currency defined' in screen
+                assert 'No flags set' not in screen
+                assert 'Enter follows up to 16 more' in screen
+                assert [(p[0], p[1]) for method, p in server.requests if method == 'gettxout'] == points[:16]
+                terminal.key(b'\x1b[H\r')
+                wait(terminal, '17 hops checked')
+                assert 'Current token holder: VRSC@' in terminal.screen() or (
+                    f'Current token holder: {VRSC}' in terminal.screen()
+                )
+                assert [(p[0], p[1]) for method, p in server.requests if method == 'gettxout'] == points
+                terminal.key(b'\r')
+                wait(terminal, 'No flags set')
+                assert 'Tokenized Control' not in terminal.screen()
+                assert_quits(terminal)
+            finally:
+                dispose(terminal)
+    finally:
+        server.shutdown()
+        server.server_close()
+    print('Tokenized control PTY check passed: launch output, bounded continuation, verified holder, and zero flags.')
+
+
 if __name__ == '__main__':
     import sys
     if '--job-control' in sys.argv:
@@ -638,9 +738,12 @@ if __name__ == '__main__':
         run_peers()
     elif '--dashboard-only' in sys.argv:
         run_dashboard()
+    elif '--token-control-only' in sys.argv:
+        run_token_control()
     else:
         run_shutdown()
         run()
         run_peers()
         run_mempool()
         run_dashboard()
+        run_token_control()
