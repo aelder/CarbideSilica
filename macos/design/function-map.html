@@ -1,0 +1,423 @@
+<title>Carbide Function Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; the inventory is a dense sortable ledger, everything else is prose-width. */
+:root {
+  --bg: #f5f7f8; --surface: #ffffff; --line: #d9e0e4; --fg: #15212b; --muted: #5b6b78;
+  --accent: #0d6b82; --accent-soft: #e0f0f4;
+  --glance: #2f7d4f; --steps: #a8690a; --invest: #8a3d8f;
+  --glance-soft: #e3f2e8; --steps-soft: #f8ecd4; --invest-soft: #f3e3f4;
+  --display: "Space Grotesk", "Avenir Next", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --glance: #6fcf94; --steps: #e5b25a; --invest: #d48fd9;
+  --glance-soft: #173325; --steps-soft: #3a2d12; --invest-soft: #351d37; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --glance: #6fcf94; --steps: #e5b25a; --invest: #d48fd9;
+  --glance-soft: #173325; --steps-soft: #3a2d12; --invest-soft: #351d37; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+section { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 34px; letter-spacing: -0.01em; }
+h2 { font-size: 23px; }
+h3 { font-size: 16px; }
+p { margin: 0; max-width: 68ch; }
+.lede { font-size: 17px; color: var(--muted); }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+kbd { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
+
+.counts { display: flex; flex-wrap: wrap; gap: 28px 44px; }
+.counts div { display: flex; flex-direction: column; }
+.counts b { font-family: var(--display); font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.counts span { color: var(--muted); font-size: 13px; }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure .scroll { overflow-x: auto; }
+figure svg { display: block; min-width: 640px; width: 100%; height: auto; color: var(--fg); font-family: var(--body); }
+figcaption { color: var(--muted); font-size: 13.5px; margin-top: 12px; max-width: 78ch; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 13.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.c1 { color: var(--glance); background: var(--glance-soft); }
+.c2 { color: var(--steps); background: var(--steps-soft); }
+.c3 { color: var(--invest); background: var(--invest-soft); }
+.dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--accent); display: inline-block; flex: none; }
+.s2 { background: var(--accent); }
+.s1 { background: linear-gradient(90deg, var(--accent) 50%, transparent 50%); }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filters span { font-size: 13px; color: var(--muted); margin-right: 2px; }
+.filters button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.filters button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filters .gap { width: 14px; }
+
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.group header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.group header p { color: var(--muted); font-size: 13.5px; }
+.group header .tally { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 118px; gap: 4px 14px; padding: 11px 18px; align-items: start; }
+.row + .row { border-top: 1px solid var(--line); }
+.row .dot { margin-top: 6px; }
+.row .name { font-weight: 600; }
+.row .desc { color: var(--muted); font-size: 13.5px; }
+.row .keys { margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+.row .lvl { justify-self: end; }
+.empty { padding: 14px 18px; color: var(--muted); font-size: 13.5px; }
+
+.tasks { display: flex; flex-direction: column; }
+.task { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 0 14px; padding: 18px 0; border-top: 1px solid var(--line); }
+.task:last-child { border-bottom: 1px solid var(--line); }
+.task .rank { font-family: var(--display); font-size: 22px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+.task h3 { font-size: 17px; }
+.task dl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 6px 14px; margin: 10px 0 0; font-size: 14px; }
+.task dt { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding-top: 2px; }
+.task dd { margin: 0; max-width: 70ch; }
+
+.nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.nav > div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.nav ul, .plain { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; font-size: 14px; }
+.nav li b { font-weight: 600; }
+.nav li span { color: var(--muted); }
+.nav .where { font-size: 12.5px; color: var(--muted); }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tabs div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; flex: 1 1 170px; min-width: 0; font-size: 13.5px; color: var(--muted); }
+.tabs b { display: block; color: var(--fg); font-family: var(--display); font-size: 15px; }
+
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 22px 36px; }
+.rules div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rules p { font-size: 14px; color: var(--muted); }
+.rules .eg { font-size: 13px; }
+.rules .eg s { color: var(--muted); }
+
+.conf { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.conf div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 13.5px; }
+.conf .mark { font-family: var(--display); font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.conf .mark i { width: 14px; height: 14px; flex: none; border: 2px solid var(--fg); border-radius: 3px; }
+.conf .v i { background: var(--fg); }
+.conf .o i { background: linear-gradient(135deg, var(--fg) 50%, transparent 50%); }
+.conf .c i { border-style: dashed; }
+.conf .u i { border-style: dotted; border-radius: 50%; }
+.conf span { color: var(--muted); }
+
+ol.order { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; max-width: 72ch; }
+ol.order b { font-weight: 600; }
+.note { color: var(--muted); font-size: 13.5px; }
+@media (max-width: 560px) {
+  .row { grid-template-columns: 18px minmax(0, 1fr); }
+  .row .lvl { grid-column: 2; justify-self: start; }
+  .task dl { grid-template-columns: 1fr; }
+  h1 { font-size: 28px; }
+}
+</style>
+
+<main>
+  <section>
+    <span class="eyebrow">Carbide Silica · design groundwork</span>
+    <h1>Carbide Function Map</h1>
+    <p class="lede">Everything Carbide's terminal app does, sorted by what the person is trying to accomplish and how hard it is today. This is the list the Mac app has to cover, and the order to cover it in.</p>
+    <div class="counts" id="counts"></div>
+    <p class="note">Sources: Carbide's README and explorer reference, plus a sweep of the source for features the docs leave out. Several functions here are not documented upstream, including identity origin, tokenized control, registration payments and value accounting.</p>
+  </section>
+
+  <section>
+    <h2>The six objects, and how you move between them</h2>
+    <p>Almost every function is a view of one of six objects or a walk along one of these links. Carbide's keys (<kbd>b</kbd>, <kbd>c</kbd>, <kbd>n</kbd>, <kbd>F3</kbd>, <kbd>F8</kbd>) are shortcuts for specific arrows. In the Mac app each arrow becomes a visible, clickable link.</p>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 880 370" role="img" aria-label="Six objects and the links between them: a block contains transactions; a transaction pays addresses, registers identities and transfers currencies; an identity signs with addresses and defines a currency; a currency is proven by notarizations, which commit to blocks and are recorded in transactions.">
+        <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#arr)">
+          <line x1="220" y1="62" x2="366" y2="62"/>
+          <line x1="510" y1="62" x2="656" y2="62"/>
+          <line x1="730" y1="288" x2="730" y2="88"/>
+          <line x1="660" y1="310" x2="514" y2="310"/>
+          <line x1="440" y1="84" x2="440" y2="284"/>
+          <line x1="370" y1="310" x2="224" y2="310"/>
+          <line x1="150" y1="288" x2="150" y2="88"/>
+          <line x1="215" y1="288" x2="372" y2="88"/>
+          <line x1="508" y1="84" x2="665" y2="284"/>
+        </g>
+        <g font-size="12" fill="currentColor" opacity="0.75">
+          <text x="293" y="54" text-anchor="middle">contains</text>
+          <text x="583" y="54" text-anchor="middle">pays, spends</text>
+          <text x="740" y="192">signs with</text>
+          <text x="587" y="328" text-anchor="middle">defines</text>
+          <text x="448" y="150">transfers,</text>
+          <text x="448" y="165">converts</text>
+          <text x="297" y="328" text-anchor="middle">proven by</text>
+          <text x="140" y="192" text-anchor="end">commits to</text>
+          <text x="262" y="180" text-anchor="end">recorded in</text>
+          <text x="604" y="180">registers, updates</text>
+        </g>
+        <g font-family="Space Grotesk, system-ui, sans-serif" font-size="15" font-weight="600" text-anchor="middle">
+          <g fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="80" y="40" width="140" height="44" rx="8"/>
+            <rect x="370" y="40" width="140" height="44" rx="8" stroke="#0d8aa8" stroke-width="2.4"/>
+            <rect x="660" y="40" width="140" height="44" rx="8"/>
+            <rect x="80" y="288" width="140" height="44" rx="8"/>
+            <rect x="370" y="288" width="140" height="44" rx="8"/>
+            <rect x="660" y="288" width="140" height="44" rx="8"/>
+          </g>
+          <g fill="currentColor">
+            <text x="150" y="67">Block</text>
+            <text x="440" y="67">Transaction</text>
+            <text x="730" y="67">Address</text>
+            <text x="150" y="315">Notarization</text>
+            <text x="440" y="315">Currency</text>
+            <text x="730" y="315">Identity</text>
+          </g>
+        </g>
+      </svg>
+      </div>
+      <figcaption>The transaction is the hub: five of the nine links start or end there. Marketplace offers and network peers sit outside this graph. An offer points at an identity or currency and a funding transaction; a peer belongs to the node, not the chain.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Every function, sorted</h2>
+    <p>Grouped by what the person is trying to do. Each function has a difficulty rating for how it works in the terminal today, and a marker for where the Mac app stands.</p>
+    <div class="legend">
+      <span><span class="pill c1">Glance</span> one look answers it</span>
+      <span><span class="pill c2">Steps</span> needs choices or several moves</span>
+      <span><span class="pill c3">Investigation</span> multi-hop, and the answer can be partial</span>
+    </div>
+    <div class="legend">
+      <span><span class="dot s2"></span> Built in Silica</span>
+      <span><span class="dot s1"></span> Partly built</span>
+      <span><span class="dot"></span> Not yet</span>
+    </div>
+    <div class="filters" id="filters" role="group" aria-label="Filter functions"></div>
+    <div id="groups" style="display:flex;flex-direction:column;gap:16px"></div>
+    <p class="note">Left out on purpose, because they only exist to cope with a terminal: tmux and window titles, clipboard transport over SSH, the mouse-capture toggle, Ctrl-Z suspend, emoji fallback and the UI timing log.</p>
+  </section>
+
+  <section>
+    <h2>The seven hard tasks</h2>
+    <p>The most demanding things people do with Carbide, restated as the question the person actually has. They are where the terminal asks the most of its user, so they are where a GUI can help the most.</p>
+    <div class="tasks">
+      <div class="task"><span class="rank">1</span><div>
+        <h3>Where did this transfer or conversion end up?</h3>
+        <dl>
+          <dt>Today</dt><dd>Open the transaction, select the right output, press <kbd>F8</kbd>, then read a hop list. For a cross-chain transfer you search the destination chain yourself in 1,000-block windows with <kbd>g</kbd>, <kbd>[</kbd> <kbd>]</kbd> and <kbd>s</kbd>. Up to eight legs, each with its own evidence.</dd>
+          <dt>In Silica</dt><dd>A route drawn left to right: Sent → Exported → Imported → Received. Each leg is a card with the amount, the rate it converted at and the fees. The destination search runs on its own with visible progress. One verdict at the top: Received, Refunded, Forwarded or Still unresolved.</dd>
+        </dl></div></div>
+      <div class="task"><span class="rank">2</span><div>
+        <h3>What is this transaction actually doing?</h3>
+        <dl>
+          <dt>Today</dt><dd>Read up to a dozen header lines, a row of tags, then input and output tiles. Fee and value lines carry qualifiers such as "partly derived", "known + hidden" and "unknown (protocol accounting)".</dd>
+          <dt>In Silica</dt><dd>One plain sentence first, built from the tags: "Converted 100 VRSC to DAI through Bridge.vETH." Below it, a money-flow picture from inputs to outputs with the fee shown as its own slice. Hidden amounts are drawn as hidden, never as zero.</dd>
+        </dl></div></div>
+      <div class="task"><span class="rank">3</span><div>
+        <h3>Who controls this identity, and where did it come from?</h3>
+        <dl>
+          <dt>Today</dt><dd>Spread across four places: authority fields, the tokenized-control check (<kbd>Enter</kbd>, 16 hops per pass), the registration and associations panel (funding candidates, referral chain) and a historical reverse lookup (<kbd>v</kbd>, one 1,000-block window at a time).</dd>
+          <dt>In Silica</dt><dd>A Control card answering three questions in words: who can spend, who can revoke, who can recover, plus the current token holder if control is tokenized. An Origin timeline: name commitment → registration → each update, with who paid and who referred.</dd>
+        </dl></div></div>
+      <div class="task"><span class="rank">4</span><div>
+        <h3>Are these two chains agreeing with each other?</h3>
+        <dl>
+          <dt>Today</dt><dd>From a currency press <kbd>n</kbd> for the notarization browser, <kbd>Tab</kbd> to swap perspective, <kbd>[</kbd> <kbd>]</kbd> to pick a proof root, then <kbd>F4</kbd> in the transaction to see who signed. Signature groups are explicitly not a quorum count.</dd>
+          <dt>In Silica</dt><dd>Two parallel chain lanes with each notarization drawn as a tie between them. A tick where the committed block is on the active chain, a warning where it is off-chain or missing, and a grey mark where the other chain's source isn't connected. Signers listed beside each tie.</dd>
+        </dl></div></div>
+      <div class="task"><span class="rank">5</span><div>
+        <h3>What did this currency look like on a given date?</h3>
+        <dl>
+          <dt>Today</dt><dd><kbd>g</kbd> to seek by height or date, <kbd>a</kbd> to check activity at that height, <kbd>w</kbd> for the preceding 1,000 blocks, <kbd>[</kbd> <kbd>]</kbd> for adjacent windows.</dd>
+          <dt>In Silica</dt><dd>A date scrubber above the currency page. Supply, reserves and prices redraw for the chosen moment, with imports and exports listed underneath for that period. "Now" is one click back.</dd>
+        </dl></div></div>
+      <div class="task"><span class="rank">6</span><div>
+        <h3>Was this block or transaction ever on a different branch?</h3>
+        <dl>
+          <dt>Today</dt><dd><kbd>F7</kbd> lists stored inclusions and child branches, 100 per page, with active, orphaned and unverified labels kept per source.</dd>
+          <dt>In Silica</dt><dd>A small branch diagram at the affected height: the active path and each orphaned sibling, with which source saw which. Shown only when more than one branch is known, so the common case stays quiet.</dd>
+        </dl></div></div>
+      <div class="task"><span class="rank">7</span><div>
+        <h3>What else does this output refer to?</h3>
+        <dl>
+          <dt>Today</dt><dd><kbd>F3</kbd> in a transaction lists notarization, evidence, finalization and import/export references, each with one of nine resolution statuses.</dd>
+          <dt>In Silica</dt><dd>References appear inline on the output they belong to, as links that name the other end: "Finalizes export in transaction …". The nine statuses reduce to the four confidence levels below.</dd>
+        </dl></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How the app is organised</h2>
+    <p>Three kinds of place. The sidebar holds what you go to. Object pages hold what you look at. Search is always in the toolbar, because it is the fastest way to anything.</p>
+    <div class="nav">
+      <div><h3>Watch</h3><span class="where">Sidebar · live, no input needed</span>
+        <ul><li><b>Dashboard</b> <span>chain health, recent blocks and transactions</span></li><li><b>Mempool</b> <span>what is waiting to confirm</span></li><li><b>Charts</b> <span>five metrics, with the estimator</span></li></ul></div>
+      <div><h3>Explore</h3><span class="where">Sidebar · browse and filter</span>
+        <ul><li><b>Currencies</b> <span>pools, tokens, chains, gateways</span></li><li><b>Marketplace</b> <span>open offers</span></li><li><b>Notarizations</b> <span>chain-to-chain agreement</span></li></ul></div>
+      <div><h3>Library</h3><span class="where">Sidebar · yours</span>
+        <ul><li><b>Bookmarks</b> <span>saved places with notes</span></li><li><b>Recent</b> <span>the trail you have walked</span></li></ul></div>
+      <div><h3>Node</h3><span class="where">Sidebar · the machine, not the chain</span>
+        <ul><li><b>Sources</b> <span>daemons, APIs, which chain</span></li><li><b>Peers</b> <span>list, map, actions</span></li><li><b>Storage</b> <span>cache size and reset</span></li></ul></div>
+    </div>
+    <h3 style="margin-top:8px">Every object page has the same five tabs</h3>
+    <div class="tabs">
+      <div><b>Summary</b>The plain sentence, the key numbers, the status.</div>
+      <div><b>Activity</b>What it did or what happened to it.</div>
+      <div><b>History</b>Earlier versions, earlier states, other branches.</div>
+      <div><b>Evidence</b>Traces, references, signers: the investigations.</div>
+      <div><b>JSON</b>The daemon's own data, untouched.</div>
+    </div>
+    <p class="note">The investigations are not sidebar destinations. They start from the object they are about, which is how the question arises: you are looking at a transfer and want to know where it went.</p>
+  </section>
+
+  <section>
+    <h2>Rules for showing the data</h2>
+    <p>Carbide is precise, and it shows that precision as text. The app's job is to keep the precision and remove the reading.</p>
+    <div class="rules">
+      <div><h3>Say what it is first</h3><p>Every page opens with one sentence a person could say out loud. Fields come after.</p><p class="eg"><s>Tags: Reserve Transfer, Conversion, Export</s> → "Sent 100 VRSC to be converted to DAI on vETH"</p></div>
+      <div><h3>Names before addresses</h3><p>Show the identity or currency name; keep the i-address one hover or one copy away. Carbide makes this a toggle. In the app it is the default.</p><p class="eg"><s>i9nwxtKuVYX4MSbeULLiK2ttVi6rUEhh4X</s> → vETH</p></div>
+      <div><h3>Time before height</h3><p>Lead with the date and how long ago. Height is the secondary label. Future heights say "est." as Carbide does.</p><p class="eg"><s>4,226,272</s> → 6 Sep 2026, 13:19 · block 4,226,272</p></div>
+      <div><h3>Amounts always carry a ticker</h3><p>No satoshis, no bare numbers. A hidden shielded amount is drawn as hidden. An unknown fee says unknown and why.</p><p class="eg"><s>300046564</s> → 3.00046564 VRSC</p></div>
+      <div><h3>Shape, colour and word together</h3><p>Status never depends on colour alone. Mined and staked, confirmed and pending, launched and failed each get a distinct mark and a word.</p></div>
+      <div><h3>Three depths, never more</h3><p>Glance (the sentence and status), detail (the fields), evidence (how we know). A person stops at the depth they need.</p></div>
+      <div><h3>Keep the non-claims</h3><p>Carbide is careful to say what it has not proven. Those sentences stay, in plain words, wherever a result is partial.</p><p class="eg">"Not found in the blocks searched. That does not mean it doesn't exist."</p></div>
+      <div><h3>Raw data one click away</h3><p>The JSON tab is on every page. Nothing the app simplifies is ever unavailable in its original form.</p></div>
+    </div>
+    <h3 style="margin-top:10px">Four confidence levels replace dozens of labels</h3>
+    <p>Carbide marks uncertainty with dozens of phrases: retained observation, membership unverified, funding candidate, receipt unresolved, partly derived. They are all accurate, and they fall into four kinds. One consistent mark for each makes trust readable at a glance.</p>
+    <div class="conf">
+      <div class="v"><span class="mark"><i></i>Verified</span><span>Proven by exact match or replay.</span>Received verified · Supply burn verified · Both sides resolved</div>
+      <div class="o"><span class="mark"><i></i>Observed</span><span>A source reported it, at a known block. Not re-checked since.</span>Retained observation · Last observed active · Membership unverified</div>
+      <div class="c"><span class="mark"><i></i>Candidate</span><span>A reasoned guess, shown as a guess.</span>Funding candidate · Destination-address candidate · Partly derived</div>
+      <div class="u"><span class="mark"><i></i>Unknown</span><span>A gap, with the reason it is a gap.</span>Receipt unresolved · Counterpart not loaded · Spender unresolved</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Suggested build order</h2>
+    <p>Ordered so that each step makes the next one cheaper, and the hard tasks land on pages that already read well.</p>
+    <ol class="order">
+      <li><b>The presentation layer.</b> Names, dates, tickers, status marks and the four confidence levels, applied to the five pages that already exist. Everything later inherits it.</li>
+      <li><b>Finish the object pages.</b> The plain-sentence summary, transaction money flow and value accounting, identity versions, address activity, currency option badges.</li>
+      <li><b>The sidebar and the Watch group.</b> Mempool, recent transactions on the dashboard, bookmarks and the recent trail.</li>
+      <li><b>Explore.</b> Currency browser with filters, marketplace.</li>
+      <li><b>Charts and the estimator.</b></li>
+      <li><b>The hard tasks,</b> in the ranked order above, starting with following a transfer.</li>
+      <li><b>Node.</b> Multiple sources and chains, peers and map, storage. Carbide's SQLite cache comes in here, since history, reorgs and offline use depend on it.</li>
+    </ol>
+  </section>
+</main>
+
+<script>
+const GROUPS = [
+  ["watch", "Watch the chain", "Live views that need no input."],
+  ["lookup", "Look something up", "You have a height, hash, address or name and want to see it."],
+  ["browse", "Browse and collect", "You don't know exactly what you want yet, or you want to keep it."],
+  ["time", "Go back in time", "The same object at an earlier moment."],
+  ["trace", "Investigate", "Follow a chain of evidence across transactions and chains."],
+  ["read", "Read it at a glance", "Layers that apply to every view: how raw data becomes meaning."],
+  ["node", "Run the node", "Connections, peers and storage."]
+];
+// [group, name, description, difficulty 1-3, Carbide keys, Silica status 0-2]
+const F = [
+  ["watch","Dashboard","Recent blocks and recent confirmed transactions, with a mode that keeps new blocks in view.",1,"d",1],
+  ["watch","Status line","Tip against longest chain, age of last block, daemon and API state, peer count.",1,"always shown",2],
+  ["watch","Mempool","Unconfirmed transactions with arrival, fee, size, unconfirmed parents and tags. Refreshes every two seconds.",1,"m",0],
+  ["watch","Charts","Block intervals, mining difficulty, staking difficulty, proof-of-work ratio and fee pool. Spans from 2 hours to 7 days, paging, seek by height or date.",2,"F9, 1–5, - +, g",0],
+  ["watch","Future block estimator","When a future height will arrive, or what height a future date will be, with the calibration it used.",1,"F10",0],
+
+  ["lookup","Universal search","One box that accepts a height, block hash, transaction ID, address, identity or currency.",1,"/",2],
+  ["lookup","Find a block by date","Plain-language dates and times, relative times such as \"2 hours ago\", and Unix seconds.",1,"/ with a date",2],
+  ["lookup","Block","Header, production type, chain status, combined tags of its transactions, and the transactions themselves.",1,"Enter",1],
+  ["lookup","Transaction","Status, inputs and outputs as flows, tags, fee and value accounting, shielded totals, output maturity.",2,"Enter, b",1],
+  ["lookup","Address","Balances in every currency, first and latest activity, transaction flows, identities that use it as a primary address.",1,"/",1],
+  ["lookup","Identity","Authorities, timelock, balances, activity, buy and sell offers, whether it defines a currency.",2,"/ name@, c",1],
+  ["lookup","Currency","Definition, option badges, basket reserves and prices, launch status, last confirmed notarization.",2,"/ name@@, c",1],
+  ["lookup","Step to neighbours","Previous and next block; the block containing a transaction.",1,"[ ] p n b",2],
+  ["lookup","Raw JSON","Collapsible tree, copy a value or subtree, save to a file, follow links inside it.",1,"Tab, Space, y, s",1],
+  ["lookup","OP_RETURN byte viewer","Hex and text side by side for output data Carbide doesn't recognise.",1,"Enter on output",0],
+
+  ["browse","Currency browser","Starts on liquidity pools. Filter by 13 option flags (each Any, Show or Hide), by launch status and by text.",2,"c, Shift-F, f",0],
+  ["browse","Marketplace","Open offers with expiry, asking price and what is offered for what. Four sort orders, links to the identity, currency and funding transaction.",2,"o, s, a",0],
+  ["browse","Bookmarks","Save any block, transaction, address, identity, currency or notarization view with a description. Kept per network.",1,"Shift-B, F6",0],
+  ["browse","Navigation trail","Back through everything you opened, with a breadcrumb path. A search starts a new trail.",1,"Esc, h, Backspace",1],
+
+  ["time","Identity versions","Step through each earlier update of an identity.",1,"p n",0],
+  ["time","Currency state at a moment","Supply, reserves and prices as of any past height or date.",2,"g",0],
+  ["time","Currency activity windows","Imports and exports in 1,000-block windows, paged backwards.",2,"a, w, [ ]",0],
+  ["time","Historical reverse lookup","Which addresses and identities shared this identity's primary address or authorities in a past 1,000-block window.",3,"v",0],
+
+  ["trace","Follow a transfer","From a reserve transfer through its export batch, the matching import and the final receipt. Up to eight legs, with conversions, rates, fees, forwarding and refunds each verified or marked unresolved.",3,"F8, g, [ ], s, c, p, v",0],
+  ["trace","Protocol links","Follow a notarization, evidence, finalization or import/export reference to the output it names, on whichever chain owns it.",3,"F3",0],
+  ["trace","Witnesses","Who signed a notarization: signatures grouped by identity, height, statement and target, with the evidence they came from.",3,"F4",0],
+  ["trace","Notarization browser","Confirmed and pending notarizations from both chains' point of view, checking each committed block against the other chain.",3,"n, Tab, [ ], b",0],
+  ["trace","Reorg history","Every block a transaction is known to have been in, and every known child branch of a block.",3,"F7",0],
+  ["trace","Identity origin and associations","Registration transaction, name commitment, who funded it, the referral chain, and identities linked by shared keys or funding.",3,"in identity view",0],
+  ["trace","Tokenized control","When an identity is controlled by a token, trace that token from the currency launch to its current holder.",3,"Enter on badge",0],
+  ["trace","Registration payments","How an identity registration fee was split: referrals, issuer charge, budget and transaction fee.",2,"in transaction view",0],
+
+  ["read","Names for i-addresses","Resolve identity and currency IDs to names everywhere, including inside JSON.",1,"Shift-I",1],
+  ["read","Dates for heights","Resolve heights, confirmation counts and timestamps to dates, with estimates for future heights.",1,"Shift-D",1],
+  ["read","UTC or local time","One setting for every date shown.",1,"t in Help",1],
+  ["read","Transaction and output tags","29 classifications such as Coinbase, Stake, Identity Registration, Conversion, Cross-Chain Transfer, Burn and Marketplace Offer.",1,"automatic",2],
+  ["read","Chain status badges","Nine states including Chain tip, Mempool, Immature, Stake age pending, Active and Orphaned.",1,"automatic",0],
+  ["read","Currency option badges","13 configuration flags such as Fractional, Token, Gateway, PBaaS chain and NFT, plus four launch states.",1,"automatic",0],
+  ["read","Value accounting","What moved publicly, what is hidden, what the fee was, and when a figure is derived instead of read.",2,"automatic",0],
+  ["read","Provenance labels","Dozens of phrases that say how each fact is known and how fresh it is.",2,"automatic",0],
+
+  ["node","Sources","Enable or disable each daemon and API, set a daemon to be monitored in the background, choose the current chain, save the setup.",2,"F2, e, m, s",1],
+  ["node","API permission","Ask before any lookup goes to a public API, explaining why the local daemon couldn't answer.",1,"prompt",1],
+  ["node","Source activity","Recent requests per source, with history and timestamps.",1,"F2, a, f",0],
+  ["node","Several chains at once","Work across VRSC and PBaaS chains, each with its own daemon, following transfers between them.",2,"F2, Enter",0],
+  ["node","Peers","Connected and banned peers with traffic, latency and chain progress.",1,"`",0],
+  ["node","Peer map","Peers placed on a world map from a local location database.",1,"w",0],
+  ["node","Peer actions","Add a node, ping all, disconnect or ban a peer, clear the ban list. These are the only things Carbide changes on the daemon.",2,"a, p, x, b, c",0],
+  ["node","Peer log","Recent daemon log lines that mention the selected peer.",1,"in peer view",0],
+  ["node","Storage","Where the cache is, how big it is, and clearing it. Cached data stays usable offline.",1,"c in Help",0]
+];
+const LVL = ["", "Glance", "Steps", "Investigation"], ST = ["Not yet", "Partly built", "Built"];
+let lvl = 0, st = -1;
+
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function keys(k) {
+  if (/^(automatic|always shown|prompt|in .* view)$/.test(k)) return esc(k);
+  return k.split(", ").map(x => "<kbd>" + esc(x) + "</kbd>").join(" ");
+}
+function draw() {
+  document.getElementById("groups").innerHTML = GROUPS.map(([id, title, sub]) => {
+    const all = F.filter(f => f[0] === id);
+    const rows = all.filter(f => (!lvl || f[3] === lvl) && (st < 0 || f[5] === st));
+    const body = rows.length ? rows.map(f =>
+      '<div class="row"><span class="dot s' + f[5] + '" title="' + ST[f[5]] + '" role="img" aria-label="' + ST[f[5]] + '"></span>' +
+      '<div><div class="name">' + esc(f[1]) + '</div><div class="desc">' + esc(f[2]) + '</div><div class="keys">In Carbide: ' + keys(f[4]) + '</div></div>' +
+      '<span class="pill c' + f[3] + ' lvl">' + LVL[f[3]] + '</span></div>').join("")
+      : '<div class="empty">Nothing in this group matches the filter.</div>';
+    return '<div class="group"><header><h3>' + title + '</h3><p>' + sub + '</p><span class="tally">' +
+      rows.length + (rows.length === all.length ? "" : " of " + all.length) + '</span></header>' + body + '</div>';
+  }).join("");
+}
+function chips() {
+  const b = (label, on, attr) => '<button type="button" aria-pressed="' + on + '" ' + attr + '>' + label + '</button>';
+  document.getElementById("filters").innerHTML =
+    "<span>Difficulty</span>" + b("All", lvl === 0, 'data-l="0"') + [1, 2, 3].map(i => b(LVL[i], lvl === i, 'data-l="' + i + '"')).join("") +
+    '<i class="gap"></i><span>In Silica</span>' + b("All", st === -1, 'data-s="-1"') + [2, 1, 0].map(i => b(ST[i], st === i, 'data-s="' + i + '"')).join("");
+}
+document.getElementById("filters").addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.l !== undefined) lvl = +t.dataset.l; else st = +t.dataset.s;
+  chips(); draw();
+});
+const n = k => F.filter(k).length;
+document.getElementById("counts").innerHTML = [
+  [F.length, "functions"], [GROUPS.length, "groups"], [n(f => f[3] === 3), "investigations"],
+  [n(f => f[5] === 2), "built in Silica"], [n(f => f[5] === 1), "partly built"], [n(f => f[5] === 0), "not yet started"]
+].map(([v, l]) => "<div><b>" + v + "</b><span>" + l + "</span></div>").join("");
+chips(); draw();
+</script>

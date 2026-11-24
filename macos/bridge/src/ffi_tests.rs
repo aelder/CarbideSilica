@@ -167,3 +167,19 @@ async fn live_lookups_through_an_api() {
     );
     println!("date: {:?}", explorer.resolve("2026-09-06".into()).await);
 }
+
+#[test]
+fn reads_a_peer_and_drops_its_inflight_list() {
+    use serde_json::json;
+    let peer = peer_row(&json!({
+        "id": 1, "addr": "203.0.113.18:27485", "inbound": false, "pingtime": 0.038,
+        "synced_blocks": 388290, "synced_headers": 1604000, "startingheight": 4336719,
+        "bytessent": 10, "bytesrecv": 20, "subver": "/MagicBean:2.0.73/", "conntime": 1795540710,
+        "inflight": [388293, 388297]
+    }));
+    assert_eq!(peer.synced_headers, Some(1604000));
+    assert_eq!(peer.row.address, "203.0.113.18:27485");
+    assert!((peer.row.ping_ms.unwrap() - 38.0).abs() < 1e-9);
+    assert_eq!(peer.row.synced_blocks, Some(388290));
+    assert!(!peer.row.json.contains("inflight"));
+}

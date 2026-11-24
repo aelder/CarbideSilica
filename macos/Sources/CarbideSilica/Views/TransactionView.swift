@@ -4,6 +4,7 @@ import SwiftUI
 /// A transaction's summary, inputs and outputs.
 struct TransactionView: View {
     let txid: String
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         LoadView(key: "tx:\(txid)") { explorer in
@@ -16,6 +17,11 @@ struct TransactionView: View {
                     subtitle: transaction.txid,
                     tags: transaction.tags
                 )
+
+                Card("What happened") {
+                    TransactionFlowView(
+                        flow: TransactionFlowModel(transaction: transaction, coin: model.coin))
+                }
 
                 Card("Summary") {
                     FieldRow(label: "Transaction ID", value: transaction.txid, monospaced: true)

@@ -11,10 +11,20 @@ struct DashboardView: View {
         Group {
             if let status = model.status {
                 Page {
+                    if let fraction = model.syncFraction {
+                        SyncBanner(fraction: fraction, tipTime: status.tipTime)
+                    }
                     StatusTiles(status: status)
                     if let error = model.statusError {
                         Label(error, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
+                    }
+                    if !model.blocks.isEmpty {
+                        Card("Chain pulse", trailing: "last 25 minutes of blocks") {
+                            ChainPulse(
+                                blocks: model.blocks, live: model.syncFraction == nil,
+                                waiting: model.node?.mempoolCount)
+                        }
                     }
                     RecentBlocks(blocks: model.blocks)
                 }
@@ -32,6 +42,37 @@ struct DashboardView: View {
                 try? await Task.sleep(for: refreshInterval)
             }
         }
+    }
+}
+
+/// Says plainly that the dashboard is showing history while the node catches up.
+private struct SyncBanner: View {
+    let fraction: Double
+    let tipTime: UInt64?
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView(value: fraction)
+                .progressViewStyle(.circular)
+                .controlSize(.small)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Your node is still syncing: \(fraction.formatted(.percent.precision(.fractionLength(1)))) validated")
+                    .fontWeight(.semibold)
+                Text(detail).font(.callout).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Show sync") { model.show(.node) }
+        }
+        .padding(14)
+        .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var detail: String {
+        guard let tipTime else { return "What you see here is history, not the present." }
+        let date = Date(timeIntervalSince1970: TimeInterval(tipTime))
+            .formatted(.dateTime.month(.wide).year())
+        return "Everything here is history from \(date). Recent blocks, addresses and identities won't be found yet."
     }
 }
 

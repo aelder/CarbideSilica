@@ -1,0 +1,867 @@
+<title>Silica Visual Methods</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column of studies. Each study sets the terminal's text beside a working picture of the same data. */
+:root {
+  --bg: #f5f7f8; --surface: #ffffff; --line: #d9e0e4; --fg: #15212b; --muted: #5b6b78;
+  --accent: #0d6b82; --accent-soft: #dcedf2;
+  --mined: #b4690f; --staked: #7448b0; --warn: #b3372f; --ok: #2f7d4f;
+  --display: "Space Grotesk", "Avenir Next", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 60px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 34px; letter-spacing: -0.01em; } h2 { font-size: 24px; } h3 { font-size: 15.5px; }
+p { margin: 0; max-width: 68ch; }
+.lede { font-size: 17px; color: var(--muted); }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.note { color: var(--muted); font-size: 13.5px; }
+button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 20px 34px; }
+.grid3 div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.grid3 p { font-size: 14px; color: var(--muted); }
+.tests { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; max-width: 72ch; }
+
+.pair { display: grid; grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.5fr); gap: 16px; align-items: start; }
+.pane { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pane > .label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+pre.tui { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.5; background: #0e1418; color: #b9c6cd; border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+pre.tui b { color: #e7eef1; font-weight: 500; } pre.tui i { color: #6f828e; font-style: normal; }
+.demo { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.demo svg, .demo canvas { display: block; width: 100%; }
+.demo .scroll { overflow-x: auto; }
+.demo .scroll svg { min-width: 560px; height: auto; color: var(--fg); font-family: var(--body); }
+.readout { display: flex; flex-wrap: wrap; gap: 6px 26px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.readout b { color: var(--fg); font-weight: 600; }
+.say { font-size: 14.5px; min-height: 3.1em; }
+.say b { font-weight: 600; }
+.chip { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; border: 1.5px solid currentColor; }
+.chip.ok { color: var(--ok); } .chip.wait { color: var(--muted); border-style: dashed; } .chip.unk { color: var(--warn); border-style: dotted; }
+.sim { font-size: 11.5px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-left: auto; }
+.gain { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px 30px; font-size: 14px; }
+.gain div { min-width: 0; } .gain b { display: block; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+
+.scrub { display: flex; flex-direction: column; gap: 2px; }
+.srow { display: grid; grid-template-columns: 104px minmax(0, 1fr) 132px; gap: 12px; align-items: center; padding: 5px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.srow:first-child { border-top: 0; }
+.srow .n { font-weight: 600; } .srow .n small { display: block; font-weight: 400; color: var(--muted); font-size: 11.5px; }
+.srow .c { position: relative; height: 36px; }
+.srow .c svg { position: absolute; inset: 0; height: 100%; }
+.srow .c .cur { position: absolute; top: -5px; bottom: -5px; width: 1.5px; background: var(--fg); opacity: 0.55; }
+.srow .v { text-align: right; font-variant-numeric: tabular-nums; } .srow .v small { display: block; color: var(--muted); font-size: 11.5px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.more { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px 34px; }
+.more div { min-width: 0; } .more p { font-size: 14px; color: var(--muted); }
+@keyframes dash { to { stroke-dashoffset: -14; } }
+.flowing { stroke-dasharray: 6 8; animation: dash 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .flowing { animation: none; } }
+@media (max-width: 760px) { .pair { grid-template-columns: minmax(0, 1fr); } h1 { font-size: 28px; }
+  .srow { grid-template-columns: 78px minmax(0, 1fr) 92px; gap: 8px; } }
+</style>
+
+<main>
+  <section>
+    <span class="eyebrow">Carbide Silica · design study</span>
+    <h1>Silica Visual Methods</h1>
+    <p class="lede">A terminal can only arrange characters in a grid. A window can use position, size, connection and motion to carry meaning. These are thirteen working studies of where that difference changes what a person understands, and how fast.</p>
+    <p class="note">Every picture below runs on simulated data shaped like real Verus data. In the app the same views would be fed by the daemon through Carbide's existing code.</p>
+  </section>
+
+  <section>
+    <h2>What a window can say that a grid of text can't</h2>
+    <div class="grid3">
+      <div><h3>Position can be time</h3><p>Put events where they happened on a time axis and rhythm, gaps and bursts become visible without reading a single timestamp.</p></div>
+      <div><h3>Size can be amount</h3><p>Draw a value as a width and the eye compares it before the mind reads the digits. A fee that is a hair beside a payment needs no explanation.</p></div>
+      <div><h3>A line can be a relationship</h3><p>"A funds B", "X can revoke Y", "this export became that import". Text states these one per row. A line shows them all at once.</p></div>
+      <div><h3>Motion can be change</h3><p>A mark that appears, moves or fills is noticed without being looked for. Refreshing a table makes you find the difference yourself.</p></div>
+      <div><h3>The hand can ask the question</h3><p>Dragging a date, hovering a mark, brushing a range: the question and the answer happen in the same place, with no command to remember.</p></div>
+      <div><h3>Overview and detail can coexist</h3><p>A terminal shows one or the other. A window keeps the whole picture in view while one part of it is opened up.</p></div>
+    </div>
+    <h3 style="margin-top:6px">Three tests that keep this from being a skin</h3>
+    <ol class="tests">
+      <li><b>It answers a question the terminal needs several screens for.</b> If the picture only restyles one table, it stays a table.</li>
+      <li><b>Every mark is the real object.</b> Clicking a block mark, a flow band or a node opens exactly what Carbide would open, with the same data and the same caveats.</li>
+      <li><b>Nothing is rounded away.</b> Exact figures, raw JSON and Carbide's uncertainty labels are one step from every picture, and each picture has a table form for people who prefer it.</li>
+    </ol>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 1 · live</span>
+    <h2>Is the chain healthy right now?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>tip 4336712/4336712 | last 48s | rpc on | peers 57</b>
+<i>Recent Blocks</i>
+4336712  17:01:50  staked  3 tx  cc1dbaa4…
+4336711  17:00:41  mined   1 tx  00000000…
+4336710  16:59:58  mined   2 tx  00000000…
+4336709  16:55:12  staked  2 tx  9e6a2978…
+4336708  16:54:20  mined   1 tx  00000000…
+<i>F9 charts · m mempool · ` peers</i></pre>
+        <p class="note">Four separate screens hold the answer: the block list, the mempool, the interval chart and the proof-of-work ratio chart.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="bar"><button id="pulsePlay" type="button" aria-pressed="true">Running</button><span class="sim">Simulated · 10× speed</span></div>
+          <canvas id="pulse" height="220" aria-label="A scrolling timeline of blocks. Each block is placed at the moment it arrived, so the spacing between marks is the time between blocks."></canvas>
+          <div class="readout" id="pulseOut"></div>
+          <div class="say" id="pulseHover">Point at a block to see it. Squares are mined, circles are staked, and the bar above each one is its transaction count.</div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>The rhythm of the chain. A slow block is a visible gap, marked in red past three minutes. The mix of mined and staked blocks is a pattern, not a percentage. Waiting transactions pile up on the right and clear when a block lands.</div>
+      <div><b>Depth kept</b>Each mark is its block. The interval, difficulty and ratio charts become overlays on this same axis instead of separate screens.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 2 · flow</span>
+    <h2>Where did the money in this transaction go?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui" id="flowTui"></pre>
+        <p class="note">The reader has to notice that one output returns to the sender, and subtract to find what was really paid.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="bar" id="flowTabs"></div>
+          <div class="say" id="flowSay"></div>
+          <div class="scroll"><svg id="flow" viewBox="0 0 660 250" role="img" aria-label="Money flowing from a transaction's inputs on the left to its outputs on the right, with band widths proportional to amounts."></svg></div>
+          <div class="note" id="flowHover">Point at any band for its exact amount.</div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>What was actually paid, against what merely came back as change. The fee as a sliver. A hidden amount drawn as hidden. Width is the amount, so nothing needs adding up.</div>
+      <div><b>Depth kept</b>Inputs join into one trunk before splitting, because a transaction doesn't record which input paid which output. The picture refuses to imply it does.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 3 · trace</span>
+    <h2>Did my cross-chain transfer arrive?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>F8 DeFi trail</b>
+  Source observed       tx 0010037f…
+  Exported              batch 6 of 7  #4226310
+  <b>Imported; receipt unresolved</b>
+<i>g jump to destination height
+[ ] search adjacent 1,000-block windows
+s scan up to 32 older windows</i>
+A missing import in searched windows is
+not proof that none exists.</pre>
+        <p class="note">The person drives the search across the other chain by hand, one window at a time.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="bar"><button type="button" data-route="0" aria-pressed="true">Arrives</button><button type="button" data-route="1" aria-pressed="false">Still unresolved</button><button type="button" id="routeReplay">Replay</button><span class="sim">Simulated</span></div>
+          <div class="scroll"><svg id="route" viewBox="0 0 680 230" role="img" aria-label="A transfer moving from the VRSC chain to the vDEX chain in four stages: sent, exported, imported, received."></svg></div>
+          <div class="say" id="routeSay"></div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>Two chains as two lanes, and the transfer as one path crossing between them. Where it is now. Which stages are proven. One verdict.</div>
+      <div><b>Depth kept</b>The search runs itself and shows how much it has covered. When nothing is found the app says what was searched and that absence isn't proof, in Carbide's own terms, and offers to search further.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 4 · structure</span>
+    <h2>Who controls this identity?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>alice@</b>  active
+Primary addresses
+  RGghmnzbELdqdbcb15XdKY6S7ZJWCHBkfK
+  RRL7cuK6x6WQrkQTvDTGEQ9BMGVj6bPebg
+  RQ1w53YNr6fWZYmv67jPmQ44zs9b7LPqQ2
+Minimum signatures  2
+Revocation  iPr3MCNHyjQwDHcBzBwsFGcQMe…
+Recovery    i5v3h9FWVdRFbNHU7DfcpGykQj…</pre>
+        <p class="note">Correct and complete, but what these fields mean for the owner's safety has to be known already.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="bar" id="idTabs"></div>
+          <div class="scroll"><svg id="ident" viewBox="0 0 680 250" role="img" aria-label="An identity in the centre with its three signing keys on the left and its revocation and recovery identities on the right."></svg></div>
+          <div class="say" id="idSay"></div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>Three separate powers: spending, revoking and recovering, and who holds each. The scenarios show what those powers are for, which is the part a field list can't teach.</div>
+      <div><b>Depth kept</b>Each node is the real key or identity and opens it. A tokenized-control identity would show its token holder in the same picture.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 5 · time</span>
+    <h2>What did this currency look like back then?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>Bridge.vETH</b>  Launched
+<i>g seek › 2026-09-06</i>
+State at #4226272 (nearest of 129 checked)
+  supply      11,412.08
+  VRSC        52,981.40   18.5701
+  DAI.vETH    33,870.11   11.8718
+  MKR.vETH        22.74    0.0079
+  vETH            17.61    0.0061
+<i>a activity at height · w previous 1,000</i></pre>
+        <p class="note">One moment at a time. Comparing two dates means remembering the first set of numbers.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="bar"><b id="scrubDate" style="font-family:var(--display);font-size:16px"></b><span class="sim">Simulated · 180 days</span></div>
+          <input type="range" id="scrub" min="0" max="179" value="120" aria-label="Date">
+          <div class="scrub" id="scrubRows"></div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>The whole history of every reserve, with one cursor through all of them. Drag it and every figure moves together. Activity is a row of bars, so the busy days are obvious before any window is opened.</div>
+      <div><b>Depth kept</b>The cursor lands on a real block, and the figures shown are that block's recorded state. "Nearest block checked" still appears when a date falls between observations.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 6 · live</span>
+    <h2>What is my node doing right now?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui">$ verus getinfo
+  <b>"blocks": 1284190,</b>
+  <b>"longestchain": 4336719,</b>
+  "connections": 3,
+  "tiptime": 1602288000,
+<i>$ tail -f debug.log</i>
+UpdateTip: new best=0000…  height=1284191
+UpdateTip: new best=0000…  height=1284192</pre>
+        <p class="note">Two numbers to subtract, and a log that scrolls too fast to read. No sense of how long is left.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="bar"><button id="syncPlay" type="button" aria-pressed="true">Running</button><span class="sim">Simulated · sped up</span></div>
+          <div class="scroll"><svg id="sync" viewBox="0 0 680 230" role="img" aria-label="A bar spanning the chain's history from 2018 to 2026 that fills as blocks are validated, with a live trace of validation speed below it."></svg></div>
+          <div class="readout" id="syncOut"></div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>The chain's whole history as one bar, filling. Which year the node is working through. Why it slows down: the darker stretches are busier eras with more to verify per block. Speed as a moving trace, peers as a row of lights, and a time remaining that accounts for the slow parts ahead.</div>
+      <div><b>Depth kept</b>Fed by the same getinfo and peer calls. Height, longest chain and each peer stay one click away. The app keeps exploring already-validated history while the rest syncs.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 7 · structure</span>
+    <h2>Are these two chains agreeing with each other?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>Notarizations  VRSC view of vDEX</b>
+  VRSC #4336650  vDEX #512901  confirmed
+  VRSC #4336590  vDEX #512841  confirmed
+  VRSC #4336530  vDEX #512781  confirmed
+  <b>VRSC #4336470  vDEX #512722  off-chain</b>
+  VRSC #4336410  vDEX #512661  confirmed
+<i>Tab other perspective · [ ] proof root</i></pre>
+        <p class="note">A fork shows up as one word in one row. A stall shows up as nothing at all: rows simply stop being added.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="bar" id="laneTabs"></div>
+          <div class="scroll"><svg id="lanes" viewBox="0 0 680 220" role="img" aria-label="Two chains drawn as parallel lanes with notarizations as ties between them."></svg></div>
+          <div class="say" id="laneSay"></div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>A healthy bridge is a regular ladder. A stall is a missing stretch of rungs. A suspected fork is a rung that lands off the lane. All three are shapes, recognisable before any label is read.</div>
+      <div><b>Depth kept</b>Each rung is a notarization transaction and opens it, with its signers. Solid means confirmed, dashed means pending, and a grey lane means that chain's source isn't connected, so its side is unchecked.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 8 · structure</span>
+    <h2>Was this transaction ever on a different branch?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>F7 Inclusion history  tx 986c1d20…</b>
+  #4226273  0000…bc11  local  <b>orphaned</b>
+  #4226274  0000…7f7a  local  active
+<i>Child branches of #4226272</i>
+  0000…bc11  cached  last observed orphaned
+  0000…a3d0  cached  last observed active
+<i>[ ] pages · r reload · Enter open</i></pre>
+        <p class="note">The reader reconstructs the tree in their head from two flat lists.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="scroll"><svg id="branch" viewBox="0 0 680 230" role="img" aria-label="A chain of blocks that splits into two branches at one height. One branch continues as the active chain and the other is orphaned."></svg></div>
+          <div class="say" id="branchSay">Point at a block. The transaction is marked where it appears on each branch.</div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>The split itself. Which path survived. That the transaction was in an orphaned block first and was then included again one block later on the surviving path.</div>
+      <div><b>Depth kept</b>Drawn only from what Carbide has stored. Blocks no source has re-checked are outlined, not filled, and the view says plainly that an empty picture doesn't prove nothing happened.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 9 · live</span>
+    <h2>What is waiting to be confirmed?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>Mempool  14 tx  21.4 kB  last block 41s</b>
+  a41f…  12s  0.0001  226 B   —
+  9c02…  12s  0.0002  3.1 kB  Conversion
+  77be…   9s  0.0001  1.4 kB  Identity Update
+  e390…   7s  0.0001  498 B   <b>1 parent</b>
+  05da…   3s  0.0001  226 B   —
+<i>refreshes every 2s</i></pre>
+        <p class="note">A list reshuffled every two seconds. Hard to see what is large, what is old and what depends on what.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="bar"><button id="poolPlay" type="button" aria-pressed="true">Running</button><span class="sim">Simulated</span></div>
+          <div class="scroll"><svg id="pool" viewBox="0 0 680 230" role="img" aria-label="Waiting transactions drawn as tiles sized by their size in bytes."></svg></div>
+          <div class="say" id="poolSay">Point at a tile. Each one is a waiting transaction, sized by its bytes and darker the longer it has waited.</div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>How full the next block will be. Which transactions are large. Which have waited longest. Which can't confirm yet because they depend on another waiting transaction, shown with a dashed edge.</div>
+      <div><b>Depth kept</b>Each tile is the transaction, with Carbide's tags. The sortable list is the other form of the same view.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 10 · live</span>
+    <h2>Who is my node talking to?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>Peers 9  banned 0</b>
+  203.0.113.18:27485   38 ms  4336719
+  198.51.100.7:27485   71 ms  4336719
+  203.0.113.201:27485 212 ms  4336719
+  <b>198.51.100.44:27485 388 ms  4336702</b>
+  192.0.2.90:27485     96 ms  4336719
+<i>w world map · p ping all · x disconnect</i></pre>
+        <p class="note">Carbide's map shows where peers are. It doesn't show how good each connection is.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="scroll"><svg id="peers" viewBox="0 0 680 300" role="img" aria-label="The node in the centre with peers placed around it. Distance from the centre is each peer's response time."></svg></div>
+          <div class="say" id="peerSay">Point at a peer. Closer to the centre means a faster connection.</div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>Distance is response time, direction is region. A slow peer sits at the edge. A peer that has fallen behind the chain is red. A node relying on one region, or on a few slow links, is obvious from the shape.</div>
+      <div><b>Depth kept</b>Every peer opens its full detail and log. Ping, disconnect and ban sit on the peer itself, each behind a confirmation, as in Carbide.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 11 · time</span>
+    <h2>Where did this identity come from?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>Registration and associations</b>
+  Registered   #3018442  tx 0010037f…
+  Commitment   #3018440  tx 77c1a09e…
+  Referral     carol@ → dave@ (2 hops)
+  <b>Funding candidate</b>  RGghmnzb…  Registration
+  Updated      #3790115, #4183352
+<i>p n previous / next update</i></pre>
+        <p class="note">The facts are all there, in the order the code found them, not the order they happened.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="scroll"><svg id="origin" viewBox="0 0 680 250" role="img" aria-label="A timeline of an identity from its name commitment to today, with who referred it above the line and who probably paid for it below."></svg></div>
+          <div class="say" id="originSay">Point at any event or link.</div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>The identity's life in order. Who referred it, and who referred them. What changed at each update. The one link that is a guess is drawn dashed, so it can't be mistaken for a fact.</div>
+      <div><b>Depth kept</b>Each event opens its transaction, and each update can be viewed as the identity stood at that moment. Carbide's limits (four referral hops, bounded searches) are stated where the line ends.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 12 · structure</span>
+    <h2>What is for sale, and what is about to lapse?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>Open offers 1-24 of 24   sort: expiry ↑</b>
+  silver@      ask 420 VRSC     38 blocks
+  nova.vETH@   ask 95 VRSC     112 blocks
+  quartz@      wants 12 VRSC   240 blocks
+  atlas@       ask 6,500 VRSC  410 blocks
+<i>s sort field · r reverse · a association</i></pre>
+        <p class="note">One sort order at a time. Price and time left can't be weighed against each other.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="bar" id="mktTabs"></div>
+          <div class="scroll"><svg id="market" viewBox="0 0 680 270" role="img" aria-label="Marketplace offers plotted by time left before expiry and by price."></svg></div>
+          <div class="say" id="mktSay">Point at an offer. Left is closer to expiring. Higher is more expensive.</div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>Both things that matter, on two axes. Offers about to lapse sit in the shaded band on the left. An offer priced far from the rest stands apart. Sales and wanted-offers have different shapes.</div>
+      <div><b>Depth kept</b>Each mark opens the offer with its funding transaction. The price axis is logarithmic and says so, since identity prices span four orders of magnitude.</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Study 13 · flow</span>
+    <h2>What is trading inside this pool?</h2>
+    <div class="pair">
+      <div class="pane"><span class="label">In the terminal</span>
+<pre class="tui"><b>Bridge.vETH</b>  activity #4335700–#4336700
+  import  VRSC → DAI.vETH      1,204.5
+  import  DAI.vETH → VRSC        310.0
+  import  vETH → VRSC             2.41
+  import  VRSC → MKR.vETH         88.0
+  <b>… 61 more</b>
+<i>w previous 1,000 · [ ] adjacent windows</i></pre>
+        <p class="note">Sixty-five rows to add up before the overall direction is clear.</p></div>
+      <div class="pane"><span class="label">In Silica</span>
+        <div class="demo">
+          <div class="bar" id="pathTabs"></div>
+          <div class="scroll"><svg id="paths" viewBox="0 0 680 270" role="img" aria-label="The four reserve currencies of a pool with lines between them. Line thickness is trading volume and the moving dashes show the net direction."></svg></div>
+          <div class="say" id="pathSay"></div>
+        </div></div>
+    </div>
+    <div class="gain">
+      <div><b>Seen at once</b>Which pairs are trading and which are quiet, as thick and thin lines. Net direction as movement. A reserve being drained or filled is the one every line flows away from or toward.</div>
+      <div><b>Depth kept</b>Each line is the sum of real imports in the period and opens that list. Volumes both ways are shown on hover, since net flow alone hides two-way trading.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What carries over from Carbide unchanged</h2>
+    <ol class="tests">
+      <li><b>The engine.</b> Every picture is a different rendering of data Carbide's code already fetches and verifies. No analysis is reimplemented.</li>
+      <li><b>The honesty.</b> Verified, observed, candidate and unknown keep distinct marks in every view: solid, half, dashed and dotted.</li>
+      <li><b>The keyboard.</b> Search, back, next and previous, and the investigation shortcuts keep working for people who know them.</li>
+      <li><b>The text.</b> Each view has a table form and a JSON tab. Pictures are the default, never the only way in.</li>
+    </ol>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function rng(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const fmt = (n, d = 4) => n.toLocaleString("en-US", { maximumFractionDigits: d });
+const dur = s => s < 60 ? Math.round(s) + "s" : Math.floor(s / 60) + "m " + String(Math.round(s % 60)).padStart(2, "0") + "s";
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- Study 1: chain pulse ---------- */
+(function () {
+  const cv = $("pulse"), ctx = cv.getContext("2d"), r = rng(11);
+  const SPAN = 1500, SPEED = 10, MEAN = 62, SLOW = 180;
+  const ex = m => -Math.log(1 - r()) * m;
+  let now = 0, pool = 2, height = 4336680, blocks = [], running = !reduce, hover = null, last = performance.now();
+  const mk = (t, tx) => ({ t, tx, staked: r() < 0.5, h: ++height });
+  for (let t = -SPAN - 200; ;) { t += ex(MEAN); if (t >= 0) break; blocks.push(mk(t, 1 + Math.floor(ex(2.4)))); }
+  let nextAt = blocks[blocks.length - 1].t + Math.max(ex(MEAN), 8 - blocks[blocks.length - 1].t);
+  function step(dt) {
+    now += dt;
+    if (r() < dt * 0.06) pool += r() < 0.08 ? 6 : 1;
+    while (now >= nextAt) { blocks.push(mk(nextAt, 1 + Math.min(pool, 40))); pool = 0; nextAt += ex(MEAN); }
+    while (blocks.length > 3 && blocks[1].t < now - SPAN - 300) blocks.shift();
+  }
+  function draw() {
+    const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 220;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const fg = css("--fg"), mu = css("--muted"), ln = css("--line"), mined = css("--mined"), staked = css("--staked"), warn = css("--warn"), acc = css("--accent");
+    const xr = W - 74, base = H - 52, x = t => xr - (now - t) / SPAN * (xr - 8);
+    ctx.font = "11px Inter, system-ui, sans-serif"; ctx.textBaseline = "middle";
+    for (let m = 5; m * 60 < SPAN; m += 5) {
+      const gx = x(now - m * 60); if (gx < 30) break;
+      ctx.strokeStyle = ln; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(gx, 14); ctx.lineTo(gx, base + 24); ctx.stroke();
+      ctx.fillStyle = mu; ctx.textAlign = "center"; ctx.fillText(m + " min ago", gx, base + 36);
+    }
+    ctx.textAlign = "center";
+    for (let i = 1; i < blocks.length; i++) {
+      const a = blocks[i - 1], b = blocks[i], gap = b.t - a.t, slow = gap > SLOW;
+      ctx.strokeStyle = slow ? warn : mu; ctx.lineWidth = slow ? 3 : 1; ctx.globalAlpha = slow ? 1 : 0.45;
+      ctx.beginPath(); ctx.moveTo(Math.max(x(a.t), 0), base); ctx.lineTo(x(b.t), base); ctx.stroke(); ctx.globalAlpha = 1;
+      if (slow && x(b.t) - x(a.t) > 44) { ctx.fillStyle = warn; ctx.fillText(dur(gap), (x(a.t) + x(b.t)) / 2, base - 12); }
+    }
+    const lastB = blocks[blocks.length - 1], wait = now - lastB.t;
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = wait > SLOW ? warn : mu; ctx.lineWidth = wait > SLOW ? 2.5 : 1;
+    ctx.beginPath(); ctx.moveTo(x(lastB.t), base); ctx.lineTo(xr, base); ctx.stroke(); ctx.setLineDash([]);
+    for (const b of blocks) {
+      const bx = x(b.t); if (bx < -8) continue;
+      const col = b.staked ? staked : mined, age = now - b.t, pop = age < 25 ? 1 + (1 - age / 25) * 0.9 : 1, sel = hover === b;
+      ctx.fillStyle = col; ctx.globalAlpha = sel ? 1 : 0.85;
+      const bh = 5 + Math.min(b.tx, 30) * 3.4; ctx.fillRect(bx - 2.5, base - 8 - bh, 5, bh);
+      ctx.globalAlpha = 1; const s = 5 * pop + (sel ? 2 : 0);
+      ctx.beginPath(); if (b.staked) ctx.arc(bx, base, s, 0, Math.PI * 2); else ctx.rect(bx - s, base - s, s * 2, s * 2); ctx.fill();
+      if (sel) { ctx.strokeStyle = fg; ctx.lineWidth = 1.5; ctx.stroke(); }
+    }
+    ctx.strokeStyle = fg; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(xr, 10); ctx.lineTo(xr, base + 24); ctx.stroke();
+    ctx.fillStyle = fg; ctx.textAlign = "right"; ctx.fillText("now", xr - 5, 16);
+    ctx.fillStyle = wait > SLOW ? warn : mu; ctx.fillText("waiting " + dur(wait), xr - 5, base + 14);
+    const px = W - 40; ctx.fillStyle = acc;
+    for (let i = 0; i < Math.min(pool, 26); i++) { ctx.beginPath(); ctx.arc(px + (i % 2 ? 6 : -6), base - 4 - Math.floor(i / 2) * 11, 4, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = mu; ctx.textAlign = "center"; ctx.fillText(pool + " waiting", px, base + 14); ctx.fillText("mempool", px, base + 28);
+  }
+  function out() {
+    const vis = blocks.filter(b => b.t > now - SPAN); let slow = 0, sum = 0;
+    for (let i = 1; i < vis.length; i++) { const g = vis[i].t - vis[i - 1].t; sum += g; if (g > SLOW) slow++; }
+    const st = vis.filter(b => b.staked).length;
+    $("pulseOut").innerHTML = "<span>Height <b>" + blocks[blocks.length - 1].h.toLocaleString("en-US") + "</b></span><span>Average interval <b>" +
+      dur(sum / Math.max(vis.length - 1, 1)) + "</b></span><span>Staked <b>" + Math.round(st / vis.length * 100) + "%</b> of last " + vis.length +
+      "</span><span>Slow gaps <b>" + slow + "</b></span>";
+  }
+  function frame(t) { const dt = Math.min((t - last) / 1000, 0.1); last = t; if (running) step(dt * SPEED); draw(); requestAnimationFrame(frame); }
+  setInterval(out, 400); out(); requestAnimationFrame(frame);
+  const btn = $("pulsePlay"); const label = () => { btn.textContent = running ? "Running" : "Paused"; btn.setAttribute("aria-pressed", running); };
+  btn.onclick = () => { running = !running; label(); }; label();
+  cv.addEventListener("mousemove", e => {
+    const b = cv.getBoundingClientRect(), mx = e.clientX - b.left, xr = b.width - 74; let best = null, bd = 9;
+    blocks.forEach((k, i) => { const d = Math.abs(xr - (now - k.t) / SPAN * (xr - 8) - mx); if (d < bd) { bd = d; best = i; } });
+    hover = best === null ? null : blocks[best];
+    if (hover) $("pulseHover").innerHTML = "<b>Block " + hover.h.toLocaleString("en-US") + "</b> · " + (hover.staked ? "staked" : "mined") + " · " +
+      hover.tx + (hover.tx === 1 ? " transaction" : " transactions") + (best > 0 ? " · arrived " + dur(hover.t - blocks[best - 1].t) + " after the one before" : "");
+  });
+  cv.addEventListener("mouseleave", () => { hover = null; });
+})();
+
+/* ---------- Study 2: transaction flow ---------- */
+(function () {
+  const TX = [
+    { name: "A payment", say: "<b>Paid 100 VRSC to bob@.</b> 50.4999 VRSC came back as change, and the fee was 0.0001 VRSC.",
+      ins: [["alice@", 120.5], ["alice@", 30]], outs: [["bob@", 100, "pay", "payment"], ["alice@", 50.4999, "change", "change, back to sender"], ["Fee", 0.0001, "fee", "to the block producer"]] },
+    { name: "A conversion", say: "<b>Sent 100 VRSC to be converted to DAI through Bridge.vETH.</b> The rest came back as change.",
+      ins: [["alice@", 250]], outs: [["Bridge.vETH", 100, "proto", "reserve transfer, to convert to DAI.vETH"], ["alice@", 149.9998, "change", "change, back to sender"], ["Fee", 0.0002, "fee", "to the block producer"]] },
+    { name: "Into a private address", say: "<b>Moved funds into a private address.</b> The amount is hidden by design. The public side shows 10 VRSC going in.",
+      ins: [["RXPzH3i4…ErEGz", 10]], outs: [["Private address", 9.9999, "hidden", "amount hidden; width derived from the public balance"], ["Fee", 0.0001, "fee", "to the block producer"]] }
+  ];
+  const svg = $("flow"), H = 250, top = 16, usable = 210, gap = 10;
+  let cur = 0;
+  const band = (x0, a0, b0, x1, a1, b1) => { const m = (x0 + x1) / 2; return "M" + x0 + " " + a0 + "C" + m + " " + a0 + "," + m + " " + a1 + "," + x1 + " " + a1 + "L" + x1 + " " + b1 + "C" + m + " " + b1 + "," + m + " " + b0 + "," + x0 + " " + b0 + "Z"; };
+  function stack(items, total, gaps) {
+    const sc = (usable - gap * (items.length - 1) * gaps) / total; let y = top; const hs = items.map(i => Math.max(i[1] * sc, 2.5));
+    const tot = hs.reduce((a, b) => a + b, 0) + gap * (items.length - 1) * gaps; y = top + (usable - tot) / 2;
+    return hs.map(h => { const o = [y, y + h]; y += h + gap * gaps; return o; });
+  }
+  function render() {
+    const t = TX[cur], total = t.ins.reduce((a, i) => a + i[1], 0);
+    const L = stack(t.ins, total, 1), R = stack(t.outs, total, 1), TL = stack(t.ins, total * 1.25, 0), TR = stack(t.outs, total * 1.25, 0);
+    const fill = { pay: "var(--accent)", change: "var(--muted)", fee: "var(--warn)", proto: "var(--staked)", hidden: "url(#hatch)" }, op = { pay: 0.5, change: 0.22, fee: 0.85, proto: 0.5, hidden: 1 };
+    let s = '<defs><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" style="stroke:var(--muted)" stroke-width="3"/></pattern></defs>';
+    t.ins.forEach((i, k) => {
+      s += '<path d="' + band(172, L[k][0], L[k][1], 318, TL[k][0], TL[k][1]) + '" style="fill:var(--accent)" opacity="0.28" data-h="' + i[0] + " put in " + fmt(i[1]) + ' VRSC"/>';
+      s += '<rect x="160" y="' + L[k][0] + '" width="12" height="' + (L[k][1] - L[k][0]) + '" style="fill:var(--accent)"/>';
+      const my = (L[k][0] + L[k][1]) / 2;
+      s += '<text x="152" y="' + (my - 3) + '" text-anchor="end" font-size="13" font-weight="600" fill="currentColor">' + i[0] + '</text><text x="152" y="' + (my + 12) + '" text-anchor="end" font-size="11.5" style="fill:var(--muted)">' + fmt(i[1]) + " VRSC</text>";
+    });
+    s += '<rect x="318" y="' + TL[0][0] + '" width="24" height="' + (TL[TL.length - 1][1] - TL[0][0]) + '" rx="3" fill="currentColor" opacity="0.85"/>';
+    s += '<text x="330" y="' + (TL[0][0] - 6) + '" text-anchor="middle" font-size="11" style="fill:var(--muted)">transaction</text>';
+    t.outs.forEach((o, k) => {
+      s += '<path d="' + band(342, TR[k][0], TR[k][1], 488, R[k][0], R[k][1]) + '" style="fill:' + fill[o[2]] + '" opacity="' + op[o[2]] + '" data-h="' + o[0] + ": " + (o[2] === "hidden" ? "amount hidden" : fmt(o[1]) + " VRSC") + " (" + o[3] + ')"/>';
+      s += '<rect x="488" y="' + R[k][0] + '" width="12" height="' + (R[k][1] - R[k][0]) + '" style="fill:' + (o[2] === "hidden" ? "var(--muted)" : fill[o[2]]) + '"/>';
+      const my = (R[k][0] + R[k][1]) / 2;
+      s += '<text x="508" y="' + (my - 3) + '" font-size="13" font-weight="600" fill="currentColor">' + o[0] + '</text><text x="508" y="' + (my + 12) + '" font-size="11.5" style="fill:var(--muted)">' + (o[2] === "hidden" ? "hidden" : fmt(o[1]) + " VRSC") + (o[2] === "change" ? " · change" : "") + "</text>";
+    });
+    svg.innerHTML = s; $("flowSay").innerHTML = t.say;
+    $("flowTui").innerHTML = "<b>Inputs " + t.ins.length + "  total " + fmt(total) + "</b>\n" + t.ins.map((i, k) => "  " + k + "  " + i[0].padEnd(16) + fmt(i[1]).padStart(10)).join("\n") +
+      "\n<b>Outputs " + t.outs.filter(o => o[2] !== "fee").length + "</b>\n" + t.outs.filter(o => o[2] !== "fee").map((o, k) => "  " + k + "  " + o[0].padEnd(16) + (o[2] === "hidden" ? "hidden" : fmt(o[1])).padStart(10) + (o[2] === "proto" ? "\n     <i>Reserve Transfer · Conversion</i>" : "")).join("\n") +
+      "\n<i>Fee " + fmt(t.outs.find(o => o[2] === "fee")[1]) + (cur === 2 ? " (partly derived)" : "") + "</i>";
+    $("flowTabs").innerHTML = TX.map((x, k) => '<button type="button" data-k="' + k + '" aria-pressed="' + (k === cur) + '">' + x.name + "</button>").join("") + '<span class="sim">Simulated</span>';
+  }
+  $("flowTabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { cur = +b.dataset.k; render(); } });
+  svg.addEventListener("mouseover", e => { const h = e.target.getAttribute && e.target.getAttribute("data-h"); if (h) $("flowHover").textContent = h; });
+  render();
+})();
+
+/* ---------- Study 3: cross-chain route ---------- */
+(function () {
+  const svg = $("route"), N = [[110, 62, "Sent"], [290, 62, "Exported"], [440, 172, "Imported"], [610, 172, "Received"]];
+  const SAY = [
+    ["<b>Sent.</b> alice@ sent 100 VRSC to be converted and delivered on vDEX.", ["Sent · VRSC block 4,226,305"]],
+    ["<b>Exported.</b> Bundled with 6 other transfers and committed for vDEX at VRSC block 4,226,310.", []],
+    ["<b>Looking for the import on vDEX…</b> searching blocks around the expected height, 1,000 at a time.", []],
+    ["<b>Imported.</b> Found at vDEX block 512,884. Converted at 0.412 vDEX per VRSC.", []],
+    ["<b>Received.</b> bob@ got 41.1588 vDEX. The conversion fee was 0.0412 vDEX. <span class='chip ok'>Verified by replay</span>", []]
+  ];
+  let stage = 0, scen = 0, timer = null;
+  function render() {
+    const stuck = scen === 1 && stage >= 2, reached = k => stuck ? k < 2 : (stage >= 4 ? true : k <= [0, 1, 1, 2, 3][stage]);
+    const at = stuck ? 1 : [0, 1, 1, 2, 3][stage], searching = stage === 2 || stuck;
+    let s = '<g font-size="12" style="fill:var(--muted)"><text x="14" y="34">VRSC chain</text><text x="14" y="204">vDEX chain</text></g>';
+    s += '<g style="stroke:var(--line)" stroke-width="10" stroke-linecap="round"><line x1="14" y1="62" x2="666" y2="62"/><line x1="14" y1="172" x2="666" y2="172"/></g>';
+    const edge = (a, b, on, dash) => '<line x1="' + N[a][0] + '" y1="' + N[a][1] + '" x2="' + N[b][0] + '" y2="' + N[b][1] + '" style="stroke:' + (on ? "var(--accent)" : "var(--muted)") + '" stroke-width="' + (on ? 3 : 1.5) + '"' + (dash ? ' stroke-dasharray="5 5"' : "") + "/>";
+    s += edge(0, 1, reached(1)) + edge(1, 2, reached(2), !reached(2)) + edge(2, 3, reached(3), !reached(3));
+    if (searching) for (let k = 0; k < 6; k++) { const lit = stuck || k < 3; s += '<rect x="' + (300 + k * 24) + '" y="164" width="18" height="16" rx="3" style="fill:' + (lit ? "var(--accent-soft)" : "none") + ";stroke:" + (lit ? "var(--accent)" : "var(--muted)") + '" stroke-width="1.2"' + (stuck ? ' stroke-dasharray="2 2"' : "") + "/>"; }
+    N.forEach((n, k) => {
+      const on = reached(k), here = k === at && !(stage >= 4 && scen === 0);
+      s += '<circle cx="' + n[0] + '" cy="' + n[1] + '" r="' + (here ? 16 : 13) + '" style="fill:' + (on ? "var(--accent)" : "var(--surface)") + ";stroke:" + (on ? "var(--accent)" : "var(--muted)") + '" stroke-width="2"' + (on ? "" : ' stroke-dasharray="4 3"') + "/>";
+      if (on) s += '<path d="M' + (n[0] - 5) + " " + n[1] + "l4 4l7 -8" + '" fill="none" style="stroke:var(--bg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>';
+      s += '<text x="' + n[0] + '" y="' + (n[1] + (k < 2 ? -24 : 34)) + '" text-anchor="middle" font-size="13" font-weight="600" fill="currentColor">' + n[2] + "</text>";
+    });
+    s += '<text x="372" y="112" font-size="11.5" style="fill:var(--muted)">crosses chains</text>';
+    svg.innerHTML = s;
+    $("routeSay").innerHTML = stuck
+      ? "<b>Exported, not yet found on vDEX.</b> 6,000 blocks searched. That doesn't mean it never arrived. <span class='chip unk'>Unresolved</span> <button type='button'>Search further</button>"
+      : SAY[stage][0] + (stage < 4 ? " <span class='chip wait'>In progress</span>" : "");
+  }
+  function play() { clearInterval(timer); stage = 0; render(); if (reduce) { stage = 4; render(); return; } timer = setInterval(() => { stage++; render(); if (stage >= 4 || (scen === 1 && stage >= 3)) clearInterval(timer); }, 1700); }
+  document.querySelectorAll("[data-route]").forEach(b => b.onclick = () => { scen = +b.dataset.route; document.querySelectorAll("[data-route]").forEach(x => x.setAttribute("aria-pressed", x === b)); play(); });
+  $("routeReplay").onclick = play; play();
+})();
+
+/* ---------- Study 4: identity control ---------- */
+(function () {
+  const S = [
+    { name: "Everyday use", say: "<b>Any two of the three keys sign together.</b> That is all it takes to spend or update alice@.", keys: [1, 1, 0], state: "Active" },
+    { name: "Keys are stolen", say: "<b>guardian@ revokes alice@.</b> The stolen keys can no longer spend or sign. Nothing is lost; it is frozen.", keys: [2, 2, 2], rev: 1, state: "Revoked · frozen" },
+    { name: "Then recovered", say: "<b>vault@ assigns three new keys.</b> alice@ keeps its name, its funds and its history. The old keys are worthless.", keys: [3, 3, 3], rec: 1, state: "Active again" }
+  ];
+  const svg = $("ident"); let cur = 0;
+  function render() {
+    const c = S[cur], ky = [50, 125, 200], col = ["var(--muted)", "var(--accent)", "var(--warn)", "var(--ok)"], lab = ["Key", "Key", "Stolen", "New key"];
+    let s = "";
+    ky.forEach((y, k) => { const v = c.keys[k];
+      s += '<line x1="150" y1="' + y + '" x2="268" y2="125" style="stroke:' + col[v] + '" stroke-width="' + (v ? 2.6 : 1.2) + '"' + (v === 2 ? ' stroke-dasharray="4 4"' : "") + "/>";
+      s += '<rect x="24" y="' + (y - 18) + '" width="126" height="36" rx="18" style="fill:var(--surface);stroke:' + col[v] + '" stroke-width="' + (v ? 2.2 : 1.4) + '"/>';
+      s += '<text x="87" y="' + (y + 4.5) + '" text-anchor="middle" font-size="12.5" font-weight="600" style="fill:' + (v ? col[v] : "currentColor") + '">' + lab[v] + " " + (k + 1) + "</text>"; });
+    s += '<text x="87" y="238" text-anchor="middle" font-size="11.5" style="fill:var(--muted)">any 2 of 3 can sign</text>';
+    const side = (y, name, role, on, colr) => '<line x1="412" y1="125" x2="520" y2="' + y + '" style="stroke:' + (on ? colr : "var(--muted)") + '" stroke-width="' + (on ? 2.8 : 1.2) + '"/>' +
+      '<rect x="520" y="' + (y - 24) + '" width="140" height="48" rx="8" style="fill:var(--surface);stroke:' + (on ? colr : "var(--muted)") + '" stroke-width="' + (on ? 2.4 : 1.4) + '"/>' +
+      '<text x="590" y="' + (y - 2) + '" text-anchor="middle" font-size="13.5" font-weight="600" fill="currentColor">' + name + '</text><text x="590" y="' + (y + 14) + '" text-anchor="middle" font-size="11.5" style="fill:var(--muted)">' + role + "</text>";
+    s += side(56, "guardian@", "can revoke", c.rev, "var(--warn)") + side(194, "vault@", "can recover", c.rec, "var(--ok)");
+    const sc = c.rev ? "var(--warn)" : c.rec ? "var(--ok)" : "var(--accent)";
+    s += '<rect x="268" y="89" width="144" height="72" rx="10" style="fill:var(--accent-soft);stroke:' + sc + '" stroke-width="2.4"/>';
+    s += '<text x="340" y="121" text-anchor="middle" font-size="17" font-weight="600" font-family="Space Grotesk, system-ui, sans-serif" fill="currentColor">alice@</text>';
+    s += '<text x="340" y="141" text-anchor="middle" font-size="12" font-weight="600" style="fill:' + sc + '">' + c.state + "</text>";
+    svg.innerHTML = s; $("idSay").innerHTML = c.say;
+    $("idTabs").innerHTML = S.map((x, k) => '<button type="button" data-k="' + k + '" aria-pressed="' + (k === cur) + '">' + x.name + "</button>").join("") + '<span class="sim">Simulated</span>';
+  }
+  $("idTabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { cur = +b.dataset.k; render(); } });
+  render();
+})();
+
+/* ---------- Study 5: currency over time ---------- */
+(function () {
+  const r = rng(29), D = 180, walk = (start, vol, drift) => { const a = [start]; for (let i = 1; i < D; i++) a.push(Math.max(a[i - 1] * (1 + (r() - 0.5) * vol + drift), start * 0.2)); return a; };
+  const rows = [
+    ["Supply", "Bridge.vETH", walk(9800, 0.012, 0.001), 2, ""],
+    ["VRSC", "price per unit", walk(15.2, 0.03, 0.0012), 4, ""],
+    ["DAI.vETH", "price per unit", walk(10.9, 0.022, 0.0005), 4, ""],
+    ["MKR.vETH", "price per unit", walk(0.0071, 0.035, 0.0006), 5, ""],
+    ["vETH", "price per unit", walk(0.0058, 0.04, 0.0003), 5, ""]
+  ];
+  const act = Array.from({ length: D }, () => { const v = r(); return v > 0.93 ? 8 + Math.floor(r() * 14) : v > 0.6 ? Math.floor(r() * 4) : 0; });
+  const W = 400, HH = 36, end = Date.UTC(2026, 10, 24);
+  const line = a => { const lo = Math.min(...a), hi = Math.max(...a); return a.map((v, i) => (i / (D - 1) * W).toFixed(1) + "," + (HH - 4 - (v - lo) / (hi - lo || 1) * (HH - 8)).toFixed(1)).join(" "); };
+  $("scrubRows").innerHTML = rows.map((x, k) => '<div class="srow"><div class="n">' + x[0] + "<small>" + x[1] + '</small></div><div class="c"><svg viewBox="0 0 ' + W + " " + HH + '" preserveAspectRatio="none"><polyline points="' + line(x[2]) +
+    '" fill="none" style="stroke:var(--accent)" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg><div class="cur"></div></div><div class="v" id="sv' + k + '"></div></div>').join("") +
+    '<div class="srow"><div class="n">Activity<small>imports, exports</small></div><div class="c"><svg viewBox="0 0 ' + W + " " + HH + '" preserveAspectRatio="none">' +
+    act.map((v, i) => v ? '<rect x="' + (i / D * W).toFixed(1) + '" y="' + (HH - v * 1.5 - 1) + '" width="' + (W / D * 0.7).toFixed(2) + '" height="' + (v * 1.5) + '" style="fill:var(--staked)"/>' : "").join("") +
+    '</svg><div class="cur"></div></div><div class="v" id="sva"></div></div>';
+  function set(i) {
+    $("scrubDate").textContent = new Date(end - (D - 1 - i) * 864e5).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) + (i === D - 1 ? " · now" : "");
+    document.querySelectorAll("#scrubRows .cur").forEach(c => c.style.left = (i / (D - 1) * 100) + "%");
+    rows.forEach((x, k) => { const v = x[2][i], n = x[2][D - 1], d = (n - v) / v * 100;
+      $("sv" + k).innerHTML = fmt(v, x[3]) + "<small>" + (i === D - 1 ? "current" : (d >= 0 ? "+" : "") + d.toFixed(1) + "% since") + "</small>"; });
+    $("sva").innerHTML = act[i] + "<small>that day</small>";
+  }
+  $("scrub").addEventListener("input", e => set(+e.target.value)); set(+$("scrub").value);
+})();
+/* ---------- shared ---------- */
+const hov = (svgId, sayId) => $(svgId).addEventListener("mouseover", e => { const t = e.target.closest("[data-h]"); if (t) $(sayId).innerHTML = t.getAttribute("data-h"); });
+const tabs = (id, names, cur, sim) => { $(id).innerHTML = names.map((n, k) => '<button type="button" data-k="' + k + '" aria-pressed="' + (k === cur) + '">' + n + "</button>").join("") + (sim === false ? "" : '<span class="sim">Simulated</span>'); };
+const onTab = (id, fn) => $(id).addEventListener("click", e => { const b = e.target.closest("button[data-k]"); if (b) fn(+b.dataset.k); });
+const T = (x, y, t, o = "") => '<text x="' + x + '" y="' + y + '" ' + o + ">" + t + "</text>";
+
+/* ---------- Study 6: the daemon at work ---------- */
+(function () {
+  const TOTAL = 4336719, T0 = Date.UTC(2018, 4, 21), T1 = Date.UTC(2026, 10, 24), X0 = 20, BW = 640;
+  const cost = f => 1 + 7 * f * f + (f > 0.55 && f < 0.68 ? 2.5 : 0);
+  let h = 380000, peers = 3, trace = [], running = !reduce, pause = 0;
+  function tick() {
+    if (running && !pause) {
+      if (Math.random() < 0.08) peers = Math.max(1, Math.min(8, peers + (Math.random() < 0.6 ? 1 : -1)));
+      const rate = 950 / cost(h / TOTAL) * (0.55 + peers * 0.07) * (0.85 + Math.random() * 0.3);
+      trace.push(rate); if (trace.length > 90) trace.shift();
+      h = Math.min(TOTAL, h + rate * 0.25 * 260);
+      if (h >= TOTAL) pause = 16;
+    } else if (pause && --pause === 0) { h = 380000; trace = []; }
+    const f = h / TOTAL, rate = trace[trace.length - 1] || 0;
+    let left = 0; for (let k = 0; k < 60; k++) { const g = f + (1 - f) * (k + 0.5) / 60; left += (1 - f) * TOTAL / 60 / (950 / cost(g) * (0.55 + peers * 0.07)); }
+    let s = "";
+    for (let k = 0; k < 64; k++) s += '<rect x="' + (X0 + k * 10) + '" y="46" width="10" height="26" style="fill:var(--muted)" opacity="' + (0.06 + cost((k + 0.5) / 64) / 9 * 0.34).toFixed(2) + '"/>';
+    s += '<rect x="' + X0 + '" y="46" width="' + (BW * f).toFixed(1) + '" height="26" style="fill:var(--accent)" opacity="0.85"/>';
+    s += '<rect x="' + X0 + '" y="46" width="' + BW + '" height="26" fill="none" style="stroke:var(--muted)" stroke-width="1"/>';
+    for (let y = 2019; y <= 2026; y++) { const x = X0 + BW * (Date.UTC(y, 0, 1) - T0) / (T1 - T0); s += '<line x1="' + x + '" y1="72" x2="' + x + '" y2="79" style="stroke:var(--muted)"/>' + T(x, 92, y, 'text-anchor="middle" font-size="11" style="fill:var(--muted)"'); }
+    const mx = X0 + BW * f; s += '<line x1="' + mx + '" y1="36" x2="' + mx + '" y2="72" stroke="currentColor" stroke-width="1.5"/>';
+    s += T(Math.min(Math.max(mx, 70), 610), 28, h >= TOTAL ? "Up to date" : new Date(T0 + (T1 - T0) * f).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }), 'text-anchor="middle" font-size="12.5" font-weight="600" fill="currentColor"');
+    s += T(X0, 124, "Blocks per second", 'font-size="11" style="fill:var(--muted)"') + '<line x1="' + X0 + '" y1="190" x2="460" y2="190" style="stroke:var(--line)"/>';
+    if (trace.length > 1) s += '<polyline fill="none" style="stroke:var(--accent)" stroke-width="1.8" points="' + trace.map((v, i) => (X0 + i / 89 * 440).toFixed(1) + "," + (190 - Math.min(v, 900) / 900 * 56).toFixed(1)).join(" ") + '"/>';
+    s += T(500, 124, "Peers", 'font-size="11" style="fill:var(--muted)"');
+    for (let k = 0; k < 8; k++) s += '<circle cx="' + (508 + k * 21) + '" cy="150" r="7" style="fill:' + (k < peers ? "var(--ok)" : "none") + ';stroke:var(--muted)" stroke-width="1.2"/>';
+    s += T(500, 190, peers < 3 ? "Few peers: slower" : "", 'font-size="11.5" style="fill:var(--warn)"');
+    $("sync").innerHTML = s;
+    const hrs = left / 3600;
+    $("syncOut").innerHTML = "<span>Block <b>" + Math.round(h).toLocaleString("en-US") + "</b> of " + TOTAL.toLocaleString("en-US") + "</span><span><b>" + (f * 100).toFixed(1) + "%</b> validated</span><span><b>" + Math.round(rate) +
+      "</b> blocks/s</span><span>About <b>" + (h >= TOTAL ? "0 min" : hrs >= 1 ? Math.floor(hrs) + " h " + Math.round(hrs % 1 * 60) + " min" : Math.round(hrs * 60) + " min") + "</b> left</span>";
+  }
+  const btn = $("syncPlay"); btn.onclick = () => { running = !running; btn.textContent = running ? "Running" : "Paused"; btn.setAttribute("aria-pressed", running); };
+  if (reduce) { btn.textContent = "Paused"; btn.setAttribute("aria-pressed", false); h = 1284190; trace = [310, 300, 322, 296, 305]; }
+  setInterval(tick, 250); tick();
+})();
+
+/* ---------- Study 7: notarization lanes ---------- */
+(function () {
+  const S = [["Healthy", "<b>The chains agree.</b> A notarization about every hour, each confirmed by the next. The newest two are still pending, which is normal."],
+    ["Stalled", "<b>No notarization for 3 h 10 min.</b> Both chains are still producing blocks, but nothing has tied them together since VRSC block 4,336,410. Cross-chain transfers will wait."],
+    ["Fork suspected", "<b>One notarization commits to a vDEX block that isn't on the active chain.</b> That can mean a fork. The notarizations after it are confirmed against the active chain."]];
+  let cur = 0;
+  function render() {
+    let s = T(14, 30, "VRSC", 'font-size="12" style="fill:var(--muted)"') + T(14, 196, "vDEX", 'font-size="12" style="fill:var(--muted)"');
+    s += '<g style="stroke:var(--line)" stroke-width="12" stroke-linecap="round"><line x1="14" y1="56" x2="666" y2="56"/><line x1="14" y1="166" x2="666" y2="166"/></g>';
+    for (let x = 24; x < 664; x += 16) s += '<circle cx="' + x + '" cy="56" r="1.6" style="fill:var(--muted)"/><circle cx="' + (x + 5) + '" cy="166" r="1.6" style="fill:var(--muted)"/>';
+    for (let k = 0; k < 8; k++) {
+      if (cur === 1 && k > 3) continue;
+      const x = 70 + k * 78, pend = cur !== 1 && k > 5, bad = cur === 2 && k === 4, y2 = bad ? 198 : 166, x2 = x + 14 + (bad ? 22 : 0), col = bad ? "var(--warn)" : pend ? "var(--muted)" : "var(--accent)";
+      s += '<g data-h="' + (bad ? "<b>Off-chain.</b> This notarization commits to vDEX block 512,722, which the vDEX source reports is not on its active chain." : pend ? "<b>Pending.</b> Seen, not yet confirmed by a later notarization." : "<b>Confirmed.</b> VRSC block " + (4336170 + k * 60).toLocaleString("en-US") + " and vDEX block " + (512421 + k * 60).toLocaleString("en-US") + " each commit to the other.") + '">' +
+        '<line x1="' + x + '" y1="56" x2="' + x2 + '" y2="' + y2 + '" style="stroke:' + col + '" stroke-width="' + (pend ? 1.6 : 2.6) + '"' + (pend ? ' stroke-dasharray="5 4"' : "") + "/>" +
+        '<circle cx="' + x + '" cy="56" r="6" style="fill:' + col + '"/><circle cx="' + x2 + '" cy="' + y2 + '" r="6" style="fill:' + (bad ? "var(--surface)" : col) + ";stroke:" + col + '" stroke-width="2"/>' +
+        '<line x1="' + x + '" y1="56" x2="' + x2 + '" y2="' + y2 + '" stroke="transparent" stroke-width="16"/></g>';
+      if (bad) s += T(x2 + 12, 202, "not on the active chain", 'font-size="11.5" style="fill:var(--warn)"');
+    }
+    if (cur === 1) s += '<line x1="324" y1="111" x2="640" y2="111" style="stroke:var(--warn)" stroke-width="1.5" stroke-dasharray="3 4"/>' + T(482, 103, "no notarization for 3 h 10 min", 'text-anchor="middle" font-size="12" font-weight="600" style="fill:var(--warn)"');
+    $("lanes").innerHTML = s; $("laneSay").innerHTML = S[cur][1]; tabs("laneTabs", S.map(x => x[0]), cur);
+  }
+  onTab("laneTabs", k => { cur = k; render(); }); hov("lanes", "laneSay"); render();
+})();
+
+/* ---------- Study 8: branch view ---------- */
+(function () {
+  const X = i => 62 + i * 92, H0 = 4226270; let s = "";
+  const blk = (i, y, kind, tx, note) => { const col = kind === "orph" ? "var(--warn)" : "var(--accent)", h = (H0 + i).toLocaleString("en-US");
+    return '<g data-h="<b>Block ' + h + "</b> · " + note + '"><rect x="' + (X(i) - 27) + '" y="' + (y - 19) + '" width="54" height="38" rx="7" style="fill:' + (kind === "seen" ? "var(--surface)" : col) + ";stroke:" + col + '" stroke-width="2"' + (kind === "orph" ? ' opacity="0.8"' : "") + "/>" +
+      T(X(i), y + 4, "…" + String(H0 + i).slice(-3), 'text-anchor="middle" font-size="12" font-weight="600" style="fill:' + (kind === "seen" ? "currentColor" : "var(--bg)") + '"') +
+      (tx ? '<circle cx="' + (X(i) + 22) + '" cy="' + (y - 18) + '" r="8" style="fill:var(--staked);stroke:var(--surface)" stroke-width="2"/>' : "") + "</g>"; };
+  const link = (a, ya, b, yb, col, dash) => '<path d="M' + (X(a) + 27) + " " + ya + "C" + (X(a) + 50) + " " + ya + "," + (X(b) - 50) + " " + yb + "," + (X(b) - 27) + " " + yb + '" fill="none" style="stroke:' + col + '" stroke-width="2"' + (dash ? ' stroke-dasharray="5 4"' : "") + "/>";
+  for (let i = 0; i < 6; i++) s += link(i, 78, i + 1, 78, "var(--accent)");
+  s += link(2, 78, 3, 168, "var(--warn)", 1) + link(3, 168, 4, 168, "var(--warn)", 1);
+  for (let i = 0; i < 7; i++) s += blk(i, 78, "act", i === 4, i === 4 ? "active chain. <b>Your transaction is here now</b>, with " + (6 - i + 1) + " confirmations." : i === 2 ? "the last block both branches share." : i === 6 ? "active chain · current tip." : "active chain.");
+  s += blk(3, 168, "orph", 1, "<b>orphaned.</b> Your transaction was first included here, then this block lost out. Seen by the local daemon at 14:02.") + blk(4, 168, "orph", 0, "<b>orphaned.</b> Built on the losing branch. Last observed by the local daemon at 14:03.");
+  s += T(X(6), 44, "tip", 'text-anchor="middle" font-size="11.5" style="fill:var(--muted)"') + T(X(4) + 40, 173, "orphaned branch", 'font-size="12" font-weight="600" style="fill:var(--warn)"') + T(X(2), 118, "split", 'text-anchor="middle" font-size="11.5" style="fill:var(--muted)"');
+  s += '<circle cx="30" cy="214" r="7" style="fill:var(--staked)"/>' + T(44, 218, "your transaction", 'font-size="12" style="fill:var(--muted)"');
+  $("branch").innerHTML = s; hov("branch", "branchSay");
+})();
+
+/* ---------- Study 9: mempool as area ---------- */
+(function () {
+  const KIND = ["Payment", "Payment", "Payment", "Conversion", "Identity update", "Marketplace offer", "Cross-chain transfer"], W = 680, H = 230;
+  let items = [], t = 0, running = !reduce, id = 0, since = 0;
+  const add = () => { const k = KIND[Math.floor(Math.random() * KIND.length)]; items.push({ id: ++id, k, size: k === "Payment" ? 226 + Math.floor(Math.random() * 400) : 900 + Math.floor(Math.random() * 3600), born: t, dep: Math.random() < 0.14 }); };
+  for (let i = 0; i < 9; i++) { add(); items[i].born = -Math.random() * 30; }
+  function render() {
+    if (!items.length) { $("pool").innerHTML = T(W / 2, H / 2, "Empty. A block just cleared everything.", 'text-anchor="middle" font-size="13" style="fill:var(--muted)"'); return; }
+    const list = [...items].sort((a, b) => b.size - a.size), total = list.reduce((a, i) => a + i.size, 0), rows = Math.min(4, Math.ceil(list.length / 3)), per = total / rows;
+    const R = [[]]; let acc = 0; list.forEach(i => { if (acc >= per && R.length < rows) { R.push([]); acc = 0; } R[R.length - 1].push(i); acc += i.size; });
+    let y = 0, s = "";
+    R.forEach(row => { const sum = row.reduce((a, i) => a + i.size, 0), rh = sum / total * H; let x = 0;
+      row.forEach(i => { const w = i.size / sum * W, age = t - i.born;
+        s += '<g data-h="<b>' + i.k + "</b> · " + fmt(i.size / 1000, 2) + " kB · waiting " + dur(Math.max(age, 0)) + (i.dep ? " · <b>depends on another waiting transaction</b>" : "") + '"><rect x="' + (x + 1.5).toFixed(1) + '" y="' + (y + 1.5).toFixed(1) + '" width="' + Math.max(w - 3, 1).toFixed(1) + '" height="' + Math.max(rh - 3, 1).toFixed(1) +
+          '" rx="4" style="fill:var(--accent);stroke:' + (i.dep ? "var(--fg)" : "none") + '" stroke-width="1.6"' + (i.dep ? ' stroke-dasharray="4 3"' : "") + ' opacity="' + Math.min(0.25 + Math.max(age, 0) / 60 * 0.7, 0.95).toFixed(2) + '"/>' +
+          (w > 96 && rh > 30 ? T(x + 10, y + 21, i.k, 'font-size="11.5" font-weight="600" fill="currentColor"') : "") + "</g>"; x += w; });
+      y += rh; });
+    $("pool").innerHTML = s;
+  }
+  setInterval(() => { if (!running) return; t += 1; since += 1; if (Math.random() < 0.55) add(); if (since > 16 + Math.random() * 14) { items = []; since = 0; $("poolSay").innerHTML = "<b>A block arrived</b> and confirmed everything that was waiting."; } render(); }, 700);
+  const btn = $("poolPlay"); btn.onclick = () => { running = !running; btn.textContent = running ? "Running" : "Paused"; btn.setAttribute("aria-pressed", running); };
+  if (reduce) { btn.textContent = "Paused"; btn.setAttribute("aria-pressed", false); }
+  hov("pool", "poolSay"); render();
+})();
+
+/* ---------- Study 10: peers by response time ---------- */
+(function () {
+  const r = rng(5), CX = 340, CY = 150, R = ms => Math.min(132, 20 + 50 * Math.log10(ms / 8));
+  const REG = [["Europe", 300, ["Frankfurt", "Amsterdam", "Helsinki", "London"]], ["North America", 215, ["Ashburn", "Dallas", "Toronto"]], ["Asia", 35, ["Singapore", "Tokyo"]], ["Oceania", 110, ["Sydney"]], ["South America", 160, ["São Paulo"]]];
+  const P = []; REG.forEach(([name, ang, cities], gi) => cities.forEach((c, k) => P.push({ c, name, a: (ang + (k - (cities.length - 1) / 2) * 17) * Math.PI / 180, ms: [38, 52, 61, 44, 96, 118, 140, 205, 232, 310, 388][P.length], mb: 2 + Math.floor(r() * 30), behind: P.length === 9 ? 17 : 0, ip: (gi % 2 ? "198.51.100." : "203.0.113.") + (10 + P.length * 13) })));
+  function render() {
+    let s = "";
+    [[50, "50 ms"], [150, "150 ms"], [400, "400 ms"]].forEach(([ms, l]) => { s += '<circle cx="' + CX + '" cy="' + CY + '" r="' + R(ms) + '" fill="none" style="stroke:var(--line)" stroke-width="1.2"/>' + T(CX + 4, CY - R(ms) - 4, l, 'font-size="10.5" style="fill:var(--muted)"'); });
+    REG.forEach(([name, ang]) => { const a = ang * Math.PI / 180; s += T(CX + Math.cos(a) * 205, CY + Math.sin(a) * 136 + 4, name, 'text-anchor="middle" font-size="11.5" style="fill:var(--muted)"'); });
+    P.forEach(p => { const ms = p.ms * (0.93 + Math.random() * 0.14), x = CX + Math.cos(p.a) * R(ms) * 1.35, y = CY + Math.sin(p.a) * R(ms), col = p.behind ? "var(--warn)" : "var(--ok)";
+      s += '<g data-h="<b>' + p.c + "</b> · " + p.ip + " · " + Math.round(ms) + " ms · " + (p.behind ? "<b>" + p.behind + " blocks behind</b>" : "in step with the chain") + " · " + p.mb + ' MB exchanged"><line x1="' + CX + '" y1="' + CY + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '" style="stroke:' + col + '" stroke-width="1" opacity="0.4"/>' +
+        '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + (4 + p.mb / 6).toFixed(1) + '" style="fill:' + col + '"/><circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="14" fill="transparent"/></g>'; });
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="9" fill="currentColor"/>' + T(CX, CY + 24, "your node", 'text-anchor="middle" font-size="11" fill="currentColor"');
+    $("peers").innerHTML = s;
+  }
+  render(); if (!reduce) setInterval(render, 1500); hov("peers", "peerSay");
+})();
+
+/* ---------- Study 11: identity origin ---------- */
+(function () {
+  const Y = 140, EV = [[70, "Name reserved", "3 Mar 2024", "<b>Name reserved.</b> A commitment hides the name until registration, so nobody can front-run it. Block 3,018,440."],
+    [170, "Registered", "3 Mar 2024", "<b>alice@ registered.</b> Two blocks after the commitment. The registration paid a referral to carol@. Block 3,018,442."],
+    [360, "Keys changed", "19 Aug 2025", "<b>Signing keys changed</b> from one key to any two of three. Block 3,790,115."],
+    [520, "Recovery set", "2 Feb 2026", "<b>Recovery authority set to vault@.</b> Before this, alice@ was its own recovery. Block 4,183,352."]];
+  let s = '<line x1="40" y1="' + Y + '" x2="650" y2="' + Y + '" stroke="currentColor" stroke-width="2"/>' + T(650, Y + 28, "today", 'text-anchor="end" font-size="11.5" style="fill:var(--muted)"');
+  const box = (x, y, t, sub, col, dash, h) => '<g data-h="' + h + '"><rect x="' + (x - 52) + '" y="' + (y - 19) + '" width="104" height="38" rx="8" style="fill:var(--surface);stroke:' + col + '" stroke-width="1.8"' + (dash ? ' stroke-dasharray="5 4"' : "") + "/>" +
+    T(x, y - 1, t, 'text-anchor="middle" font-size="12.5" font-weight="600" fill="currentColor"') + T(x, y + 13, sub, 'text-anchor="middle" font-size="10.5" style="fill:var(--muted)"') + "</g>";
+  s += '<line x1="170" y1="' + (Y - 8) + '" x2="170" y2="69" style="stroke:var(--accent)" stroke-width="1.8"/><line x1="222" y1="50" x2="268" y2="50" style="stroke:var(--accent)" stroke-width="1.8"/><line x1="372" y1="50" x2="418" y2="50" style="stroke:var(--accent)" stroke-width="1.8"/>';
+  s += box(170, 50, "carol@", "referred alice@", "var(--accent)", 0, "<b>Referred by carol@.</b> Verified: the registration transaction pays carol@ the referral share.") +
+    box(320, 50, "dave@", "referred carol@", "var(--accent)", 0, "<b>carol@ was referred by dave@.</b> Verified the same way, one hop further back.") +
+    box(470, 50, "VRSC", "issuer", "var(--muted)", 0, "<b>The chain itself issued the name.</b> The referral chain ends here.");
+  s += '<line x1="170" y1="' + (Y + 8) + '" x2="170" y2="201" style="stroke:var(--muted)" stroke-width="1.8" stroke-dasharray="5 4"/>' +
+    box(170, 220, "RGghmn…BkfK", "probably paid", "var(--muted)", 1, "<b>Probably paid for by this address.</b> A candidate, not a fact: it funded the registration transaction's inputs, which is the usual pattern but not proof of who the owner is.");
+  s += T(238, 224, "candidate", 'font-size="11" font-style="italic" style="fill:var(--muted)"');
+  EV.forEach(e => { s += '<g data-h="' + e[3] + '"><circle cx="' + e[0] + '" cy="' + Y + '" r="8" style="fill:var(--accent);stroke:var(--surface)" stroke-width="2.5"/><circle cx="' + e[0] + '" cy="' + Y + '" r="18" fill="transparent"/>' +
+    (e[0] === 170 ? T(e[0] + 14, Y - 14, e[1], 'font-size="12.5" font-weight="600" fill="currentColor"') + T(e[0] + 14, Y + 22, e[2], 'font-size="11" style="fill:var(--muted)"')
+      : T(e[0], Y - 16, e[1], 'text-anchor="middle" font-size="12.5" font-weight="600" fill="currentColor"') + T(e[0], Y + 26, e[2], 'text-anchor="middle" font-size="11" style="fill:var(--muted)"')) + "</g>"; });
+  $("origin").innerHTML = s; hov("origin", "originSay");
+})();
+
+/* ---------- Study 12: marketplace board ---------- */
+(function () {
+  const r = rng(41), NAMES = ["silver", "nova", "quartz", "atlas", "ember", "delta", "onyx", "lumen", "kite", "harbor", "pixel", "sable", "tundra", "vega", "orbit", "fern", "cobalt", "mesa", "rune", "zephyr", "iris", "flint", "opal", "birch"];
+  const O = NAMES.map((n, k) => ({ n: n + "@", sell: r() < 0.68, hrs: k === 0 ? 0.6 : k === 5 ? 3.2 : 2 + r() * 70, price: k === 3 ? 6500 : Math.round(Math.pow(10, 0.9 + r() * 1.9)) }));
+  const X = h => 70 + h / 72 * 590, Y = p => 222 - Math.log10(p) / 4 * 196; let cur = 0;
+  function render() {
+    let s = '<rect x="70" y="26" width="' + (X(6) - 70) + '" height="196" style="fill:var(--warn)" opacity="0.1"/>' + T(74, 40, "expiring within 6 hours", 'font-size="11" style="fill:var(--warn)"');
+    [1, 10, 100, 1000, 10000].forEach(p => { s += '<line x1="70" y1="' + Y(p) + '" x2="660" y2="' + Y(p) + '" style="stroke:var(--line)"/>' + T(62, Y(p) + 4, p.toLocaleString("en-US"), 'text-anchor="end" font-size="11" style="fill:var(--muted)"'); });
+    [0, 12, 24, 48, 72].forEach(h => s += T(X(h), 240, h === 0 ? "now" : h + " h", 'text-anchor="middle" font-size="11" style="fill:var(--muted)"'));
+    s += T(660, 258, "time left before the offer expires →", 'text-anchor="end" font-size="11" style="fill:var(--muted)"') + T(14, 18, "Price in VRSC (log scale)", 'font-size="11" style="fill:var(--muted)"');
+    O.filter(o => cur === 0 || (cur === 1) === o.sell).forEach(o => { const x = X(o.hrs), y = Y(o.price), col = o.sell ? "var(--accent)" : "var(--staked)";
+      s += '<g data-h="<b>' + o.n + "</b> · " + (o.sell ? "for sale at " : "someone offers ") + o.price.toLocaleString("en-US") + " VRSC · " + (o.hrs < 1 ? Math.round(o.hrs * 60) + " min" : o.hrs.toFixed(0) + " h") + ' left">' +
+        (o.sell ? '<circle cx="' + x + '" cy="' + y + '" r="6.5" style="fill:' + col + '"/>' : '<rect x="' + (x - 6) + '" y="' + (y - 6) + '" width="12" height="12" style="fill:none;stroke:' + col + '" stroke-width="2.4"/>') + '<circle cx="' + x + '" cy="' + y + '" r="13" fill="transparent"/></g>'; });
+    $("market").innerHTML = s; tabs("mktTabs", ["All offers", "For sale ●", "Wanted □"], cur);
+  }
+  onTab("mktTabs", k => { cur = k; render(); }); hov("market", "mktSay"); render();
+})();
+
+/* ---------- Study 13: pool conversion paths ---------- */
+(function () {
+  const N = [["VRSC", 150, 62], ["DAI.vETH", 530, 62], ["MKR.vETH", 150, 214], ["vETH", 530, 214]];
+  // [from, to, volume a→b, volume b→a] in VRSC value
+  const D = [[[0, 1, 1204, 310], [0, 2, 88, 61], [0, 3, 140, 392], [1, 3, 55, 48], [1, 2, 12, 0], [2, 3, 0, 4]],
+             [[0, 1, 6120, 5890], [0, 2, 410, 505], [0, 3, 2210, 2340], [1, 3, 380, 365], [1, 2, 96, 40], [2, 3, 22, 31]]];
+  const SAY = ["<b>Last 24 hours: VRSC is flowing into DAI.vETH,</b> nearly four to one, while vETH is being sold back into VRSC. The other pairs are quiet.", "<b>Last 7 days: busy but balanced.</b> Every pair has traded in both directions at similar volume, so the day's lean toward DAI is recent."];
+  let cur = 0;
+  function render() {
+    const max = Math.max(...D[cur].map(e => e[2] + e[3])); let s = T(340, 22, "Bridge.vETH", 'text-anchor="middle" font-size="13" font-weight="600" fill="currentColor"');
+    D[cur].forEach(e => { const net = e[2] - e[3], a = N[net >= 0 ? e[0] : e[1]], b = N[net >= 0 ? e[1] : e[0]], tot = e[2] + e[3], w = 1.5 + tot / max * 13, lean = Math.abs(net) / Math.max(tot, 1);
+      const h = "<b>" + N[e[0]][0] + " ⇄ " + N[e[1]][0] + "</b> · " + e[2].toLocaleString("en-US") + " one way, " + e[3].toLocaleString("en-US") + " back (VRSC value)" + (lean > 0.2 ? " · net toward " + b[0] : " · balanced");
+      s += '<g data-h="' + h + '"><line x1="' + a[1] + '" y1="' + a[2] + '" x2="' + b[1] + '" y2="' + b[2] + '" style="stroke:var(--accent)" stroke-width="' + w.toFixed(1) + '" opacity="0.28" stroke-linecap="round"/>' +
+        (lean > 0.2 ? '<line class="flowing" x1="' + a[1] + '" y1="' + a[2] + '" x2="' + b[1] + '" y2="' + b[2] + '" style="stroke:var(--accent)" stroke-width="' + Math.max(w * 0.45, 1.6).toFixed(1) + '"/>' : "") +
+        '<line x1="' + a[1] + '" y1="' + a[2] + '" x2="' + b[1] + '" y2="' + b[2] + '" stroke="transparent" stroke-width="20"/></g>'; });
+    N.forEach(n => { s += '<rect x="' + (n[1] - 58) + '" y="' + (n[2] - 21) + '" width="116" height="42" rx="21" style="fill:var(--surface);stroke:var(--fg)" stroke-width="1.8"/>' + T(n[1], n[2] + 5, n[0], 'text-anchor="middle" font-size="13.5" font-weight="600" fill="currentColor"'); });
+    $("paths").innerHTML = s; $("pathSay").innerHTML = SAY[cur]; tabs("pathTabs", ["Last 24 hours", "Last 7 days"], cur);
+  }
+  onTab("pathTabs", k => { cur = k; render(); }); hov("paths", "pathSay"); render();
+})();
+</script>

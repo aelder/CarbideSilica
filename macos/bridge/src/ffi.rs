@@ -260,6 +260,40 @@ pub struct AddressDetail {
     pub json: String,
 }
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct PeerRow {
+    pub id: i64,
+    pub address: String,
+    pub inbound: bool,
+    /// Round-trip time of the last ping, in milliseconds.
+    pub ping_ms: Option<f64>,
+    /// The last block this peer and the node have in common.
+    pub synced_blocks: Option<i64>,
+    /// The peer's own chain height when it connected.
+    pub starting_height: Option<i64>,
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
+    pub version: Option<String>,
+    pub connected_since: Option<u64>,
+    pub json: String,
+}
+
+/// What the local node is doing: how far it has validated and who it is connected to.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct NodeStatus {
+    pub blocks: u64,
+    pub longest_chain: Option<u64>,
+    /// Timestamp of the newest validated block.
+    pub tip_time: Option<u64>,
+    /// The furthest block header any peer has delivered; headers arrive ahead of blocks.
+    pub synced_headers: Option<u64>,
+    pub mempool_count: Option<u64>,
+    pub peers: Vec<PeerRow>,
+    /// Set when peers could not be listed (they are only available from a local daemon).
+    pub peers_error: Option<String>,
+    pub source: DataSource,
+}
+
 /// Where a search query leads.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum Route {
@@ -329,11 +363,39 @@ impl Explorer {
             testnet: info["testnet"]
                 .as_bool()
                 .unwrap_or(self.config.chain.testnet),
-            source: if output.source_id.starts_with("public-api") {
-                DataSource::PublicApi
-            } else {
-                DataSource::LocalDaemon
-            },
+            source: source_of(&output.source_id),
+        })
+    }
+
+    /// Sync progress, mempool size and peers. Peers come only from the local daemon.
+    pub async fn node_status(&self) -> Outcome<NodeStatus> {
+        let output = self.settle(self.client.get_info().await)?;
+        let info = &output.result;
+        let (peers, peers_error) = match self.settle(
+            self.client
+                .call_with_raw::<Vec<Value>>("getpeerinfo", &[])
+                .await,
+        ) {
+            Ok(list) => (list.result.iter().map(peer_row).collect::<Vec<_>>(), None),
+            Err(error) => (Vec::new(), Some(readable(&error))),
+        };
+        let mempool_count = self
+            .settle(
+                self.client
+                    .call_with_raw::<Value>("getmempoolinfo", &[])
+                    .await,
+            )
+            .ok()
+            .and_then(|pool| pool.result["size"].as_u64());
+        Ok(NodeStatus {
+            blocks: info["blocks"].as_u64().unwrap_or(0),
+            longest_chain: info["longestchain"].as_u64(),
+            tip_time: info["tiptime"].as_u64(),
+            synced_headers: peers.iter().filter_map(|peer| peer.synced_headers).max(),
+            mempool_count,
+            peers: peers.into_iter().map(|peer| peer.row).collect(),
+            peers_error,
+            source: source_of(&output.source_id),
         })
     }
 
@@ -831,6 +893,40 @@ fn platform_config_path(chain: &str, network: Network) -> Option<PathBuf> {
 fn fail(message: &str) -> CarbideError {
     CarbideError::Failed {
         message: message.into(),
+    }
+}
+
+fn source_of(source_id: &str) -> DataSource {
+    if source_id.starts_with("public-api") {
+        DataSource::PublicApi
+    } else {
+        DataSource::LocalDaemon
+    }
+}
+
+struct Peer {
+    row: PeerRow,
+    synced_headers: Option<u64>,
+}
+
+fn peer_row(peer: &Value) -> Peer {
+    // `inflight` lists every block being downloaded and can be long; leave it out of the raw view.
+    let json = pretty(&without(peer, "inflight"));
+    Peer {
+        synced_headers: peer["synced_headers"].as_u64(),
+        row: PeerRow {
+            id: peer["id"].as_i64().unwrap_or(-1),
+            address: text(&peer["addr"]).unwrap_or_default(),
+            inbound: peer["inbound"].as_bool().unwrap_or(false),
+            ping_ms: peer["pingtime"].as_f64().map(|seconds| seconds * 1000.0),
+            synced_blocks: peer["synced_blocks"].as_i64(),
+            starting_height: peer["startingheight"].as_i64(),
+            bytes_sent: peer["bytessent"].as_u64().unwrap_or(0),
+            bytes_received: peer["bytesrecv"].as_u64().unwrap_or(0),
+            version: text(&peer["subver"]),
+            connected_since: peer["conntime"].as_u64(),
+            json,
+        },
     }
 }
 

@@ -15,17 +15,19 @@ struct CarbideSilicaApp: App {
         Window("Carbide Silica", id: "main") {
             RootView()
                 .environment(model)
-                .frame(minWidth: 820, minHeight: 520)
+                .frame(minWidth: 980, minHeight: 560)
         }
-        .defaultSize(width: 1120, height: 780)
+        .defaultSize(width: 1280, height: 820)
         .commands {
             CommandGroup(after: .textEditing) {
                 Button("Find…") { model.searchFocusRequests += 1 }
                     .keyboardShortcut("f", modifiers: .command)
             }
             CommandMenu("Go") {
-                Button("Dashboard") { model.path = [] }
-                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                Button("Dashboard") { model.show(.dashboard) }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("Node") { model.show(.node) }
+                    .keyboardShortcut("2", modifiers: .command)
                 Button("Back") { _ = model.path.popLast() }
                     .keyboardShortcut("[", modifiers: .command)
                     .disabled(model.path.isEmpty)
@@ -48,24 +50,25 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var model = model
-        NavigationStack(path: $model.path) {
-            DashboardView()
+        NavigationSplitView {
+            Sidebar()
+                .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 280)
+        } detail: {
+            NavigationStack(path: $model.path) {
+                Group {
+                    switch model.sidebar {
+                    case .dashboard: DashboardView()
+                    case .node: NodeView()
+                    }
+                }
                 .navigationDestination(for: Route.self) { route in
                     destination(route)
                 }
+            }
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 SearchField()
-            }
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    model.path = []
-                } label: {
-                    Label("Dashboard", systemImage: "square.grid.2x2")
-                }
-                .help("Dashboard")
-                .disabled(model.path.isEmpty)
             }
             ToolbarItem(placement: .primaryAction) {
                 ConnectionBadge()
@@ -93,6 +96,48 @@ struct RootView: View {
         case .currency(let name): CurrencyView(name: name)
         case .address(let address): AddressView(address: address)
         }
+    }
+}
+
+/// Places to go, and the trail of what was opened this session.
+struct Sidebar: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        List(selection: selection) {
+            Section("Watch") {
+                Label("Dashboard", systemImage: "square.grid.2x2").tag(SidebarItem.dashboard)
+            }
+            Section("Node") {
+                Label("Sync and peers", systemImage: "server.rack")
+                    .badge(model.syncFraction.map { Text(Format.percent($0)) })
+                    .tag(SidebarItem.node)
+            }
+            if !model.recent.isEmpty {
+                Section("Recent") {
+                    ForEach(model.recent, id: \.self) { route in
+                        Button {
+                            model.path = [route]
+                        } label: {
+                            Label(route.title, systemImage: route.symbol)
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+    }
+
+    /// Nothing is selected while an object page is open on top of a sidebar place.
+    private var selection: Binding<SidebarItem?> {
+        Binding(
+            get: { model.path.isEmpty ? model.sidebar : nil },
+            set: { if let item = $0 { model.show(item) } }
+        )
     }
 }
 
