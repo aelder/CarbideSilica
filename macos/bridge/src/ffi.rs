@@ -294,6 +294,44 @@ pub struct NodeStatus {
     pub source: DataSource,
 }
 
+/// A resolved name for an identity or currency ID.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct NameEntry {
+    pub id: String,
+    pub name: String,
+}
+
+/// One recorded state of an identity, with what changed since the state before it.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct IdentityVersion {
+    pub height: u64,
+    pub time: Option<u64>,
+    pub block_hash: Option<String>,
+    pub txid: Option<String>,
+    pub primary_addresses: Vec<String>,
+    pub minimum_signatures: Option<u64>,
+    pub revocation_authority: Option<String>,
+    pub recovery_authority: Option<String>,
+    /// Plain descriptions of the differences from the previous version.
+    pub changes: Vec<String>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ReservePoint {
+    pub currency_id: String,
+    pub reserves: Option<f64>,
+    pub price_in_reserve: Option<f64>,
+}
+
+/// A currency's recorded state at one block.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct CurrencyPoint {
+    pub height: u64,
+    pub time: Option<u64>,
+    pub supply: Option<f64>,
+    pub reserves: Vec<ReservePoint>,
+}
+
 /// Where a search query leads.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum Route {
@@ -312,10 +350,15 @@ pub struct Explorer {
     config: Config,
     api_endpoint: Option<String>,
     config_found: bool,
+    /// Names already resolved for identity and currency IDs.
+    names: std::sync::Mutex<std::collections::HashMap<String, String>>,
 }
 
 const RECENT_ADDRESS_TXIDS: usize = 200;
 const MAX_RECENT_BLOCKS: u32 = 100;
+const MAX_NAME_LOOKUPS: usize = 48;
+const MAX_HISTORY_TIMES: usize = 60;
+const MAX_HISTORY_SAMPLES: u32 = 200;
 const MAX_BLOCK_TX_BODIES: usize = 150;
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -462,6 +505,131 @@ impl Explorer {
                 }
             },
         })
+    }
+
+    /// Resolves identity and currency IDs to names. IDs that cannot be resolved are left out.
+    pub async fn names(&self, ids: Vec<String>) -> Vec<NameEntry> {
+        let mut found = Vec::new();
+        let mut tasks = tokio::task::JoinSet::new();
+        for id in ids.into_iter().take(MAX_NAME_LOOKUPS) {
+            if let Some(name) = self.cached_name(&id) {
+                found.push(NameEntry { id, name });
+                continue;
+            }
+            let client = self.client.clone();
+            tasks.spawn(async move {
+                let result = client.get_identity(&id, None).await;
+                (id, result)
+            });
+        }
+        while let Some(Ok((id, result))) = tasks.join_next().await {
+            if let Ok(output) = self.settle(result)
+                && let Some(name) = text(&output.result["friendlyname"])
+                    .or_else(|| text(&output.result["fullyqualifiedname"]))
+            {
+                let name = self.short_name(&name);
+                self.names
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(id.clone(), name.clone());
+                found.push(NameEntry { id, name });
+            }
+        }
+        found
+    }
+
+    /// Every recorded version of an identity, oldest first, with what changed each time.
+    pub async fn identity_history(&self, name: String) -> Outcome<Vec<IdentityVersion>> {
+        let output = self.settle(self.client.get_identity_history(name.trim()).await)?;
+        let entries = output.result["history"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let mut versions: Vec<IdentityVersion> = Vec::new();
+        let mut previous: Option<&Value> = None;
+        for entry in &entries {
+            let identity = &entry["identity"];
+            versions.push(IdentityVersion {
+                height: entry["height"].as_u64().unwrap_or(0),
+                time: None,
+                block_hash: text(&entry["blockhash"]),
+                txid: text(&entry["output"]["txid"]),
+                primary_addresses: strings(&identity["primaryaddresses"]),
+                minimum_signatures: identity["minimumsignatures"].as_u64(),
+                revocation_authority: text(&identity["revocationauthority"]),
+                recovery_authority: text(&identity["recoveryauthority"]),
+                changes: identity_changes(previous, identity),
+            });
+            previous = Some(identity);
+        }
+        // Block times, for the most recent versions if there are very many.
+        let mut tasks = tokio::task::JoinSet::new();
+        let skip = versions.len().saturating_sub(MAX_HISTORY_TIMES);
+        for (index, version) in versions.iter().enumerate().skip(skip) {
+            let Some(hash) = version.block_hash.clone() else {
+                continue;
+            };
+            let client = self.client.clone();
+            tasks.spawn(async move { (index, fetch_block(&client, BlockId::Hash(hash)).await) });
+        }
+        while let Some(Ok((index, block))) = tasks.join_next().await {
+            if let Ok(block) = self.settle(block) {
+                versions[index].time = Some(block.result.time);
+            }
+        }
+        Ok(versions)
+    }
+
+    /// A currency's state sampled evenly across a range of heights, oldest first.
+    pub async fn currency_history(
+        &self,
+        name: String,
+        from_height: u64,
+        to_height: u64,
+        samples: u32,
+    ) -> Outcome<Vec<CurrencyPoint>> {
+        let name = name.trim().trim_end_matches('@');
+        if to_height <= from_height {
+            return Err(fail("The range is empty."));
+        }
+        let samples = u64::from(samples.clamp(2, MAX_HISTORY_SAMPLES));
+        let step = ((to_height - from_height) / (samples - 1)).max(1);
+        let range = format!("{from_height},{to_height},{step}");
+        let output = self.settle(
+            self.client
+                .call_with_raw::<Vec<Value>>(
+                    "getcurrencystate",
+                    &[Value::from(name), Value::from(range)],
+                )
+                .await,
+        )?;
+        Ok(output
+            .result
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                let state = &entry["currencystate"];
+                CurrencyPoint {
+                    height: entry["height"]
+                        .as_u64()
+                        .unwrap_or(from_height + index as u64 * step),
+                    time: entry["blocktime"].as_u64(),
+                    supply: state["supply"].as_f64(),
+                    reserves: state["reservecurrencies"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|reserve| {
+                            Some(ReservePoint {
+                                currency_id: text(&reserve["currencyid"])?,
+                                reserves: reserve["reserves"].as_f64(),
+                                price_in_reserve: reserve["priceinreserve"].as_f64(),
+                            })
+                        })
+                        .collect(),
+                }
+            })
+            .collect())
     }
 
     /// `id` is a height or a block hash.
@@ -782,7 +950,28 @@ impl Explorer {
             config,
             api_endpoint,
             config_found,
+            names: Default::default(),
         })
+    }
+
+    fn cached_name(&self, id: &str) -> Option<String> {
+        if self.config.chain.system_id.get().map(AsRef::as_ref) == Some(id) {
+            return Some(self.config.chain.name.clone());
+        }
+        self.names
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(id)
+            .cloned()
+    }
+
+    /// Friendly names omit the chain's own root, as Carbide's do: `alice.VRSC@` is `alice@`.
+    fn short_name(&self, name: &str) -> String {
+        let root = format!(".{}@", self.config.chain.name);
+        match name.strip_suffix(root.as_str()) {
+            Some(base) if !base.is_empty() => format!("{base}@"),
+            _ => name.to_string(),
+        }
     }
 
     /// Carbide backs off an API endpoint for 30 seconds after any error. A
@@ -928,6 +1117,63 @@ fn peer_row(peer: &Value) -> Peer {
             json,
         },
     }
+}
+
+/// Describes how an identity version differs from the one before it, in plain words.
+fn identity_changes(previous: Option<&Value>, current: &Value) -> Vec<String> {
+    let Some(previous) = previous else {
+        return vec!["Registered".into()];
+    };
+    let mut changes = Vec::new();
+    let keys = |identity: &Value| strings(&identity["primaryaddresses"]);
+    let required = |identity: &Value| identity["minimumsignatures"].as_u64().unwrap_or(1);
+    if keys(previous) != keys(current) {
+        changes.push(format!(
+            "Signing keys changed ({} of {} needed)",
+            required(current),
+            keys(current).len()
+        ));
+    } else if required(previous) != required(current) {
+        changes.push(format!(
+            "Signatures needed changed from {} to {}",
+            required(previous),
+            required(current)
+        ));
+    }
+    for (key, label) in [
+        ("revocationauthority", "Revocation authority changed"),
+        ("recoveryauthority", "Recovery authority changed"),
+        ("privateaddress", "Private address changed"),
+    ] {
+        if previous[key] != current[key] {
+            changes.push(label.into());
+        }
+    }
+    let flags = |identity: &Value| identity["flags"].as_u64().unwrap_or(0);
+    // CIdentity flags: 1 active currency, 2 locked, 0x8000 revoked.
+    for (bit, on, off) in [
+        (1, "Currency defined", "Currency flag cleared"),
+        (2, "Locked", "Unlocked"),
+        (0x8000, "Revoked", "Recovered from revocation"),
+    ] {
+        match (flags(previous) & bit != 0, flags(current) & bit != 0) {
+            (false, true) => changes.push(on.into()),
+            (true, false) => changes.push(off.into()),
+            _ => {}
+        }
+    }
+    if previous["timelock"] != current["timelock"] {
+        changes.push("Timelock changed".into());
+    }
+    if previous["contentmap"] != current["contentmap"]
+        || previous["contentmultimap"] != current["contentmultimap"]
+    {
+        changes.push("Attached data changed".into());
+    }
+    if changes.is_empty() {
+        changes.push("Updated, with no change to control".into());
+    }
+    changes
 }
 
 fn block_row(block: &BlockSummary) -> BlockRow {

@@ -26,6 +26,8 @@ struct IdentityView: View {
                     }
                 }
 
+                IdentityControlCard(identity: identity)
+
                 Card("Identity") {
                     FieldRow(label: "Name", value: identity.name)
                     OptionalFieldRow(
@@ -64,6 +66,8 @@ struct IdentityView: View {
                         route: { .identity(name: $0) }, monospaced: true)
                 }
 
+                IdentityHistoryCard(name: identity.identityAddress ?? name)
+
                 Card("Latest update") {
                     if let height = identity.blockHeight {
                         FieldRow(
@@ -76,6 +80,12 @@ struct IdentityView: View {
                 }
 
                 JSONSection(json: identity.json)
+            }
+            .task(id: identity.identityAddress) {
+                await model.resolveNames([
+                    identity.parent, identity.systemId, identity.revocationAuthority,
+                    identity.recoveryAuthority,
+                ])
             }
         }
         .navigationTitle("Identity")
@@ -93,6 +103,7 @@ struct IdentityView: View {
 struct CurrencyView: View {
     /// A currency name or ID.
     let name: String
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         LoadView(key: "currency:\(name)") { explorer in
@@ -147,6 +158,8 @@ struct CurrencyView: View {
                     }
                 }
 
+                CurrencyOverTimeCard(currency: currency)
+
                 if !currency.reserves.isEmpty {
                     Card("Reserves", trailing: "\(currency.reserves.count) currencies") {
                         Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 8) {
@@ -176,6 +189,10 @@ struct CurrencyView: View {
                 }
 
                 JSONSection(json: currency.json)
+            }
+            .task(id: currency.currencyId) {
+                await model.resolveNames(
+                    [currency.parent, currency.systemId] + currency.reserves.map(\.currencyId))
             }
         }
         .navigationTitle("Currency")

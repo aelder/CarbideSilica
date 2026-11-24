@@ -35,6 +35,11 @@ final class AppModel {
     /// Objects opened this session, newest first.
     private(set) var recent: [Route] = []
 
+    /// Names resolved for identity and currency IDs, so views can show a name before an address.
+    private(set) var names: [String: String] = [:]
+    private var nameRequests: Set<String> = []
+    private var openedStartObject = false
+
     private(set) var node: NodeStatus?
     private(set) var nodeError: String?
     /// Validation speed over the last few minutes, oldest first.
@@ -83,6 +88,8 @@ final class AppModel {
             apiEndpoint: defaults.bool(forKey: SettingsKey.apiEnabled) ? apiURL : nil
         )
         explorer = nil
+        names = [:]
+        nameRequests = []
         status = nil
         statusError = nil
         blocks = []
@@ -110,6 +117,18 @@ final class AppModel {
         }
         // Views reload when the generation changes, so they start once the bridge is ready.
         generation += 1
+        openStartObject()
+    }
+
+    /// Opens the object named on the command line, once: `CarbideSilica -open vETH@`.
+    /// This mirrors Carbide's `--open`.
+    private func openStartObject() {
+        guard !openedStartObject, explorer != nil else { return }
+        openedStartObject = true
+        let arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+        guard let query = arguments["open"] as? String, !query.isEmpty else { return }
+        searchText = query
+        Task { await search() }
     }
 
     /// Turns on the public API fallback. Only called from an explicit user action.
@@ -183,6 +202,22 @@ final class AppModel {
         } catch {
             guard generation == self.generation else { return }
             nodeError = describe(error)
+        }
+    }
+
+    /// Looks up names for any identity or currency IDs not yet known. Other strings are ignored.
+    func resolveNames(_ ids: [String?]) async {
+        guard let explorer else { return }
+        let wanted = Set(ids.compactMap { $0 }).filter {
+            $0.hasPrefix("i") && $0.count == 34 && names[$0] == nil && !nameRequests.contains($0)
+        }
+        guard !wanted.isEmpty else { return }
+        nameRequests.formUnion(wanted)
+        let generation = generation
+        let found = await explorer.names(ids: Array(wanted))
+        guard generation == self.generation else { return }
+        for entry in found {
+            names[entry.id] = entry.name
         }
     }
 

@@ -166,11 +166,22 @@ struct FieldRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 170, alignment: .leading)
             if let route {
-                Button(value) { model.open(route) }
-                    .buttonStyle(.link)
-                    .font(monospaced ? .body.monospaced() : .body)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                // A known name is shown before the raw ID; the ID stays one hover or copy away.
+                if let name = model.names[value] {
+                    Button(name) { model.open(route) }
+                        .buttonStyle(.link)
+                        .lineLimit(1)
+                        .help(value)
+                    Text(Format.short(value, head: 6, tail: 4))
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.tertiary)
+                } else {
+                    Button(value) { model.open(route) }
+                        .buttonStyle(.link)
+                        .font(monospaced ? .body.monospaced() : .body)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             } else {
                 Text(value)
                     .font(monospaced ? .body.monospaced() : .body)
@@ -231,11 +242,18 @@ struct RouteLink: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Button(shorten ? Format.short(text) : text) { model.open(route) }
-            .buttonStyle(.link)
-            .font(.body.monospaced())
-            .lineLimit(1)
-            .help(text)
+        if let name = model.names[text] {
+            Button(name) { model.open(route) }
+                .buttonStyle(.link)
+                .lineLimit(1)
+                .help(text)
+        } else {
+            Button(shorten ? Format.short(text) : text) { model.open(route) }
+                .buttonStyle(.link)
+                .font(.body.monospaced())
+                .lineLimit(1)
+                .help(text)
+        }
     }
 }
 

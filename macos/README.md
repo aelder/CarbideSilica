@@ -13,6 +13,15 @@ Like Carbide, it is read-only. It never creates or signs transactions.
   or currency (`name@@`), using Carbide's own resolver
 - Block, transaction, identity, currency and address views, with links between
   them and the daemon's raw JSON for each
+- Node view: sync progress across the chain's history, validation speed and peers
+- Chain pulse: recent blocks on a time axis, with slow gaps marked
+- Transaction flow: a plain-sentence summary and a picture of where the coins went
+- Identity control diagram and version history
+- Currency supply and reserve prices over time, with one cursor through all of them
+- Names shown in place of identity and currency IDs where they are known
+
+`CarbideSilica -open <object>` opens a block, transaction, address, identity or
+currency at launch, like Carbide's `--open`.
 
 Not here yet: charts, the mempool, notarizations, DeFi views, bookmarks, the
 future-block estimator, multiple chains at once, and Carbide's SQLite cache.

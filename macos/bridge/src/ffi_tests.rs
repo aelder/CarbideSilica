@@ -166,6 +166,34 @@ async fn live_lookups_through_an_api() {
             .err()
     );
     println!("date: {:?}", explorer.resolve("2026-09-06".into()).await);
+    let names = explorer
+        .names(vec![
+            "i5v3h9FWVdRFbNHU7DfcpGykQjRaHtMqu7".into(),
+            "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV".into(),
+        ])
+        .await;
+    println!("names: {names:?}");
+    let history = explorer.identity_history("vETH@".into()).await.unwrap();
+    for version in &history {
+        println!(
+            "  v #{} {:?} {:?}",
+            version.height, version.time, version.changes
+        );
+    }
+    let tip = explorer.chain_status().await.unwrap().blocks;
+    let points = explorer
+        .currency_history("Bridge.vETH".into(), tip - 43200, tip, 6)
+        .await
+        .unwrap();
+    for point in &points {
+        println!(
+            "  p #{} {:?} supply {:?} reserves {}",
+            point.height,
+            point.time,
+            point.supply,
+            point.reserves.len()
+        );
+    }
 }
 
 #[test]
@@ -182,4 +210,46 @@ fn reads_a_peer_and_drops_its_inflight_list() {
     assert!((peer.row.ping_ms.unwrap() - 38.0).abs() < 1e-9);
     assert_eq!(peer.row.synced_blocks, Some(388290));
     assert!(!peer.row.json.contains("inflight"));
+}
+
+#[test]
+fn describes_identity_changes_in_plain_words() {
+    use serde_json::json;
+    let first = json!({"primaryaddresses": ["RA"], "minimumsignatures": 1, "flags": 0,
+        "revocationauthority": "iSelf", "recoveryauthority": "iSelf", "timelock": 0});
+    assert_eq!(identity_changes(None, &first), ["Registered"]);
+
+    let second = json!({"primaryaddresses": ["RA", "RB", "RC"], "minimumsignatures": 2, "flags": 1,
+        "revocationauthority": "iSelf", "recoveryauthority": "iVault", "timelock": 0});
+    assert_eq!(
+        identity_changes(Some(&first), &second),
+        [
+            "Signing keys changed (2 of 3 needed)",
+            "Recovery authority changed",
+            "Currency defined"
+        ]
+    );
+    assert_eq!(
+        identity_changes(Some(&second), &second),
+        ["Updated, with no change to control"]
+    );
+    let revoked = json!({"primaryaddresses": ["RA", "RB", "RC"], "minimumsignatures": 2, "flags": 0x8001,
+        "revocationauthority": "iSelf", "recoveryauthority": "iVault", "timelock": 0});
+    assert_eq!(identity_changes(Some(&second), &revoked), ["Revoked"]);
+}
+
+#[test]
+fn friendly_names_drop_the_chain_root() {
+    let explorer = explorer(None);
+    assert_eq!(
+        explorer.short_name("Verus Coin Foundation.VRSC@"),
+        "Verus Coin Foundation@"
+    );
+    assert_eq!(explorer.short_name("DAI.vETH@"), "DAI.vETH@");
+    assert_eq!(
+        explorer
+            .cached_name("i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV")
+            .as_deref(),
+        Some("VRSC")
+    );
 }
