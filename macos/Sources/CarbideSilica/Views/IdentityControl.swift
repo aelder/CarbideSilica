@@ -178,6 +178,7 @@ struct IdentityControlCard: View {
 /// Every recorded version of an identity, newest first, with what changed each time.
 struct IdentityHistoryCard: View {
     let name: String
+    var identityAddress: String?
     @State private var showAll = false
 
     private let collapsedCount = 8
@@ -186,6 +187,10 @@ struct IdentityHistoryCard: View {
         LoadView(key: "identity-history:\(name)") { explorer in
             try await explorer.identityHistory(name: name)
         } content: { versions in
+            VStack(spacing: 20) {
+            if let first = versions.first {
+                IdentityOriginCard(registration: first, identityAddress: identityAddress)
+            }
             Card("History", trailing: "\(versions.count) version\(versions.count == 1 ? "" : "s")") {
                 let newestFirst = Array(versions.reversed())
                 let shown = showAll ? newestFirst : Array(newestFirst.prefix(collapsedCount))
@@ -202,6 +207,7 @@ struct IdentityHistoryCard: View {
                     }
                     .buttonStyle(.link)
                 }
+            }
             }
         }
         .frame(minHeight: 80)

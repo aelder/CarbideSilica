@@ -78,8 +78,14 @@ struct CurrencyOverTimeCard: View {
                             }, digits: 6)
                     }
                 }
+                Divider()
+                activityRow
                 if flatSince != nil {
                     Text(flatSince!).font(.caption).foregroundStyle(.secondary)
+                }
+                if let point = selected, !point.reserves.isEmpty {
+                    Divider().padding(.vertical, 4)
+                    PoolBatchView(currencyName: currency.name, point: point, name: reserveName)
                 }
             }
         }
@@ -124,6 +130,45 @@ struct CurrencyOverTimeCard: View {
         let date = Date(timeIntervalSince1970: TimeInterval(time))
             .formatted(date: .abbreviated, time: .omitted)
         return "Supply has not changed since about \(date): no conversions were recorded at the sampled blocks after that."
+    }
+
+    /// A sample counts as activity when the latest batch differs from the previous sample's.
+    private var changed: [Bool] {
+        let marks = points.map { point in
+            point.reserves.map { "\($0.lastIn)/\($0.lastOut)" }.joined(separator: "|") + "|\(point.supply ?? 0)"
+        }
+        return marks.indices.map { $0 > 0 && marks[$0] != marks[$0 - 1] }
+    }
+
+    /// Marks where conversions happened between samples, on the same axis as the traces.
+    private var activityRow: some View {
+        let flags = changed
+        let position = min(Int(index), max(points.count - 1, 0))
+        return HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Activity").fontWeight(.semibold)
+                Text("conversions seen").font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(width: 130, alignment: .leading)
+            Canvas { context, size in
+                let count = max(flags.count - 1, 1)
+                for (offset, active) in flags.enumerated() where active {
+                    let x = size.width * CGFloat(offset) / CGFloat(count)
+                    context.fill(
+                        Path(CGRect(x: x - 1.5, y: 6, width: 3, height: size.height - 12)),
+                        with: .color(.purple))
+                }
+                let cursor = size.width * CGFloat(position) / CGFloat(count)
+                context.fill(
+                    Path(CGRect(x: cursor - 0.75, y: 0, width: 1.5, height: size.height)),
+                    with: .color(.primary.opacity(0.55)))
+            }
+            .frame(height: 30)
+            Text("\(flags.filter { $0 }.count) of \(max(flags.count - 1, 0)) intervals")
+                .font(.caption).foregroundStyle(.secondary)
+                .frame(width: 130, alignment: .trailing)
+        }
+        .padding(.vertical, 7)
     }
 
     @ViewBuilder

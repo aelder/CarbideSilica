@@ -26,8 +26,12 @@ struct CarbideSilicaApp: App {
             CommandMenu("Go") {
                 Button("Dashboard") { model.show(.dashboard) }
                     .keyboardShortcut("1", modifiers: .command)
-                Button("Node") { model.show(.node) }
+                Button("Mempool") { model.show(.mempool) }
                     .keyboardShortcut("2", modifiers: .command)
+                Button("Marketplace") { model.show(.marketplace) }
+                    .keyboardShortcut("3", modifiers: .command)
+                Button("Node") { model.show(.node) }
+                    .keyboardShortcut("4", modifiers: .command)
                 Button("Back") { _ = model.path.popLast() }
                     .keyboardShortcut("[", modifiers: .command)
                     .disabled(model.path.isEmpty)
@@ -58,6 +62,8 @@ struct RootView: View {
                 Group {
                     switch model.sidebar {
                     case .dashboard: DashboardView()
+                    case .mempool: MempoolView()
+                    case .marketplace: MarketplaceView()
                     case .node: NodeView()
                     }
                 }
@@ -107,9 +113,15 @@ struct Sidebar: View {
         List(selection: selection) {
             Section("Watch") {
                 Label("Dashboard", systemImage: "square.grid.2x2").tag(SidebarItem.dashboard)
+                Label("Mempool", systemImage: "tray.full")
+                    .badge(Int(model.node?.mempoolCount ?? 0))
+                    .tag(SidebarItem.mempool)
+            }
+            Section("Explore") {
+                Label("Marketplace", systemImage: "tag").tag(SidebarItem.marketplace)
             }
             Section("Node") {
-                Label("Sync and peers", systemImage: "server.rack")
+                Label("Node", systemImage: "server.rack")
                     .badge(model.syncFraction.map { Text(Format.percent($0)) })
                     .tag(SidebarItem.node)
             }

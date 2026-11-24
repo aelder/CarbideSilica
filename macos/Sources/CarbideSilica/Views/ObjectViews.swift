@@ -66,7 +66,8 @@ struct IdentityView: View {
                         route: { .identity(name: $0) }, monospaced: true)
                 }
 
-                IdentityHistoryCard(name: identity.identityAddress ?? name)
+                IdentityHistoryCard(
+                    name: identity.identityAddress ?? name, identityAddress: identity.identityAddress)
 
                 Card("Latest update") {
                     if let height = identity.blockHeight {

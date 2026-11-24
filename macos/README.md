@@ -23,12 +23,19 @@ Like Carbide, it is read-only. It never creates or signs transactions.
   one verdict and the evidence behind it
 - Notarization lanes: two systems as parallel lanes with each notarization a tie between
   them, showing confirmed, pending and stalled links
+- Mempool: waiting transactions as tiles sized by bytes and shaded by age
+- Marketplace: open offers plotted by time left and price
+- Peers by response time, and the side branches the node knows near the chain tip
+- Pool conversions: what the latest batch moved in and out of each reserve, with an
+  activity row marking when conversions happened
+- Identity origin: who probably paid for a registration and what it paid out
 
 `CarbideSilica -open <object>` opens a block, transaction, address, identity or
 currency at launch, like Carbide's `--open`.
 
-Not here yet: charts, the mempool, the marketplace, the currency browser, witnesses,
-reorg history, bookmarks, the future-block estimator and multiple chains at once.
+Not here yet: the metric charts, the currency browser, witnesses, protocol links,
+per-transaction reorg history, bookmarks, the future-block estimator and multiple
+chains at once.
 
 Following a transfer uses Carbide's SQLite cache, kept in
 `~/Library/Caches/verus-carbide`. It holds only what has been looked up.

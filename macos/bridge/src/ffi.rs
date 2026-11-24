@@ -323,6 +323,11 @@ pub struct ReservePoint {
     pub currency_id: String,
     pub reserves: Option<f64>,
     pub price_in_reserve: Option<f64>,
+    /// What the most recent import batch before this block moved into the pool.
+    pub last_in: f64,
+    /// What that batch paid out of the pool.
+    pub last_out: f64,
+    pub last_fees: f64,
 }
 
 /// A currency's recorded state at one block.
@@ -437,6 +442,50 @@ pub struct NotarizationData {
     pub json: String,
 }
 
+/// A transaction waiting in the local node's memory pool.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct MempoolRow {
+    pub txid: String,
+    pub size: u64,
+    pub fee_sats: Option<i64>,
+    /// When the node first saw it.
+    pub time: Option<u64>,
+    /// How many other waiting transactions this one depends on.
+    pub depends: u32,
+    pub tags: Vec<String>,
+}
+
+/// The end of a chain of blocks the node knows about.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ChainTip {
+    pub height: u64,
+    pub hash: String,
+    /// Blocks on this branch since it left the active chain. Zero for the active chain.
+    pub branch_length: u64,
+    /// The daemon's status: active, valid-fork, valid-headers, headers-only or invalid.
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum OfferKind {
+    IdentityForSale,
+    IdentityWanted,
+    CurrencySwap,
+}
+
+/// An open marketplace offer.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct MarketOffer {
+    pub txid: String,
+    pub kind: OfferKind,
+    /// The identity's name, or the currency ID being offered.
+    pub subject: String,
+    pub subject_id: Option<String>,
+    pub price: f64,
+    pub price_currency: String,
+    pub expiry_height: Option<u64>,
+}
+
 /// Where a search query leads.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum Route {
@@ -462,6 +511,7 @@ pub struct Explorer {
 const RECENT_ADDRESS_TXIDS: usize = 200;
 const MAX_RECENT_BLOCKS: u32 = 100;
 const MAX_NAME_LOOKUPS: usize = 48;
+const MAX_OFFERS: usize = 4000;
 const MAX_HISTORY_TIMES: usize = 60;
 const MAX_HISTORY_SAMPLES: u32 = 200;
 const MAX_BLOCK_TX_BODIES: usize = 150;
@@ -725,10 +775,15 @@ impl Explorer {
                         .into_iter()
                         .flatten()
                         .filter_map(|reserve| {
+                            let currency_id = text(&reserve["currencyid"])?;
+                            let flow = &state["currencies"][&currency_id];
                             Some(ReservePoint {
-                                currency_id: text(&reserve["currencyid"])?,
                                 reserves: reserve["reserves"].as_f64(),
                                 price_in_reserve: reserve["priceinreserve"].as_f64(),
+                                last_in: flow["reservein"].as_f64().unwrap_or(0.0),
+                                last_out: flow["reserveout"].as_f64().unwrap_or(0.0),
+                                last_fees: flow["conversionfees"].as_f64().unwrap_or(0.0),
+                                currency_id,
                             })
                         })
                         .collect(),
@@ -815,6 +870,63 @@ impl Explorer {
             }
         }
         Ok(data)
+    }
+
+    /// Transactions waiting in the local node's memory pool. Only a local daemon has one.
+    pub async fn mempool(&self) -> Outcome<Vec<MempoolRow>> {
+        let output = self.settle(self.client.get_raw_mempool_verbose(true).await)?;
+        let mut rows: Vec<MempoolRow> = output
+            .result
+            .iter()
+            .map(|(txid, entry)| mempool_row(txid, entry))
+            .collect();
+        rows.sort_by(|a, b| b.size.cmp(&a.size).then_with(|| a.txid.cmp(&b.txid)));
+        Ok(rows)
+    }
+
+    /// Every chain tip the node knows, tallest first: the active chain and any side branches.
+    pub async fn chain_tips(&self) -> Outcome<Vec<ChainTip>> {
+        let output = self.settle(
+            self.client
+                .call_with_raw::<Vec<Value>>("getchaintips", &[])
+                .await,
+        )?;
+        let mut tips: Vec<ChainTip> = output
+            .result
+            .iter()
+            .map(|tip| ChainTip {
+                height: tip["height"].as_u64().unwrap_or(0),
+                hash: text(&tip["hash"]).unwrap_or_default(),
+                branch_length: tip["branchlen"].as_u64().unwrap_or(0),
+                status: text(&tip["status"]).unwrap_or_else(|| "unknown".into()),
+            })
+            .collect();
+        tips.sort_by(|a, b| b.height.cmp(&a.height));
+        Ok(tips)
+    }
+
+    /// Open offers involving this chain's currency: identities for sale or wanted, and
+    /// currency swaps.
+    pub async fn offers(&self) -> Outcome<Vec<MarketOffer>> {
+        let output = self.settle(self.client.get_offers(&self.config.chain.name, true).await)?;
+        let mut offers = Vec::new();
+        for entries in output
+            .result
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(_, list)| list)
+        {
+            for entry in entries.as_array().into_iter().flatten() {
+                if let Some(offer) = market_offer(entry) {
+                    offers.push(offer);
+                }
+                if offers.len() >= MAX_OFFERS {
+                    return Ok(offers);
+                }
+            }
+        }
+        Ok(offers)
     }
 
     /// `id` is a height or a block hash.
@@ -1551,6 +1663,91 @@ fn notarization_data(raw: &Value, local_system: Option<&str>) -> NotarizationDat
         last_confirmed_index: last_confirmed.map(|index| index as u32),
         json: pretty(&without(raw, "notarizations")),
     }
+}
+
+fn mempool_row(txid: &str, entry: &Value) -> MempoolRow {
+    // With full transactions requested, the entry carries the transaction's own fields.
+    let tags = if entry.get("vout").is_some() {
+        labels(&TransactionSummary {
+            txid: txid.to_string(),
+            raw: Some(entry.clone()),
+        })
+    } else {
+        Vec::new()
+    };
+    MempoolRow {
+        txid: txid.to_string(),
+        size: entry["size"].as_u64().unwrap_or(0),
+        fee_sats: entry["fee"]
+            .as_f64()
+            .map(|coins| (coins * 100_000_000.0).round() as i64),
+        time: entry["time"].as_u64(),
+        depends: count(Some(&entry["depends"])),
+        tags,
+    }
+}
+
+/// Reads one `getoffers` entry. Each has what is offered and what is accepted in return;
+/// either side can be an identity or a map of currency amounts.
+fn market_offer(entry: &Value) -> Option<MarketOffer> {
+    let body = &entry["offer"];
+    let txid = text(&body["txid"])?;
+    let offered = &body["offer"];
+    let accepted = &body["accept"];
+    let first_amount = |side: &Value| {
+        side.as_object()?
+            .iter()
+            .find_map(|(currency, amount)| Some((currency.clone(), amount.as_f64()?)))
+    };
+    let identity = |side: &Value| {
+        Some((
+            text(&side["name"]).or_else(|| text(&side["identityid"]))?,
+            text(&side["identityid"]),
+        ))
+    };
+    let expiry_height = body["blockexpiry"].as_u64();
+    if offered.get("identityid").is_some() {
+        let (subject, subject_id) = identity(offered)?;
+        let (price_currency, price) = first_amount(accepted)?;
+        return Some(MarketOffer {
+            txid,
+            kind: OfferKind::IdentityForSale,
+            subject,
+            subject_id,
+            price,
+            price_currency,
+            expiry_height,
+        });
+    }
+    if accepted.get("identityid").is_some() {
+        let (subject, subject_id) = identity(accepted)?;
+        let (price_currency, price) = first_amount(offered)?;
+        return Some(MarketOffer {
+            txid,
+            kind: OfferKind::IdentityWanted,
+            subject,
+            subject_id,
+            price,
+            price_currency,
+            expiry_height,
+        });
+    }
+    // A swap: the largest offered amount for the first accepted one.
+    let (subject, _) = offered
+        .as_object()?
+        .iter()
+        .filter_map(|(currency, amount)| Some((currency.clone(), amount.as_f64()?)))
+        .max_by(|a, b| a.1.total_cmp(&b.1))?;
+    let (price_currency, price) = first_amount(accepted)?;
+    Some(MarketOffer {
+        txid,
+        kind: OfferKind::CurrencySwap,
+        subject_id: Some(subject.clone()),
+        subject,
+        price,
+        price_currency,
+        expiry_height,
+    })
 }
 
 fn block_row(block: &BlockSummary) -> BlockRow {

@@ -14,7 +14,9 @@ struct NodeView: View {
                     if isSyncing(node) {
                         SpeedCard(samples: model.speeds)
                     }
+                    PeersRadarCard(node: node)
                     PeersCard(node: node)
+                    BranchesCard()
                 }
             } else if let error = model.nodeError ?? model.statusError {
                 ContentUnavailableView {

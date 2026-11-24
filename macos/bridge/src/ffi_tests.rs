@@ -212,6 +212,10 @@ async fn live_lookups_through_an_api() {
             row.on_best_chain
         );
     }
+    let offers = explorer.offers().await.unwrap();
+    println!("offers: {} first {:?}", offers.len(), offers.first());
+    let tips = explorer.chain_tips().await.unwrap();
+    println!("tips: {} top {:?}", tips.len(), &tips[..tips.len().min(4)]);
     let names = explorer
         .names(vec![
             "i5v3h9FWVdRFbNHU7DfcpGykQjRaHtMqu7".into(),
@@ -340,4 +344,57 @@ fn an_empty_trail_is_reported_as_unknown() {
     let trace = transfer_trace(crate::defi::Trail::default());
     assert_eq!(trace.confidence, Confidence::Unknown);
     assert!(trace.legs.is_empty());
+}
+
+#[test]
+fn reads_offers_of_each_kind() {
+    use serde_json::json;
+    let sale = market_offer(&json!({"identityid": "iA", "price": 225.0, "offer": {
+        "accept": {"iVRSC": 225.0}, "blockexpiry": 7874345, "txid": "aa",
+        "offer": {"identityid": "iA", "name": "digital fingerprint", "systemid": "iVRSC"}}}))
+    .unwrap();
+    assert_eq!(sale.kind, OfferKind::IdentityForSale);
+    assert_eq!(
+        (
+            sale.subject.as_str(),
+            sale.price,
+            sale.price_currency.as_str()
+        ),
+        ("digital fingerprint", 225.0, "iVRSC")
+    );
+    assert_eq!(sale.expiry_height, Some(7874345));
+
+    let wanted = market_offer(&json!({"offer": {"txid": "bb", "blockexpiry": 10,
+        "offer": {"iVRSC": 12.0}, "accept": {"identityid": "iB", "name": "quartz"}}}))
+    .unwrap();
+    assert_eq!(wanted.kind, OfferKind::IdentityWanted);
+    assert_eq!((wanted.subject.as_str(), wanted.price), ("quartz", 12.0));
+
+    let swap = market_offer(&json!({"offer": {"txid": "cc", "blockexpiry": 10,
+        "offer": {"iVRSC": 0.1}, "accept": {"iDAI": 100.0}}}))
+    .unwrap();
+    assert_eq!(swap.kind, OfferKind::CurrencySwap);
+    assert_eq!(
+        (
+            swap.subject.as_str(),
+            swap.price_currency.as_str(),
+            swap.price
+        ),
+        ("iVRSC", "iDAI", 100.0)
+    );
+    assert!(market_offer(&json!({"offer": {"offer": {}, "accept": {}}})).is_none());
+}
+
+#[test]
+fn reads_a_mempool_entry() {
+    use serde_json::json;
+    let row = mempool_row(
+        "ab",
+        &json!({"size": 1400, "fee": 0.0001, "time": 1795540000, "depends": ["cd"]}),
+    );
+    assert_eq!(
+        (row.size, row.fee_sats, row.depends),
+        (1400, Some(10000), 1)
+    );
+    assert!(row.tags.is_empty());
 }

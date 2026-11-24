@@ -16,6 +16,8 @@ enum SettingsKey {
 /// The places the sidebar can show.
 enum SidebarItem: Hashable {
     case dashboard
+    case mempool
+    case marketplace
     case node
 }
 
