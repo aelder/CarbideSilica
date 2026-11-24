@@ -29,13 +29,22 @@ Like Carbide, it is read-only. It never creates or signs transactions.
 - Pool conversions: what the latest batch moved in and out of each reserve, with an
   activity row marking when conversions happened
 - Identity origin: who probably paid for a registration and what it paid out
+- Charts of block intervals, mining difficulty, staking difficulty and staked share,
+  and an estimator for future blocks
+- Currency browser with filters for option flags and launch status
+- Bookmarks, kept in Carbide's own bookmark file so the terminal app shares them
+- Witnesses and protocol links on notarization transactions, using Carbide's own
+  investigation code
+- A hex and text view for unrecognised output data
+- Times in UTC or local, and cache size and clearing, in Settings
 
 `CarbideSilica -open <object>` opens a block, transaction, address, identity or
 currency at launch, like Carbide's `--open`.
 
-Not here yet: the metric charts, the currency browser, witnesses, protocol links,
-per-transaction reorg history, bookmarks, the future-block estimator and multiple
-chains at once.
+Not here yet: the fee pool chart, several chains at once, peer actions (ping, ban,
+disconnect), the peer log, per-transaction reorg history, tokenized-control tracing,
+registration payment breakdowns and the historical reverse lookup. The last three
+live in Carbide's terminal layer and need to be lifted out of it first.
 
 Following a transfer uses Carbide's SQLite cache, kept in
 `~/Library/Caches/verus-carbide`. It holds only what has been looked up.

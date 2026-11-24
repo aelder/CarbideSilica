@@ -18,6 +18,8 @@ struct BlockView: View {
                     title: "#\(Format.integer(block.row.height))",
                     subtitle: block.row.hash,
                     tags: [block.row.staked ? "Staked" : "Mined"]
+                        + (block.confirmations == 1 ? ["Chain tip"] : [])
+                        + ((block.confirmations ?? 1) < 0 ? ["Not on the active chain"] : [])
                 )
                 HStack {
                     Button {

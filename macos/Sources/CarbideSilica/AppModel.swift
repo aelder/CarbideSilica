@@ -8,6 +8,7 @@ enum SettingsKey {
     static let testnet = "testnet"
     static let configFile = "configFile"
     static let apiEnabled = "apiEnabled"
+    static let useUTC = "useUTC"
     static let apiURL = "apiURL"
 
     static let defaultAPI = "https://api.verus.services"
@@ -17,7 +18,10 @@ enum SettingsKey {
 enum SidebarItem: Hashable {
     case dashboard
     case mempool
+    case charts
+    case currencies
     case marketplace
+    case bookmarks
     case node
 }
 
@@ -41,6 +45,9 @@ final class AppModel {
     private(set) var names: [String: String] = [:]
     private var nameRequests: Set<String> = []
     private var openedStartObject = false
+
+    private(set) var bookmarks: [BookmarkRow] = []
+    private(set) var bookmarkError: String?
 
     private(set) var node: NodeStatus?
     private(set) var nodeError: String?
@@ -119,6 +126,7 @@ final class AppModel {
         }
         // Views reload when the generation changes, so they start once the bridge is ready.
         generation += 1
+        reloadBookmarks()
         openStartObject()
     }
 
@@ -205,6 +213,58 @@ final class AppModel {
             guard generation == self.generation else { return }
             nodeError = describe(error)
         }
+    }
+
+    func reloadBookmarks() {
+        guard let explorer else { return }
+        do {
+            bookmarks = try explorer.bookmarks()
+            bookmarkError = nil
+        } catch {
+            bookmarkError = describe(error)
+        }
+    }
+
+    /// Saves the object as a bookmark in Carbide's bookmark file.
+    func addBookmark(_ route: Route, description: String) {
+        guard let explorer else { return }
+        let (kind, target): (String, String) =
+            switch route {
+            case .block(let id): ("block", id)
+            case .transaction(let txid): ("transaction", txid)
+            case .identity(let name): ("identity", name)
+            case .currency(let name): ("currency", name)
+            case .address(let address): ("address", address)
+            }
+        do {
+            try explorer.addBookmark(kind: kind, target: target, description: description)
+            bookmarkError = nil
+        } catch {
+            bookmarkError = describe(error)
+        }
+        reloadBookmarks()
+    }
+
+    func removeBookmark(_ index: UInt32) {
+        guard let explorer else { return }
+        do {
+            try explorer.removeBookmark(index: index)
+            bookmarkError = nil
+        } catch {
+            bookmarkError = describe(error)
+        }
+        reloadBookmarks()
+    }
+
+    func editBookmark(_ index: UInt32, description: String) {
+        guard let explorer else { return }
+        do {
+            try explorer.editBookmark(index: index, description: description)
+            bookmarkError = nil
+        } catch {
+            bookmarkError = describe(error)
+        }
+        reloadBookmarks()
     }
 
     /// Looks up names for any identity or currency IDs not yet known. Other strings are ignored.

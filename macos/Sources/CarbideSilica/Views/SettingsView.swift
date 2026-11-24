@@ -11,6 +11,10 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.configFile) private var configFile = ""
     @AppStorage(SettingsKey.apiEnabled) private var apiEnabled = false
     @AppStorage(SettingsKey.apiURL) private var apiURL = SettingsKey.defaultAPI
+    @AppStorage(SettingsKey.useUTC) private var useUTC = false
+    @State private var cache: CacheInfo?
+    @State private var cacheMessage: String?
+    @State private var confirmingClear = false
 
     var body: some View {
         Form {
@@ -44,6 +48,31 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
+            Section {
+                Toggle("Show times in UTC", isOn: $useUTC)
+            } header: {
+                Text("Display")
+            } footer: {
+                Text("Applies to dates on pages opened from now on.").foregroundStyle(.secondary)
+            }
+
+            Section {
+                if let cache {
+                    LabeledContent("Size", value: Format.bytes(cache.bytes))
+                    LabeledContent("Location", value: cache.path)
+                }
+                Button("Clear Cache…") { confirmingClear = true }
+                    .disabled(cache == nil)
+                if let cacheMessage {
+                    Text(cacheMessage).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Storage")
+            } footer: {
+                Text("The cache holds data that transfer tracing and witness lookups have fetched. Bookmarks and settings are kept separately.")
+                    .foregroundStyle(.secondary)
+            }
+
             HStack {
                 Spacer()
                 Button("Apply") { model.connect() }
@@ -51,6 +80,20 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .task(id: model.generation) { cache = model.explorer?.cacheInfo() }
+        .confirmationDialog("Clear the cache?", isPresented: $confirmingClear) {
+            Button("Clear Cache", role: .destructive) {
+                do {
+                    try model.explorer?.clearCache()
+                    cacheMessage = "Cache cleared."
+                } catch {
+                    cacheMessage = describe(error)
+                }
+                cache = model.explorer?.cacheInfo()
+            }
+        } message: {
+            Text("Cached lookups are removed and fetched again when needed. Bookmarks and settings are not affected.")
+        }
         .frame(width: 560)
         .fixedSize(horizontal: false, vertical: true)
     }

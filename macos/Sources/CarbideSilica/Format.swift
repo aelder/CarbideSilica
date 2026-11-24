@@ -16,9 +16,15 @@ enum Format {
         value.formatted(.number)
     }
 
+    /// Dates follow the "Show times in UTC" setting.
     static func date(_ unix: UInt64) -> String {
-        Date(timeIntervalSince1970: TimeInterval(unix))
-            .formatted(date: .abbreviated, time: .standard)
+        let date = Date(timeIntervalSince1970: TimeInterval(unix))
+        guard UserDefaults.standard.bool(forKey: SettingsKey.useUTC) else {
+            return date.formatted(date: .abbreviated, time: .standard)
+        }
+        var style = Date.FormatStyle(date: .abbreviated, time: .standard)
+        style.timeZone = .gmt
+        return date.formatted(style) + " UTC"
     }
 
     static func age(_ unix: UInt64, now: Date = .now) -> String {

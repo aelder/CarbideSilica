@@ -51,6 +51,8 @@ struct CarbideSilicaApp: App {
 /// The window's content: a navigation stack rooted at the dashboard, with search in the toolbar.
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @State private var bookmarking: Route?
+    @State private var bookmarkNote = ""
 
     var body: some View {
         @Bindable var model = model
@@ -63,7 +65,10 @@ struct RootView: View {
                     switch model.sidebar {
                     case .dashboard: DashboardView()
                     case .mempool: MempoolView()
+                    case .charts: ChartsView()
+                    case .currencies: CurrenciesView()
                     case .marketplace: MarketplaceView()
+                    case .bookmarks: BookmarksView()
                     case .node: NodeView()
                     }
                 }
@@ -77,8 +82,41 @@ struct RootView: View {
                 SearchField()
             }
             ToolbarItem(placement: .primaryAction) {
+                if let current = model.path.last {
+                    Button {
+                        bookmarkNote = ""
+                        bookmarking = current
+                    } label: {
+                        Label("Bookmark", systemImage: "bookmark")
+                    }
+                    .help("Bookmark this page")
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
                 ConnectionBadge()
             }
+        }
+        .alert(
+            "Bookmark this page",
+            isPresented: Binding(get: { bookmarking != nil }, set: { if !$0 { bookmarking = nil } })
+        ) {
+            TextField("Description (optional)", text: $bookmarkNote)
+            Button("Save") {
+                if let bookmarking { model.addBookmark(bookmarking, description: bookmarkNote) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Saved to Carbide's bookmark file, which the terminal app also reads.")
+        }
+        .alert(
+            "Bookmarks",
+            isPresented: Binding(
+                get: { model.bookmarkError != nil && model.sidebar != .bookmarks },
+                set: { _ in })
+        ) {
+            Button("OK", role: .cancel) { model.reloadBookmarks() }
+        } message: {
+            Text(model.bookmarkError ?? "")
         }
         .alert(
             "Search",
@@ -116,9 +154,16 @@ struct Sidebar: View {
                 Label("Mempool", systemImage: "tray.full")
                     .badge(Int(model.node?.mempoolCount ?? 0))
                     .tag(SidebarItem.mempool)
+                Label("Charts", systemImage: "chart.xyaxis.line").tag(SidebarItem.charts)
             }
             Section("Explore") {
+                Label("Currencies", systemImage: "circle.hexagongrid").tag(SidebarItem.currencies)
                 Label("Marketplace", systemImage: "tag").tag(SidebarItem.marketplace)
+            }
+            Section("Library") {
+                Label("Bookmarks", systemImage: "bookmark")
+                    .badge(model.bookmarks.count)
+                    .tag(SidebarItem.bookmarks)
             }
             Section("Node") {
                 Label("Node", systemImage: "server.rack")

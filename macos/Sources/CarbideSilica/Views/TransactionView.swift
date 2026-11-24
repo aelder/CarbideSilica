@@ -27,6 +27,14 @@ struct TransactionView: View {
                     TransferTraceCard(txid: transaction.txid, root: root)
                 }
 
+                ForEach(transaction.witnessRoots, id: \.output) { root in
+                    WitnessCard(txid: transaction.txid, root: root)
+                }
+
+                if !transaction.links.isEmpty {
+                    ProtocolLinksCard(links: transaction.links)
+                }
+
                 Card("Summary") {
                     FieldRow(label: "Transaction ID", value: transaction.txid, monospaced: true)
                     if let height = transaction.height {
@@ -136,6 +144,7 @@ private struct InputRow: View {
 private struct OutputRow: View {
     let output: TransactionOutput
     @State private var showingJSON = false
+    @State private var showingBytes = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -182,6 +191,16 @@ private struct OutputRow: View {
                 .buttonStyle(.borderless)
                 .help("Show this output's JSON")
                 .accessibilityLabel("Show JSON for output \(output.index)")
+            }
+            if let hex = output.dataHex {
+                Button(showingBytes ? "Hide bytes" : "View \(hex.count / 2) bytes of data") {
+                    showingBytes.toggle()
+                }
+                .buttonStyle(.link)
+                .padding(.leading, 40)
+                if showingBytes {
+                    BytesView(hex: hex).padding(.leading, 40)
+                }
             }
             if showingJSON {
                 ScrollView(.horizontal) {

@@ -115,7 +115,7 @@ struct CurrencyView: View {
                     kind: "Currency",
                     title: currency.fullyQualifiedName ?? currency.name,
                     subtitle: currency.currencyId,
-                    tags: [currency.launchStatus]
+                    tags: [currency.launchStatus] + currency.optionTags
                 )
 
                 Card("Definition") {

@@ -216,6 +216,20 @@ async fn live_lookups_through_an_api() {
     println!("offers: {} first {:?}", offers.len(), offers.first());
     let tips = explorer.chain_tips().await.unwrap();
     println!("tips: {} top {:?}", tips.len(), &tips[..tips.len().min(4)]);
+    let series = explorer.block_series(4226272, 40).await.unwrap();
+    println!(
+        "series: {} first {:?} staked diff {:?}",
+        series.len(),
+        series.first(),
+        series.iter().find_map(|p| p.staking_difficulty)
+    );
+    let listed = explorer.currencies().await.unwrap();
+    println!(
+        "currencies: {} e.g. {:?}",
+        listed.len(),
+        listed.iter().find(|c| c.name.contains("Bridge.vETH"))
+    );
+    println!("estimate: {:?}", explorer.estimate("5000000".into()).await);
     let names = explorer
         .names(vec![
             "i5v3h9FWVdRFbNHU7DfcpGykQjRaHtMqu7".into(),
@@ -397,4 +411,39 @@ fn reads_a_mempool_entry() {
         (1400, Some(10000), 1)
     );
     assert!(row.tags.is_empty());
+}
+
+#[test]
+fn reads_block_points_and_staking_difficulty() {
+    use serde_json::json;
+    let mined = block_point(
+        &json!({"height": 5, "time": 100, "blocktype": "mined", "difficulty": 12.5, "tx": ["a"]}),
+    );
+    assert_eq!(
+        (
+            mined.staked,
+            mined.mining_difficulty,
+            mined.staking_difficulty
+        ),
+        (false, Some(12.5), None)
+    );
+
+    // Compact 0x1c0f0f0f expands to the 28-byte reference limit itself, so difficulty is about 1.
+    let nonce = format!("{}1c0f0f0f", "0".repeat(56));
+    let staked = block_point(
+        &json!({"height": 6, "time": 160, "blocktype": "minted", "difficulty": 9.0, "nonce": nonce, "tx": ["a", "b"]}),
+    );
+    assert!(staked.staked && staked.mining_difficulty.is_none());
+    assert!((staked.staking_difficulty.unwrap() - 1.0).abs() < 0.01);
+    assert_eq!(staked.transaction_count, 2);
+}
+
+#[test]
+fn names_currency_option_flags() {
+    assert_eq!(
+        option_tags(Some(545)),
+        ["Fractional", "Token", "Gateway converter"]
+    );
+    assert_eq!(option_tags(Some(0x80)), ["Gateway"]);
+    assert!(option_tags(None).is_empty());
 }

@@ -176,6 +176,8 @@ pub struct TransactionOutput {
     pub tags: Vec<String>,
     pub spent_txid: Option<String>,
     pub currency_values: Vec<CurrencyAmount>,
+    /// Unrecognised OP_RETURN data, as hex.
+    pub data_hex: Option<String>,
     pub json: String,
 }
 
@@ -196,6 +198,10 @@ pub struct TransactionDetail {
     pub private_outputs: u32,
     /// Outputs from which a transfer can be followed.
     pub trace_roots: Vec<TraceRoot>,
+    /// Outputs carrying notarization evidence whose signers can be investigated.
+    pub witness_roots: Vec<TraceRoot>,
+    /// References from this transaction's outputs to other outputs.
+    pub links: Vec<ProtocolLink>,
     pub json: String,
 }
 
@@ -237,6 +243,7 @@ pub struct CurrencyDetail {
     pub parent: Option<String>,
     pub system_id: Option<String>,
     pub launch_status: String,
+    pub option_tags: Vec<String>,
     pub options: Option<u64>,
     pub proof_protocol: Option<u64>,
     pub start_block: Option<u64>,
@@ -486,6 +493,91 @@ pub struct MarketOffer {
     pub expiry_height: Option<u64>,
 }
 
+/// One block's figures for charting.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct BlockPoint {
+    pub height: u64,
+    pub time: u64,
+    pub staked: bool,
+    pub transaction_count: u32,
+    /// The daemon's difficulty, meaningful for mined blocks.
+    pub mining_difficulty: Option<f64>,
+    /// Staking difficulty for staked blocks, normalised as Carbide does.
+    pub staking_difficulty: Option<f64>,
+}
+
+/// When a future block will arrive, or what height a future moment will be.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct BlockEstimate {
+    pub height: u64,
+    pub time: i64,
+    pub seconds_per_block: f64,
+    /// The stretch of chain the rate was measured over.
+    pub measured_from: u64,
+    pub measured_to: u64,
+    pub source: String,
+}
+
+/// A currency as listed by the daemon.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct CurrencyRow {
+    pub name: String,
+    pub currency_id: String,
+    pub options: u64,
+    pub option_tags: Vec<String>,
+    pub launch_status: String,
+    pub supply: Option<f64>,
+    pub reserve_count: u32,
+}
+
+/// A reference from one of a transaction's outputs to another output.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ProtocolLink {
+    pub label: String,
+    pub output: u32,
+    pub target_system: String,
+    pub target_txid: String,
+    pub target_output: u32,
+}
+
+/// Signatures by one identity over one target, as found in notarization evidence.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct WitnessSignature {
+    pub identity: String,
+    pub height: Option<u64>,
+    /// True for a confirming statement, false for a rejecting one.
+    pub confirms: bool,
+    pub system: String,
+    pub target_txid: String,
+    pub target_output: u32,
+    pub key_count: u32,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct WitnessReport {
+    pub signatures: Vec<WitnessSignature>,
+    pub finalizations: Vec<String>,
+    /// Gaps and limits reached, in Carbide's words.
+    pub issues: Vec<String>,
+    pub transactions_checked: u32,
+    pub outputs_checked: u32,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct BookmarkRow {
+    pub index: u32,
+    pub kind: String,
+    pub target: String,
+    pub description: String,
+    pub created_at: u64,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct CacheInfo {
+    pub path: String,
+    pub bytes: u64,
+}
+
 /// Where a search query leads.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum Route {
@@ -512,6 +604,8 @@ const RECENT_ADDRESS_TXIDS: usize = 200;
 const MAX_RECENT_BLOCKS: u32 = 100;
 const MAX_NAME_LOOKUPS: usize = 48;
 const MAX_OFFERS: usize = 4000;
+const MAX_SERIES_BLOCKS: u32 = 1500;
+const SIMPLE_ESTIMATE_BLOCKS: u64 = 43_200;
 const MAX_HISTORY_TIMES: usize = 60;
 const MAX_HISTORY_SAMPLES: u32 = 200;
 const MAX_BLOCK_TX_BODIES: usize = 150;
@@ -929,6 +1023,235 @@ impl Explorer {
         Ok(offers)
     }
 
+    /// Figures for `count` consecutive blocks ending at `end_height`, oldest first.
+    pub async fn block_series(&self, end_height: u64, count: u32) -> Outcome<Vec<BlockPoint>> {
+        let count = u64::from(count.clamp(2, MAX_SERIES_BLOCKS));
+        let first = end_height.saturating_sub(count - 1).max(1);
+        let mut tasks = tokio::task::JoinSet::new();
+        for height in first..=end_height {
+            let client = self.client.clone();
+            tasks.spawn(async move {
+                client
+                    .call_with_raw::<Value>("getblock", &[Value::from(height.to_string())])
+                    .await
+            });
+        }
+        let mut points = Vec::new();
+        while let Some(joined) = tasks.join_next().await {
+            let output = self.settle(joined.context("block request stopped")?)?;
+            points.push(block_point(&output.result));
+        }
+        points.sort_by_key(|point| point.height);
+        Ok(points)
+    }
+
+    /// Estimates a future block's time or a future moment's height. `query` is a height
+    /// or a date, as in search.
+    ///
+    /// Uses Carbide's calibrated block rate when the source allows it. A source that
+    /// refuses the calibration lookups gets a plain average over the last 30 days instead,
+    /// and the result says which was used.
+    pub async fn estimate(&self, query: String) -> Outcome<BlockEstimate> {
+        use crate::block_forecast::{Estimate, Target, calibrate, parse_target};
+        let target = parse_target(&query)?;
+        let calibration = calibrate(&self.config).await;
+        self.forgive();
+        if let Ok(calibration) = calibration {
+            let estimate = Estimate::new(calibration, target)?;
+            return Ok(BlockEstimate {
+                height: estimate.height,
+                time: estimate.timestamp,
+                seconds_per_block: estimate.calibration.seconds_per_block(),
+                measured_from: estimate.calibration.start.height,
+                measured_to: estimate.calibration.tip.height,
+                source: format!(
+                    "Carbide's calibrated rate · {}",
+                    estimate.calibration.source_label
+                ),
+            });
+        }
+        let tip_height = self.tip_height().await?;
+        let start_height = tip_height.saturating_sub(SIMPLE_ESTIMATE_BLOCKS).max(1);
+        let tip = self
+            .settle(fetch_block(&self.client, BlockId::Height(tip_height)).await)?
+            .result;
+        let start = self
+            .settle(fetch_block(&self.client, BlockId::Height(start_height)).await)?
+            .result;
+        if tip_height <= start_height || tip.time <= start.time {
+            return Err(fail("Not enough chain history to estimate from."));
+        }
+        let rate = (tip.time - start.time) as f64 / (tip_height - start_height) as f64;
+        let (height, time) = match target {
+            Target::Height(height) => {
+                if height <= tip_height {
+                    return Err(fail("That block already exists. Search for it instead."));
+                }
+                (
+                    height,
+                    tip.time as i64 + ((height - tip_height) as f64 * rate) as i64,
+                )
+            }
+            Target::Time(time) => {
+                if time <= tip.time as i64 {
+                    return Err(fail("That moment has passed. Search for the date instead."));
+                }
+                (
+                    tip_height + ((time - tip.time as i64) as f64 / rate) as u64,
+                    time,
+                )
+            }
+        };
+        Ok(BlockEstimate {
+            height,
+            time,
+            seconds_per_block: rate,
+            measured_from: start_height,
+            measured_to: tip_height,
+            source: "Plain average of the last 30 days".into(),
+        })
+    }
+
+    /// The currencies the daemon lists for this chain.
+    pub async fn currencies(&self) -> Outcome<Vec<CurrencyRow>> {
+        let output = self.settle(
+            self.client
+                .call_with_raw::<Vec<Value>>("listcurrencies", &[])
+                .await,
+        )?;
+        let mut rows: Vec<CurrencyRow> = output
+            .result
+            .iter()
+            .filter_map(|entry| {
+                let definition = &entry["currencydefinition"];
+                let state = crate::currency_status::reported_state(entry);
+                Some(CurrencyRow {
+                    name: text(&definition["fullyqualifiedname"])
+                        .or_else(|| text(&definition["name"]))?,
+                    currency_id: text(&definition["currencyid"])?,
+                    options: definition["options"].as_u64().unwrap_or(0),
+                    option_tags: option_tags(definition["options"].as_u64()),
+                    launch_status: crate::currency_status::classify(state).label().to_string(),
+                    supply: state["supply"].as_f64(),
+                    reserve_count: count(Some(&definition["currencies"])),
+                })
+            })
+            .collect();
+        rows.sort_by_key(|row| row.name.to_lowercase());
+        Ok(rows)
+    }
+
+    /// Who signed the notarization evidence in one output, using Carbide's witness
+    /// investigation. It reports reachable evidence; it does not verify signatures or quorum.
+    pub async fn witnesses(&self, txid: String, output: u32) -> Outcome<WitnessReport> {
+        let seed = self.settle(self.client.get_raw_transaction(txid.trim()).await)?;
+        let system_id = self
+            .config
+            .chain
+            .system_id
+            .get()
+            .cloned()
+            .ok_or_else(|| fail("The chain's system ID is not known yet."))?;
+        let root = crate::world::OutpointRef {
+            system_id,
+            txid: txid.trim().to_string(),
+            vout: output,
+        };
+        let report = crate::witnesses::investigate(
+            self.config.noninteractive(),
+            root,
+            seed.result,
+            seed.source_id,
+            false,
+        )
+        .await;
+        self.forgive();
+        Ok(WitnessReport {
+            signatures: report
+                .signatures
+                .into_iter()
+                .map(|signature| WitnessSignature {
+                    identity: signature.identity,
+                    height: signature.height,
+                    confirms: signature.confirmed,
+                    system: signature.system.to_string(),
+                    target_txid: signature.target.txid,
+                    target_output: signature.target.vout,
+                    key_count: signature.key_signatures.len() as u32,
+                })
+                .collect(),
+            finalizations: report.finalizations,
+            issues: report.issues,
+            transactions_checked: report.transactions as u32,
+            outputs_checked: report.outputs as u32,
+        })
+    }
+
+    /// Saved bookmarks for this network, in Carbide's own file so both apps share them.
+    pub fn bookmarks(&self) -> Outcome<Vec<BookmarkRow>> {
+        Ok(self
+            .book()?
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(index, (_, bookmark))| BookmarkRow {
+                index: index as u32,
+                kind: bookmark.kind.label().to_string(),
+                target: bookmark.target.clone(),
+                description: bookmark.description.clone(),
+                created_at: bookmark.created_at,
+            })
+            .collect())
+    }
+
+    /// `kind` is block, transaction, address, identity or currency.
+    pub fn add_bookmark(&self, kind: String, target: String, description: String) -> Outcome<()> {
+        use crate::bookmarks::Kind;
+        let kind = match kind.as_str() {
+            "block" => Kind::Block,
+            "transaction" => Kind::Transaction,
+            "address" => Kind::Address,
+            "identity" => Kind::Identity,
+            "currency" => Kind::Currency,
+            _ => Kind::Auto,
+        };
+        let system_id = self
+            .config
+            .chain
+            .system_id
+            .get()
+            .cloned()
+            .ok_or_else(|| fail("The chain's system ID is not known yet."))?;
+        let bookmark = crate::bookmarks::Bookmark::new(system_id, kind, target, description)?;
+        Ok(self.book()?.add(bookmark)?)
+    }
+
+    pub fn remove_bookmark(&self, index: u32) -> Outcome<()> {
+        Ok(self.book()?.remove(index as usize)?)
+    }
+
+    pub fn edit_bookmark(&self, index: u32, description: String) -> Outcome<()> {
+        Ok(self.book()?.edit(index as usize, description)?)
+    }
+
+    /// Where Carbide's cache of looked-up data lives and how large it is.
+    pub fn cache_info(&self) -> CacheInfo {
+        CacheInfo {
+            path: self.config.cache_path.display().to_string(),
+            bytes: std::fs::metadata(&self.config.cache_path)
+                .map(|file| file.len())
+                .unwrap_or(0),
+        }
+    }
+
+    /// Empties the cache for this network. Bookmarks and settings are kept.
+    pub fn clear_cache(&self) -> Outcome<()> {
+        if self.config.cache_path.exists() {
+            crate::cache::Cache::clear_at(&self.config.cache_path)?;
+        }
+        Ok(())
+    }
+
     /// `id` is a height or a block hash.
     pub async fn block(&self, id: String) -> Outcome<BlockDetail> {
         let selector = match id.trim().parse::<u64>() {
@@ -1048,6 +1371,12 @@ impl Explorer {
                     .collect(),
                 spent_txid: text(&output["spentTxId"]),
                 currency_values: amounts(&output["scriptPubKey"]["reserve_balance"]),
+                data_hex: crate::domain::arbitrary_op_return(output).map(|data| {
+                    data.bytes
+                        .iter()
+                        .map(|byte| format!("{byte:02x}"))
+                        .collect()
+                }),
                 json: pretty(output),
             })
             .collect();
@@ -1069,6 +1398,26 @@ impl Explorer {
             trace_roots: crate::defi::roots(&raw)
                 .into_iter()
                 .map(|(output, label)| TraceRoot { output, label })
+                .collect(),
+            witness_roots: crate::witnesses::roots(&raw)
+                .into_iter()
+                .map(|(output, label)| TraceRoot { output, label })
+                .collect(),
+            links: self
+                .config
+                .chain
+                .system_id
+                .get()
+                .map(|system| crate::relationships::transaction_links(system, &raw))
+                .unwrap_or_default()
+                .into_iter()
+                .map(|link| ProtocolLink {
+                    label: link.label,
+                    output: link.carrier_vout,
+                    target_system: link.target.system_id.to_string(),
+                    target_txid: link.target.txid,
+                    target_output: link.target.vout,
+                })
                 .collect(),
             json: pretty(&without(&raw, "hex")),
             txid: summary.txid,
@@ -1132,6 +1481,7 @@ impl Explorer {
             parent: text(&raw["parent"]),
             system_id: text(&raw["systemid"]),
             launch_status: crate::currency_status::classify(state).label().to_string(),
+            option_tags: option_tags(raw["options"].as_u64()),
             options: raw["options"].as_u64(),
             proof_protocol: raw["proofprotocol"].as_u64(),
             start_block: raw["startblock"].as_u64(),
@@ -1272,6 +1622,21 @@ impl Explorer {
         match name.strip_suffix(root.as_str()) {
             Some(base) if !base.is_empty() => format!("{base}@"),
             _ => name.to_string(),
+        }
+    }
+
+    fn book(&self) -> Result<crate::bookmarks::Book> {
+        let network = Network::from_testnet(self.config.chain.testnet);
+        crate::bookmarks::Book::load(crate::bookmarks::path(network)?)
+    }
+
+    /// Clears API back-off after work done by Carbide's own clients, which share the pool.
+    fn forgive(&self) {
+        for endpoint in &self.config.daemon.api_pool.endpoints {
+            *endpoint
+                .retry_after
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
         }
     }
 
@@ -1748,6 +2113,75 @@ fn market_offer(entry: &Value) -> Option<MarketOffer> {
         price_currency,
         expiry_height,
     })
+}
+
+// CCurrencyDefinition::EOptions, as tabulated in Carbide's currency viewer.
+const OPTION_TAGS: &[(u64, &str)] = &[
+    (1, "Fractional"),
+    (2, "Restricted ID issuance"),
+    (4, "ID staking"),
+    (8, "ID referrals"),
+    (0x10, "Referrer required"),
+    (0x20, "Token"),
+    (0x40, "Single currency"),
+    (0x80, "Gateway"),
+    (0x100, "PBaaS chain"),
+    (0x200, "Gateway converter"),
+    (0x400, "Gateway name control"),
+    (0x800, "NFT"),
+    (0x1000, "No ID issuance"),
+];
+
+fn option_tags(options: Option<u64>) -> Vec<String> {
+    let Some(options) = options else {
+        return Vec::new();
+    };
+    OPTION_TAGS
+        .iter()
+        .filter(|(bit, _)| options & bit != 0)
+        .map(|(_, name)| (*name).to_string())
+        .collect()
+}
+
+/// The fixed reference Carbide normalises staking difficulty against: the initial
+/// proof-of-stake limit, `000000000f0f…0f`.
+fn pos_reference() -> f64 {
+    let mut value = 0.0;
+    for _ in 0..28 {
+        value = value * 256.0 + 15.0;
+    }
+    value
+}
+
+/// Staking difficulty from a proof-of-stake block: the reference limit divided by the
+/// block's target, which is carried in compact form in the last four bytes of the nonce.
+fn staking_difficulty(block: &Value) -> Option<f64> {
+    let nonce = block["nonce"].as_str().filter(|nonce| nonce.len() == 64)?;
+    let compact = u32::from_str_radix(&nonce[56..], 16).ok()?;
+    let exponent = (compact >> 24) as i32;
+    let mantissa = f64::from(compact & 0x007f_ffff);
+    if mantissa == 0.0 || compact & 0x0080_0000 != 0 {
+        return None;
+    }
+    let target = mantissa * 256f64.powi(exponent - 3);
+    let value = pos_reference() / target;
+    (value.is_finite() && value > 0.0).then_some(value)
+}
+
+fn block_point(block: &Value) -> BlockPoint {
+    let kind = block["blocktype"]
+        .as_str()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let staked = kind.contains("stake") || kind == "minted";
+    BlockPoint {
+        height: block["height"].as_u64().unwrap_or(0),
+        time: block["time"].as_u64().unwrap_or(0),
+        staked,
+        transaction_count: count(Some(&block["tx"])),
+        mining_difficulty: (!staked).then(|| block["difficulty"].as_f64()).flatten(),
+        staking_difficulty: staked.then(|| staking_difficulty(block)).flatten(),
+    }
 }
 
 fn block_row(block: &BlockSummary) -> BlockRow {
