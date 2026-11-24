@@ -129,7 +129,11 @@ struct BranchesCard: View {
             if let failure {
                 Text(failure).foregroundStyle(.secondary)
             } else if !loaded {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 80)
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Reading the chain tips from the node. This can take some seconds.")
+                        .foregroundStyle(.secondary)
+                }
             } else if let active {
                 Text(summary(active))
                 if !recent.isEmpty {
@@ -159,6 +163,10 @@ struct BranchesCard: View {
                         .foregroundStyle(hovered == nil ? .secondary : .primary)
                         .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
                 }
+                Button("Refresh") {
+                    loaded = false
+                    Task { await load() }
+                }
                 if let ahead = headersAhead(active) {
                     Text("The node has headers to block \(Format.integer(ahead)). It has validated blocks to block \(Format.integer(active.height)).")
                         .font(.callout).foregroundStyle(.secondary)
@@ -167,12 +175,9 @@ struct BranchesCard: View {
                 Text("The node reported no active chain.").foregroundStyle(.secondary)
             }
         }
-        .task(id: model.generation) {
-            while !Task.isCancelled {
-                await load()
-                try? await Task.sleep(for: .seconds(30))
-            }
-        }
+        // Loaded once, and again on request. On a full node this request takes several
+        // seconds and makes the node's other answers wait, so it is not repeated on a timer.
+        .task(id: model.generation) { await load() }
     }
 
     private var active: ChainTip? { tips.first { $0.status == "active" } }

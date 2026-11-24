@@ -83,7 +83,8 @@ struct TransferTraceCard: View {
                 if let stop = trace.stop {
                     Text(stop).foregroundStyle(.secondary)
                 }
-                if let search = trace.search {
+                // The search range matters only while the result is not found.
+                if let search = trace.search, trace.confidence != .verified {
                     HStack {
                         Text(
                             "Searched blocks \(Format.integer(search.first)) to \(Format.integer(search.last)) "
