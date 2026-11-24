@@ -9,6 +9,7 @@ enum SettingsKey {
     static let configFile = "configFile"
     static let apiEnabled = "apiEnabled"
     static let chainConfigs = "chainConfigs"
+    static let cacheDir = "cacheDir"
     static let useUTC = "useUTC"
     static let apiURL = "apiURL"
 
@@ -95,7 +96,8 @@ final class AppModel {
             chain: chain,
             testnet: defaults.bool(forKey: SettingsKey.testnet),
             configFile: configFile.isEmpty ? nil : configFile,
-            apiEndpoint: defaults.bool(forKey: SettingsKey.apiEnabled) ? apiURL : nil
+            apiEndpoint: defaults.bool(forKey: SettingsKey.apiEnabled) ? apiURL : nil,
+            cacheDir: defaults.string(forKey: SettingsKey.cacheDir)
         )
         explorer = nil
         names = [:]

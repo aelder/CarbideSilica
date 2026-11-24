@@ -79,6 +79,8 @@ pub struct ConnectionOptions {
     pub config_file: Option<String>,
     /// A public JSON-RPC endpoint the user has chosen to allow as a fallback.
     pub api_endpoint: Option<String>,
+    /// Folder for Carbide's cache of looked-up data. `None` uses the platform cache folder.
+    pub cache_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -1919,6 +1921,14 @@ impl Explorer {
         }
         let cli = Cli::try_parse_from(args).context("invalid connection options")?;
         let mut config = Config::load(&cli).context("the node configuration did not load")?;
+        if let Some(dir) = options
+            .cache_dir
+            .as_deref()
+            .map(str::trim)
+            .filter(|dir| !dir.is_empty())
+        {
+            config.cache_path = PathBuf::from(dir).join(network.database_name());
+        }
         let config_found = config
             .daemon
             .config_file
@@ -2785,6 +2795,21 @@ fn result_of(response_json: &str) -> Value {
 fn pretty(value: &Value) -> String {
     serde_json::to_string_pretty(value).unwrap_or_default()
 }
+
+// One module per area of the app. Each adds its own records and its own
+// `#[uniffi::export] impl Explorer` block, and can use everything in this file.
+#[path = "ffi_charts.rs"]
+mod charts;
+#[path = "ffi_currency.rs"]
+mod currency;
+#[path = "ffi_identity.rs"]
+mod identity;
+#[path = "ffi_shell.rs"]
+mod shell;
+#[path = "ffi_sources.rs"]
+mod sources;
+#[path = "ffi_transaction.rs"]
+mod transaction;
 
 #[cfg(test)]
 #[path = "ffi_tests.rs"]

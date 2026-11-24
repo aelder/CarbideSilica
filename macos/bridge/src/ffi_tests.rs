@@ -1,14 +1,41 @@
 use super::*;
 
-fn explorer(api: Option<&str>) -> Explorer {
+/// A cache folder of its own for each test process, so tests never share Carbide's cache
+/// with the app or with each other.
+fn test_cache_dir() -> String {
+    let dir = std::env::temp_dir().join(format!("carbide-bridge-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.display().to_string()
+}
+
+pub(super) fn explorer(api: Option<&str>) -> Explorer {
     Explorer::open(ConnectionOptions {
         chain: "VRSC".into(),
         testnet: false,
         // A config path that cannot exist keeps tests away from a real daemon's credentials.
         config_file: Some("/nonexistent/carbide-test/VRSC.conf".into()),
         api_endpoint: api.map(Into::into),
+        cache_dir: Some(test_cache_dir()),
     })
     .unwrap()
+}
+
+/// An explorer for live tests. Set `CARBIDE_TEST_CONF` to a node's `.conf` file to test
+/// against a local node, or `CARBIDE_TEST_API` to a JSON-RPC URL to test through a public
+/// API. A local node answers everything; a public API refuses some requests.
+pub(super) fn live_explorer() -> Explorer {
+    if let Ok(conf) = std::env::var("CARBIDE_TEST_CONF") {
+        return Explorer::open(ConnectionOptions {
+            chain: "VRSC".into(),
+            testnet: false,
+            config_file: Some(conf),
+            api_endpoint: None,
+            cache_dir: Some(test_cache_dir()),
+        })
+        .unwrap();
+    }
+    let api = std::env::var("CARBIDE_TEST_API").expect("set CARBIDE_TEST_CONF or CARBIDE_TEST_API");
+    explorer(Some(&api))
 }
 
 #[test]
@@ -29,6 +56,7 @@ fn rejects_api_urls_with_credentials() {
         testnet: false,
         config_file: None,
         api_endpoint: Some("https://user:secret@example.com".into()),
+        cache_dir: Some(test_cache_dir()),
     });
     assert!(result.is_err());
 }
@@ -88,11 +116,9 @@ fn shows_the_daemon_message_for_rpc_errors() {
 #[tokio::test]
 #[ignore]
 async fn live_lookups_through_an_api() {
-    let api = std::env::var("CARBIDE_TEST_API").expect("set CARBIDE_TEST_API");
-    let explorer = explorer(Some(&api));
+    let explorer = live_explorer();
     let status = explorer.chain_status().await.unwrap();
     println!("status: {status:?}");
-    assert_eq!(status.source, DataSource::PublicApi);
 
     let blocks = explorer.recent_blocks(None, 5).await.unwrap();
     println!("recent: {blocks:?}");
