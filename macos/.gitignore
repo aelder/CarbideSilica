@@ -1,0 +1,8 @@
+# Build products and generated code (recreated by ./build.sh)
+/build/
+/.build/
+/bridge/target/
+/CarbideFFI.xcframework/
+/Sources/CarbideCore/carbide_bridge.swift
+/Carbide Silica.app/
+.swiftpm/
