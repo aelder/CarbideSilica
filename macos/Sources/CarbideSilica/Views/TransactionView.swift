@@ -23,6 +23,10 @@ struct TransactionView: View {
                         flow: TransactionFlowModel(transaction: transaction, coin: model.coin))
                 }
 
+                ForEach(transaction.traceRoots, id: \.output) { root in
+                    TransferTraceCard(txid: transaction.txid, root: root)
+                }
+
                 Card("Summary") {
                     FieldRow(label: "Transaction ID", value: transaction.txid, monospaced: true)
                     if let height = transaction.height {

@@ -195,7 +195,7 @@ struct TransactionFlowView: View {
     }
 
     private var canvasHeight: CGFloat {
-        CGFloat(max(flow.inputs.count, flow.outputs.count, 3)) * 44 + 24
+        CGFloat(max(flow.inputs.count, flow.outputs.count, 3)) * 50 + 30
     }
 
     private func color(_ kind: FlowItem.Kind) -> Color {
@@ -211,16 +211,30 @@ struct TransactionFlowView: View {
     }
 
     /// Vertical extents for a column of items, centred in the usable height.
-    private func stack(_ items: [FlowItem], usable: CGFloat, top: CGFloat, gap: CGFloat, scaleTo total: Double)
-        -> [(CGFloat, CGFloat)]
-    {
-        let room = usable - gap * CGFloat(items.count - 1)
-        let heights = items.map { max(CGFloat(Double($0.sats) / total) * room, minBand) }
-        let used = heights.reduce(0, +) + gap * CGFloat(items.count - 1)
-        var y = top + (usable - used) / 2
-        return heights.map { height in
-            defer { y += height + gap }
-            return (y, y + height)
+    ///
+    /// With `labelled`, each item gets a slot at least tall enough for its two-line label,
+    /// and its band sits centred in that slot, so the text of small items never overlaps.
+    private func stack(
+        _ items: [FlowItem], usable: CGFloat, top: CGFloat, gap: CGFloat, scaleTo total: Double,
+        labelled: Bool = true
+    ) -> [(CGFloat, CGFloat)] {
+        let slotMinimum: CGFloat = labelled ? 34 : 0
+        let gaps = gap * CGFloat(max(items.count - 1, 0))
+        var scale = (usable - gaps) / CGFloat(total)
+        // Items too small for a label slot take the slot; the rest share what is left.
+        let small = items.filter { CGFloat($0.sats) * scale < slotMinimum }
+        let bigTotal = items.filter { CGFloat($0.sats) * scale >= slotMinimum }.map(\.sats).reduce(0, +)
+        if labelled, !small.isEmpty, bigTotal > 0 {
+            scale = max((usable - gaps - slotMinimum * CGFloat(small.count)) / CGFloat(bigTotal), 0)
+        }
+        let heights = items.map { max(CGFloat($0.sats) * scale, minBand) }
+        let slots = heights.map { max($0, slotMinimum) }
+        let used = slots.reduce(0, +) + gaps
+        var y = top + max((usable - used) / 2, 0)
+        return zip(heights, slots).map { height, slot in
+            defer { y += slot + gap }
+            let start = y + (slot - height) / 2
+            return (start, start + height)
         }
     }
 
@@ -252,8 +266,8 @@ struct TransactionFlowView: View {
 
         let left = stack(flow.inputs, usable: usable, top: top, gap: gap, scaleTo: total)
         let right = stack(flow.outputs, usable: usable, top: top, gap: gap, scaleTo: total)
-        let trunkIn = stack(flow.inputs, usable: usable * 0.8, top: top + usable * 0.1, gap: 0, scaleTo: total)
-        let trunkOut = stack(flow.outputs, usable: usable * 0.8, top: top + usable * 0.1, gap: 0, scaleTo: total)
+        let trunkIn = stack(flow.inputs, usable: usable * 0.8, top: top + usable * 0.1, gap: 0, scaleTo: total, labelled: false)
+        let trunkOut = stack(flow.outputs, usable: usable * 0.8, top: top + usable * 0.1, gap: 0, scaleTo: total, labelled: false)
 
         for (index, item) in flow.inputs.enumerated() {
             context.fill(

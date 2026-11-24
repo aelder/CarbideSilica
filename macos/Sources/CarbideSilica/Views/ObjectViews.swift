@@ -160,6 +160,8 @@ struct CurrencyView: View {
 
                 CurrencyOverTimeCard(currency: currency)
 
+                NotarizationLanesCard(currency: currency)
+
                 if !currency.reserves.isEmpty {
                     Card("Reserves", trailing: "\(currency.reserves.count) currencies") {
                         Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 8) {

@@ -19,12 +19,19 @@ Like Carbide, it is read-only. It never creates or signs transactions.
 - Identity control diagram and version history
 - Currency supply and reserve prices over time, with one cursor through all of them
 - Names shown in place of identity and currency IDs where they are known
+- Follow a transfer: Carbide's DeFi trail drawn as a route from sent to received, with
+  one verdict and the evidence behind it
+- Notarization lanes: two systems as parallel lanes with each notarization a tie between
+  them, showing confirmed, pending and stalled links
 
 `CarbideSilica -open <object>` opens a block, transaction, address, identity or
 currency at launch, like Carbide's `--open`.
 
-Not here yet: charts, the mempool, notarizations, DeFi views, bookmarks, the
-future-block estimator, multiple chains at once, and Carbide's SQLite cache.
+Not here yet: charts, the mempool, the marketplace, the currency browser, witnesses,
+reorg history, bookmarks, the future-block estimator and multiple chains at once.
+
+Following a transfer uses Carbide's SQLite cache, kept in
+`~/Library/Caches/verus-carbide`. It holds only what has been looked up.
 
 ## Build and run
 

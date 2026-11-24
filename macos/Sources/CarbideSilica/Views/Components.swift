@@ -241,12 +241,20 @@ struct RouteLink: View {
 
     @Environment(AppModel.self) private var model
 
+    /// A currency's name is its identity's name without the trailing "@".
+    private var isCurrency: Bool {
+        if case .currency = route { return true }
+        return false
+    }
+
     var body: some View {
         if let name = model.names[text] {
-            Button(name) { model.open(route) }
-                .buttonStyle(.link)
-                .lineLimit(1)
-                .help(text)
+            Button(isCurrency && name.hasSuffix("@") ? String(name.dropLast()) : name) {
+                model.open(route)
+            }
+            .buttonStyle(.link)
+            .lineLimit(1)
+            .help(text)
         } else {
             Button(shorten ? Format.short(text) : text) { model.open(route) }
                 .buttonStyle(.link)

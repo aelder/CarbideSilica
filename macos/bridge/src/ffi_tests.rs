@@ -166,6 +166,52 @@ async fn live_lookups_through_an_api() {
             .err()
     );
     println!("date: {:?}", explorer.resolve("2026-09-06".into()).await);
+    let trace = explorer
+        .trace_transfer(
+            "42f1195338518ec1bb4a08d6d156bbcbb67454fd68cbd3b92da7c5b96ea6824c".into(),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+    println!(
+        "trace: {} ({:?}) stop {:?} search {:?}",
+        trace.verdict, trace.confidence, trace.stop, trace.search
+    );
+    for leg in &trace.legs {
+        println!(
+            "  leg {} {:?} principal {:?} pool {:?} result {:?} {:?}",
+            leg.stage, leg.confidence, leg.principal, leg.pool, leg.result, leg.result_amounts
+        );
+    }
+    for step in &trace.steps {
+        println!(
+            "  step {} | {} | {}:{}",
+            step.label,
+            step.detail,
+            &step.txid[..10],
+            step.output
+        );
+    }
+    for note in &trace.notes {
+        println!("  note {note}");
+    }
+    let lanes = explorer.notarizations("vETH".into()).await.unwrap();
+    println!(
+        "lanes: forks {} confirmed {:?} other {:?}",
+        lanes.fork_count, lanes.last_confirmed_index, lanes.other_system_id
+    );
+    for row in &lanes.rows {
+        println!(
+            "  n {} local {:?} other {:?} at {:?} confirmed {} best {}",
+            row.index,
+            row.local_height,
+            row.other_height,
+            row.block_height,
+            row.confirmed,
+            row.on_best_chain
+        );
+    }
     let names = explorer
         .names(vec![
             "i5v3h9FWVdRFbNHU7DfcpGykQjRaHtMqu7".into(),
@@ -252,4 +298,46 @@ fn friendly_names_drop_the_chain_root() {
             .as_deref(),
         Some("VRSC")
     );
+}
+
+#[test]
+fn reads_notarizations_and_marks_confirmed_and_forked_ones() {
+    use serde_json::json;
+    let entry = |index: u64, local: u64, other: u64| {
+        json!({"index": index, "txid": format!("{index:064x}"), "vout": 1, "blockhash": "00",
+            "notarization": {"currencyid": "iOther", "notarizationheight": other, "proofroots": [
+                {"systemid": "iLocal", "height": local}, {"systemid": "iOther", "height": other}]}})
+    };
+    let raw = json!({"bestchain": 0, "forks": [[0, 1, 3], [0, 2]], "lastconfirmed": 1,
+        "notarizations": [entry(0, 100, 900), entry(1, 110, 910), entry(2, 115, 912), entry(3, 120, 920)]});
+    let data = notarization_data(&raw, Some("iLocal"));
+    assert_eq!(data.fork_count, 2);
+    assert_eq!(data.other_system_id.as_deref(), Some("iOther"));
+    assert_eq!(data.last_confirmed_index, Some(1));
+    let state: Vec<_> = data
+        .rows
+        .iter()
+        .map(|row| (row.index, row.confirmed, row.on_best_chain))
+        .collect();
+    assert_eq!(
+        state,
+        [
+            (0, true, true),
+            (1, true, true),
+            (2, false, false),
+            (3, false, true)
+        ]
+    );
+    assert_eq!(
+        (data.rows[3].local_height, data.rows[3].other_height),
+        (Some(120), Some(920))
+    );
+    assert!(!data.json.contains("notarizations"));
+}
+
+#[test]
+fn an_empty_trail_is_reported_as_unknown() {
+    let trace = transfer_trace(crate::defi::Trail::default());
+    assert_eq!(trace.confidence, Confidence::Unknown);
+    assert!(trace.legs.is_empty());
 }

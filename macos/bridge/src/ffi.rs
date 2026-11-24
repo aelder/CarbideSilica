@@ -194,6 +194,8 @@ pub struct TransactionDetail {
     pub outputs: Vec<TransactionOutput>,
     pub private_inputs: u32,
     pub private_outputs: u32,
+    /// Outputs from which a transfer can be followed.
+    pub trace_roots: Vec<TraceRoot>,
     pub json: String,
 }
 
@@ -330,6 +332,109 @@ pub struct CurrencyPoint {
     pub time: Option<u64>,
     pub supply: Option<f64>,
     pub reserves: Vec<ReservePoint>,
+}
+
+/// How well a fact is established. Carbide's many provenance labels reduce to these four.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum Confidence {
+    /// Proven by exact match or replay.
+    Verified,
+    /// Reported by a source at a known block; in progress or not re-checked.
+    Observed,
+    /// A reasoned guess.
+    Candidate,
+    /// A gap in what can be shown.
+    Unknown,
+}
+
+/// An output of a transaction from which a transfer can be followed.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct TraceRoot {
+    pub output: u32,
+    pub label: String,
+}
+
+/// One output along a traced transfer.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct TraceStep {
+    pub system_id: String,
+    pub txid: String,
+    pub output: u32,
+    pub label: String,
+    pub detail: String,
+}
+
+/// One leg of a transfer: an instruction and, when found, what it produced.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct TraceLeg {
+    pub source_txid: String,
+    pub source_output: u32,
+    /// Carbide's own wording for how far this leg got.
+    pub stage: String,
+    pub confidence: Confidence,
+    pub principal: Vec<CurrencyAmount>,
+    pub pool: Option<String>,
+    pub conversion_fee: Option<CurrencyAmount>,
+    /// "Received", "Forwarded" or "Refunded" when a result output was replayed exactly.
+    pub result: Option<String>,
+    pub result_amounts: Vec<CurrencyAmount>,
+    pub result_txid: Option<String>,
+    pub result_output: Option<u32>,
+    pub import_height: Option<u64>,
+}
+
+/// How much of a chain was searched for a transfer's import.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct TraceSearch {
+    pub system_id: String,
+    pub first: u64,
+    pub last: u64,
+    pub tip: u64,
+    pub windows: u32,
+    pub more_older: bool,
+}
+
+/// A transfer followed from its source output as far as the evidence reaches.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct TransferTrace {
+    /// One plain statement of the outcome so far.
+    pub verdict: String,
+    pub confidence: Confidence,
+    pub legs: Vec<TraceLeg>,
+    pub steps: Vec<TraceStep>,
+    pub notes: Vec<String>,
+    /// Why the trace stopped, when it did not reach a result.
+    pub stop: Option<String>,
+    pub search: Option<TraceSearch>,
+}
+
+/// One notarization of another system, as this chain recorded it.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct NotarizationRow {
+    pub index: u32,
+    pub txid: Option<String>,
+    pub output: Option<u32>,
+    /// The block on this chain that contains the notarization.
+    pub block_hash: Option<String>,
+    pub block_height: Option<u64>,
+    pub block_time: Option<u64>,
+    /// This chain's height that the notarization commits to.
+    pub local_height: Option<u64>,
+    /// The other system's height that the notarization commits to.
+    pub other_height: Option<u64>,
+    pub confirmed: bool,
+    /// False when the notarization sits on a fork other than the best one.
+    pub on_best_chain: bool,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct NotarizationData {
+    pub currency_id: Option<String>,
+    pub other_system_id: Option<String>,
+    pub rows: Vec<NotarizationRow>,
+    pub fork_count: u32,
+    pub last_confirmed_index: Option<u32>,
+    pub json: String,
 }
 
 /// Where a search query leads.
@@ -632,6 +737,86 @@ impl Explorer {
             .collect())
     }
 
+    /// Follows a transfer from one output through export, import and its result, using
+    /// Carbide's DeFi trail. `scan_older_from` searches older import windows from that height.
+    pub async fn trace_transfer(
+        &self,
+        txid: String,
+        output: u32,
+        scan_older_from: Option<u64>,
+    ) -> Outcome<TransferTrace> {
+        let seed = self
+            .settle(self.client.get_raw_transaction(txid.trim()).await)?
+            .result;
+        let system_id = self
+            .config
+            .chain
+            .system_id
+            .get()
+            .cloned()
+            .ok_or_else(|| fail("The chain's system ID is not known yet."))?;
+        let root = crate::world::OutpointRef {
+            system_id,
+            txid: txid.trim().to_string(),
+            vout: output,
+        };
+        let plan = crate::defi::SearchPlan {
+            request: match scan_older_from {
+                Some(height) => crate::defi::ImportSearch::BackwardFrom(height),
+                None => crate::defi::ImportSearch::Initial,
+            },
+            target: None,
+            known_imports: Vec::new(),
+        };
+        let trail =
+            crate::defi::investigate(vec![self.config.clone()], root, seed, plan, None).await;
+        for endpoint in &self.config.daemon.api_pool.endpoints {
+            *endpoint
+                .retry_after
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+        }
+        Ok(transfer_trace(trail))
+    }
+
+    /// Notarizations of a currency's system as this chain sees them, oldest first.
+    /// Returns no rows for a currency that is not notarized.
+    pub async fn notarizations(&self, currency: String) -> Outcome<NotarizationData> {
+        let name = currency.trim().trim_end_matches('@');
+        let output = self.settle(
+            self.client
+                .call_nullable_with_raw::<Value>("getnotarizationdata", &[Value::from(name)])
+                .await,
+        )?;
+        let Some(raw) = output.result else {
+            return Ok(NotarizationData {
+                currency_id: None,
+                other_system_id: None,
+                rows: Vec::new(),
+                fork_count: 0,
+                last_confirmed_index: None,
+                json: String::new(),
+            });
+        };
+        let local = self.config.chain.system_id.get().map(|id| id.to_string());
+        let mut data = notarization_data(&raw, local.as_deref());
+        let mut tasks = tokio::task::JoinSet::new();
+        for (position, row) in data.rows.iter().enumerate() {
+            let Some(hash) = row.block_hash.clone() else {
+                continue;
+            };
+            let client = self.client.clone();
+            tasks.spawn(async move { (position, fetch_block(&client, BlockId::Hash(hash)).await) });
+        }
+        while let Some(Ok((position, block))) = tasks.join_next().await {
+            if let Ok(block) = self.settle(block) {
+                data.rows[position].block_height = Some(block.result.height);
+                data.rows[position].block_time = Some(block.result.time);
+            }
+        }
+        Ok(data)
+    }
+
     /// `id` is a height or a block hash.
     pub async fn block(&self, id: String) -> Outcome<BlockDetail> {
         let selector = match id.trim().parse::<u64>() {
@@ -769,6 +954,10 @@ impl Explorer {
             outputs,
             private_inputs: crate::domain::private_input_count(&raw) as u32,
             private_outputs: crate::domain::private_output_count(&raw) as u32,
+            trace_roots: crate::defi::roots(&raw)
+                .into_iter()
+                .map(|(output, label)| TraceRoot { output, label })
+                .collect(),
             json: pretty(&without(&raw, "hex")),
             txid: summary.txid,
         })
@@ -1174,6 +1363,194 @@ fn identity_changes(previous: Option<&Value>, current: &Value) -> Vec<String> {
         changes.push("Updated, with no change to control".into());
     }
     changes
+}
+
+fn coin_amount(amount: &crate::defi::Amount) -> CurrencyAmount {
+    CurrencyAmount {
+        currency: amount.currency.clone(),
+        amount: amount.satoshis as f64 / 100_000_000.0,
+    }
+}
+
+/// Carbide reports a stop with the failing RPC attached. Say the common cause plainly.
+fn plain_stop(message: &str) -> String {
+    if message.contains("-32601") || message.contains("Method not found") {
+        return "This data source doesn't allow the lookup needed to go further. A fully synced \
+                local daemon can complete the trace."
+            .into();
+    }
+    message.to_string()
+}
+
+/// Reduces Carbide's trail to what the app draws, keeping its stage wording.
+fn transfer_trace(trail: crate::defi::Trail) -> TransferTrace {
+    use crate::defi::{ReceiptKind, Stage};
+    let legs: Vec<TraceLeg> = trail
+        .legs
+        .iter()
+        .map(|leg| {
+            let confidence = match leg.stage {
+                Stage::Received | Stage::Forwarded | Stage::Refunded | Stage::Burned => {
+                    Confidence::Verified
+                }
+                Stage::Unspent | Stage::BurnUnverified => Confidence::Unknown,
+                _ => Confidence::Observed,
+            };
+            let receipt = leg.receipt.as_ref();
+            TraceLeg {
+                source_txid: leg.source.txid.clone(),
+                source_output: leg.source.vout,
+                stage: leg.stage.label().to_string(),
+                confidence,
+                principal: leg.principal.iter().flatten().map(coin_amount).collect(),
+                pool: leg.pool.clone(),
+                conversion_fee: leg.conversion_fee.as_ref().map(coin_amount),
+                result: receipt.map(|receipt| {
+                    match receipt.kind {
+                        ReceiptKind::Received => "Received",
+                        ReceiptKind::Forwarded => "Forwarded",
+                        ReceiptKind::Refunded => "Refunded",
+                    }
+                    .to_string()
+                }),
+                result_amounts: receipt
+                    .map(|receipt| receipt.amounts.iter().map(coin_amount).collect())
+                    .unwrap_or_default(),
+                result_txid: receipt.map(|receipt| receipt.output.txid.clone()),
+                result_output: receipt.map(|receipt| receipt.output.vout),
+                import_height: leg
+                    .execution
+                    .as_ref()
+                    .and_then(|execution| execution.height),
+            }
+        })
+        .collect();
+    let (verdict, confidence) = match trail.legs.last().map(|leg| leg.stage) {
+        Some(Stage::Received) => (
+            "Received. The result output was replayed exactly.",
+            Confidence::Verified,
+        ),
+        Some(Stage::Refunded) => (
+            "Refunded. The full amount went back to the sender.",
+            Confidence::Verified,
+        ),
+        Some(Stage::Forwarded) => ("Forwarded to the next system.", Confidence::Verified),
+        Some(Stage::Burned) => (
+            "Burned. The supply change was verified.",
+            Confidence::Verified,
+        ),
+        Some(Stage::Imported | Stage::BurnUnverified) => (
+            "Imported, but the result output has not been matched.",
+            Confidence::Observed,
+        ),
+        Some(Stage::Exported) => (
+            "Exported. Its arrival has not been found in the blocks searched.",
+            Confidence::Observed,
+        ),
+        Some(Stage::Pending) => ("Waiting to be exported.", Confidence::Observed),
+        Some(Stage::Unconfirmed) => ("Not yet confirmed in a block.", Confidence::Observed),
+        Some(Stage::Unspent) => ("Not yet picked up for export.", Confidence::Unknown),
+        Some(Stage::Observed) => (
+            "Seen at its source. Nothing further is established.",
+            Confidence::Observed,
+        ),
+        None => (
+            "Nothing could be established for this output.",
+            Confidence::Unknown,
+        ),
+    };
+    TransferTrace {
+        verdict: verdict.to_string(),
+        confidence,
+        legs,
+        steps: trail
+            .entries
+            .into_iter()
+            .map(|entry| TraceStep {
+                system_id: entry.output.system_id.to_string(),
+                txid: entry.output.txid,
+                output: entry.output.vout,
+                label: entry.label,
+                detail: entry.detail,
+            })
+            .collect(),
+        notes: trail.notes,
+        stop: trail.stop.map(|stop| plain_stop(&stop.message)),
+        search: trail.search.map(|search| TraceSearch {
+            system_id: search.system,
+            first: search.first,
+            last: search.last,
+            tip: search.tip,
+            windows: search.windows,
+            more_older: search.more_older,
+        }),
+    }
+}
+
+/// Reads `getnotarizationdata`. Confirmed notarizations are those on the best fork at or
+/// before the last confirmed index.
+fn notarization_data(raw: &Value, local_system: Option<&str>) -> NotarizationData {
+    let forks: Vec<Vec<u64>> = raw["forks"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|fork| {
+            fork.as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_u64)
+                .collect()
+        })
+        .collect();
+    let best = raw["bestchain"].as_u64().unwrap_or(0) as usize;
+    let best_fork = forks.get(best).cloned().unwrap_or_default();
+    let last_confirmed = raw["lastconfirmed"].as_i64().filter(|index| *index >= 0);
+    let confirmed_position = last_confirmed
+        .and_then(|index| best_fork.iter().position(|member| *member as i64 == index));
+    let mut other_system = None;
+    let mut currency_id = None;
+    let rows = raw["notarizations"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|entry| {
+            let index = entry["index"].as_u64().unwrap_or(0);
+            let notarization = &entry["notarization"];
+            currency_id = currency_id.take().or_else(|| text(&notarization["currencyid"]));
+            let mut local_height = None;
+            let mut other_height = None;
+            for root in notarization["proofroots"].as_array().into_iter().flatten() {
+                let system = root["systemid"].as_str();
+                if system.is_some() && system == local_system {
+                    local_height = root["height"].as_u64();
+                } else {
+                    other_height = root["height"].as_u64();
+                    other_system = other_system.take().or_else(|| system.map(str::to_owned));
+                }
+            }
+            let position = best_fork.iter().position(|member| *member == index);
+            NotarizationRow {
+                index: index as u32,
+                txid: text(&entry["txid"]),
+                output: entry["vout"].as_u64().map(|n| n as u32),
+                block_hash: text(&entry["blockhash"]),
+                block_height: None,
+                block_time: None,
+                local_height,
+                other_height: other_height.or_else(|| notarization["notarizationheight"].as_u64()),
+                confirmed: matches!((position, confirmed_position), (Some(at), Some(limit)) if at <= limit),
+                on_best_chain: position.is_some(),
+            }
+        })
+        .collect();
+    NotarizationData {
+        currency_id,
+        other_system_id: other_system,
+        rows,
+        fork_count: forks.len() as u32,
+        last_confirmed_index: last_confirmed.map(|index| index as u32),
+        json: pretty(&without(raw, "notarizations")),
+    }
 }
 
 fn block_row(block: &BlockSummary) -> BlockRow {
