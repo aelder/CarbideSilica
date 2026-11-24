@@ -35,7 +35,7 @@ struct PoolBatchView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Latest conversion batch at this moment").font(.subheadline.weight(.semibold))
+            Text("Last conversion batch at this date").font(.subheadline.weight(.semibold))
             if active {
                 Text(sentence).font(.callout)
                 Canvas { context, size in
@@ -43,10 +43,10 @@ struct PoolBatchView: View {
                 }
                 .frame(height: 220)
                 .accessibilityLabel(sentence)
-                Text("Conversions run in batches through the pool. The chain records what each reserve paid in and received, not which was swapped for which.")
+                Text("The pool does conversions in batches. The chain records the quantity in and out for each reserve. It does not record the pairs.")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                Text("The most recent batch before this block moved nothing through the pool.")
+                Text("The last batch before this block had no conversions.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
@@ -59,9 +59,9 @@ struct PoolBatchView: View {
         let ins = flows.filter { $0.amountIn > 0 }.map { (name($0.id), $0.amountIn) }
         let outs = flows.filter { $0.amountOut > 0 }.map { (name($0.id), $0.amountOut) }
         switch (ins.isEmpty, outs.isEmpty) {
-        case (false, false): return "\(list(ins)) went in, and \(list(outs)) came out."
-        case (false, true): return "\(list(ins)) went in, converted to \(currencyName)."
-        case (true, false): return "\(list(outs)) came out, converted from \(currencyName)."
+        case (false, false): return "\(list(ins)) went into the pool. \(list(outs)) came out of the pool."
+        case (false, true): return "\(list(ins)) went into the pool for \(currencyName)."
+        case (true, false): return "\(list(outs)) came out of the pool for \(currencyName)."
         default: return ""
         }
     }
@@ -149,7 +149,7 @@ struct IdentityOriginCard: View {
                 let transaction = try await explorer.transaction(txid: txid)
                 return Self.origin(of: transaction, identity: identityAddress)
             } content: { origin in
-                Card("Where it came from") {
+                Card("Origin") {
                     Canvas { context, size in
                         draw(context, size, origin)
                     }
@@ -159,7 +159,7 @@ struct IdentityOriginCard: View {
                     Text(sentence(origin)).font(.callout)
                     HStack(spacing: 14) {
                         ConfidenceMark(level: .verified, label: "Registration")
-                        ConfidenceMark(level: .candidate, label: "Payer and payments are inferred")
+                        ConfidenceMark(level: .candidate, label: "Payer and payments are not confirmed")
                         Spacer()
                         RouteLink(text: txid, route: .transaction(txid: txid))
                     }
@@ -210,7 +210,7 @@ struct IdentityOriginCard: View {
     private func sentence(_ origin: Origin) -> String {
         var text = "Registered on \(when)"
         if let payer = origin.payers.first {
-            text += ", probably paid for by \(display(payer))"
+            text += ", possibly paid for by \(display(payer))"
             if origin.payers.count > 1 { text += " and \(origin.payers.count - 1) more" }
         }
         if let spent = origin.spent, spent > 0 {
@@ -219,7 +219,7 @@ struct IdentityOriginCard: View {
         text += "."
         if !origin.payments.isEmpty {
             let list = origin.payments.map { "\(Format.coins($0.1)) \(model.coin) to \(display($0.0))" }
-            text += " The registration paid \(list.joined(separator: ", ")), which is usually a referral or the issuer's charge."
+            text += " The registration paid \(list.joined(separator: ", ")). Such a payment is usually a referral or a charge from the issuer."
         }
         return text
     }
@@ -251,7 +251,7 @@ struct IdentityOriginCard: View {
                     path.move(to: CGPoint(x: frame.maxX, y: y))
                     path.addLine(to: CGPoint(x: centre.minX, y: midY))
                 }, with: .color(.secondary), style: dashed)
-            box(frame, display(payer), "probably paid")
+            box(frame, display(payer), "possible payer")
         }
         for (index, payment) in origin.payments.enumerated() {
             let y = slot(index, origin.payments.count)

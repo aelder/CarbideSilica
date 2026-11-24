@@ -14,13 +14,13 @@ struct IdentityControlCard: View {
 
     enum Scenario: String, CaseIterable, Identifiable {
         case everyday = "Everyday use"
-        case stolen = "If keys are stolen"
+        case stolen = "Stolen keys"
         case recovery = "Recovery"
         var id: String { rawValue }
     }
 
     var body: some View {
-        Card("Who controls it") {
+        Card("Control") {
             Picker("Scenario", selection: $scenario) {
                 ForEach(Scenario.allCases) { Text($0.rawValue).tag($0) }
             }
@@ -34,9 +34,7 @@ struct IdentityControlCard: View {
             .frame(height: 230)
             .accessibilityLabel(sentence)
 
-            Label(sentence, systemImage: warning ? "exclamationmark.triangle" : "info.circle")
-                .foregroundStyle(warning ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
-                .font(.callout)
+            Note(text: sentence, warning: warning).font(.callout)
         }
     }
 
@@ -62,18 +60,18 @@ struct IdentityControlCard: View {
     private var sentence: String {
         switch scenario {
         case .everyday:
-            if keys.count <= 1 { return "One key controls \(name). Whoever holds it can spend and update." }
-            return "Any \(required) of the \(keys.count) keys sign together to spend or update \(name)."
+            if keys.count <= 1 { return "One key controls \(name). The holder of the key can spend funds and update the identity." }
+            return "\(required) of the \(keys.count) keys must sign to spend funds or update \(name)."
         case .stolen:
             if selfRevoke {
-                return "\(name) is its own revocation authority. Whoever holds its keys also holds "
-                    + "the power to revoke, so stolen keys can't be shut out by anyone else."
+                return "\(name) is its own revocation authority. A person with the keys can also revoke. "
+                    + "No other identity can stop stolen keys."
             }
-            return "\(display(identity.revocationAuthority)) can revoke \(name). That freezes it: "
-                + "the stolen keys can no longer spend or sign."
+            return "\(display(identity.revocationAuthority)) can revoke \(name). After revocation, "
+                + "the stolen keys cannot spend or sign."
         case .recovery:
             if selfRecover {
-                return "\(name) is its own recovery authority. If its keys are lost, nothing else "
+                return "\(name) is its own recovery authority. If the keys are lost, no other identity "
                     + "can restore control."
             }
             return "\(display(identity.recoveryAuthority)) can assign new keys. \(name) keeps its "
@@ -132,8 +130,8 @@ struct IdentityControlCard: View {
         let state: (String, Color) =
             switch scenario {
             case .everyday: (keys.count <= 1 ? "1 key" : "\(required) of \(keys.count) keys", .accentColor)
-            case .stolen: selfRevoke ? ("No outside revoker", .orange) : ("Revoked · frozen", .red)
-            case .recovery: selfRecover ? ("No outside recovery", .orange) : ("Active again", .green)
+            case .stolen: selfRevoke ? ("No external revoker", .orange) : ("Revoked · frozen", .red)
+            case .recovery: selfRecover ? ("No external recovery", .orange) : ("Active again", .green)
             }
         let shape = Path(roundedRect: centre, cornerRadius: 10)
         context.fill(shape, with: .color(state.1.opacity(0.14)))
@@ -255,7 +253,7 @@ private struct HistoryRow: View {
     }
 
     private var when: String {
-        guard let time = version.time else { return "Date not loaded" }
+        guard let time = version.time else { return "Date not available" }
         return Date(timeIntervalSince1970: TimeInterval(time))
             .formatted(date: .abbreviated, time: .omitted)
     }

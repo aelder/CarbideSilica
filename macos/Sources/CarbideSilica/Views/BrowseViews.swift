@@ -57,7 +57,7 @@ struct CurrenciesView: View {
                         }
                     }
                     if filtered.isEmpty {
-                        Text("No currency matches these filters.").foregroundStyle(.secondary)
+                        Text("No currency matches the filters.").foregroundStyle(.secondary)
                     }
                 }
             }
@@ -156,9 +156,8 @@ struct BookmarksView: View {
                 }
                 if model.bookmarks.isEmpty {
                     VStack(spacing: 6) {
-                        Image(systemName: "bookmark").font(.largeTitle).foregroundStyle(.secondary)
-                        Text("No bookmarks yet.").font(.title3)
-                        Text("Open a block, transaction, address, identity or currency and press the bookmark button in the toolbar.")
+                        Text("No bookmarks.").font(.title3)
+                        Text("To add a bookmark, open a page and click the bookmark button in the toolbar.")
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 160)

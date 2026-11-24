@@ -19,8 +19,7 @@ struct NotarizationLanesCard: View {
         VStack(spacing: 0) {
             if let data, !data.rows.isEmpty {
                 Card("Notarizations", trailing: "\(data.rows.count) recorded") {
-                    Label(summary(data), systemImage: stale(data) ? "exclamationmark.triangle" : "link")
-                        .foregroundStyle(stale(data) ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
+                    Note(text: summary(data), warning: stale(data))
 
                     Canvas { context, size in
                         draw(context, size, data)
@@ -32,10 +31,10 @@ struct NotarizationLanesCard: View {
                         legend(color: .accentColor, dashed: false, text: "Confirmed")
                         legend(color: .secondary, dashed: true, text: "Pending")
                         if data.forkCount > 1 {
-                            legend(color: .red, dashed: false, text: "On a losing fork")
+                            legend(color: .red, dashed: false, text: "On a side branch")
                         }
                         Spacer()
-                        Text("The other system's lane is unchecked: no source for it is connected.")
+                        Text("The app cannot check the other system. No source is connected for it.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
 
@@ -45,7 +44,7 @@ struct NotarizationLanesCard: View {
                             HStack(spacing: 14) {
                                 ConfidenceMark(
                                     level: row.confirmed ? .verified : row.onBestChain ? .observed : .unknown,
-                                    label: row.confirmed ? "Confirmed" : row.onBestChain ? "Pending" : "Losing fork"
+                                    label: row.confirmed ? "Confirmed" : row.onBestChain ? "Pending" : "Side branch"
                                 )
                                 .frame(width: 120, alignment: .leading)
                                 if let height = local(row) {
@@ -54,7 +53,7 @@ struct NotarizationLanesCard: View {
                                         route: .block(id: "\(height)"), shorten: false)
                                 }
                                 if let other = row.otherHeight {
-                                    Text("⇄ \(otherName(data)) \(Format.integer(other))")
+                                    Text("with \(otherName(data)) \(Format.integer(other))")
                                         .foregroundStyle(.secondary).monospacedDigit()
                                 }
                                 Spacer()
@@ -127,16 +126,16 @@ struct NotarizationLanesCard: View {
         guard let confirmed = lastConfirmed(data), let height = local(confirmed) else {
             return "No confirmed notarization is recorded. \(pending) pending."
         }
-        var text = "Last confirmed at \(model.coin) block \(Format.integer(height))"
+        var text = "The last confirmed notarization is at \(model.coin) block \(Format.integer(height))"
         if let behind = blocksSinceConfirmed(data) {
             let days = Double(behind) / 1440
             text += ", \(Format.integer(behind)) blocks ago"
-            text += days >= 1 ? " (about \(Int(days.rounded())) days)." : "."
+            text += days >= 1 ? " (approximately \(Int(days.rounded())) days)." : "."
         } else {
             text += "."
         }
         if pending > 0 {
-            text += " \(pending) later notarization\(pending == 1 ? " is" : "s are") still pending."
+            text += " \(pending) later notarization\(pending == 1 ? " is" : "s are") pending."
         }
         return text
     }

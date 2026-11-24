@@ -18,7 +18,7 @@ struct TransactionView: View {
                     tags: transaction.tags
                 )
 
-                Card("What happened") {
+                Card("Flow") {
                     TransactionFlowView(
                         flow: TransactionFlowModel(transaction: transaction, coin: model.coin))
                 }
@@ -35,6 +35,10 @@ struct TransactionView: View {
                     ProtocolLinksCard(links: transaction.links)
                 }
 
+                if transaction.tags.contains("Identity Registration") {
+                    RegistrationPaymentsCard(transaction: transaction)
+                }
+
                 Card("Summary") {
                     FieldRow(label: "Transaction ID", value: transaction.txid, monospaced: true)
                     if let height = transaction.height {
@@ -43,7 +47,7 @@ struct TransactionView: View {
                             route: transaction.blockHash.map { .block(id: $0) }
                                 ?? .block(id: "\(height)"))
                     } else {
-                        FieldRow(label: "Block", value: "Not yet in a block")
+                        FieldRow(label: "Block", value: "Not in a block")
                     }
                     if let time = transaction.time {
                         FieldRow(
@@ -87,6 +91,10 @@ struct TransactionView: View {
                             OutputRow(output: output)
                         }
                     }
+                }
+
+                if transaction.height != nil {
+                    InclusionCard(txid: transaction.txid)
                 }
 
                 JSONSection(json: transaction.json)
@@ -189,11 +197,11 @@ private struct OutputRow: View {
                     Image(systemName: "curlybraces")
                 }
                 .buttonStyle(.borderless)
-                .help("Show this output's JSON")
+                .help("Show the JSON of this output")
                 .accessibilityLabel("Show JSON for output \(output.index)")
             }
             if let hex = output.dataHex {
-                Button(showingBytes ? "Hide bytes" : "View \(hex.count / 2) bytes of data") {
+                Button(showingBytes ? "Hide bytes" : "Show \(hex.count / 2) bytes of data") {
                     showingBytes.toggle()
                 }
                 .buttonStyle(.link)

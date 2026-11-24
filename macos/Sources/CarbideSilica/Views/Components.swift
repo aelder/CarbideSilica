@@ -27,7 +27,7 @@ struct LoadView<Value: Sendable, Content: View>: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let message):
                 ContentUnavailableView {
-                    Label("Couldn't load this", systemImage: "exclamationmark.triangle")
+                    Label("The data did not load", systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(message)
                 } actions: {
@@ -65,7 +65,10 @@ struct Page<Content: View>: View {
     }
 }
 
-/// A titled group of content on a subtle background.
+/// A titled section of a page, set off by a rule above its heading.
+///
+/// Sections are not boxed. A fill and a rounded border mark something as a separate
+/// object, so they are kept for content that is one, such as a block of raw bytes.
 struct Card<Content: View>: View {
     let title: String
     var trailing: String?
@@ -79,8 +82,9 @@ struct Card<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Divider()
             HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.headline)
+                Text(title).font(.title3.weight(.semibold))
                 Spacer()
                 if let trailing {
                     Text(trailing).font(.subheadline).foregroundStyle(.secondary)
@@ -88,13 +92,12 @@ struct Card<Content: View>: View {
             }
             content
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
     }
 }
 
-/// The heading of a detail page: a kind label, the title and optional tags.
+/// The heading of a detail page: the title, an optional ID and tags. The window title
+/// names the kind of page, so the heading does not repeat it.
 struct PageHeader: View {
     let kind: String
     let title: String
@@ -103,9 +106,6 @@ struct PageHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(kind.uppercased())
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
             Text(title)
                 .font(.title.weight(.semibold))
                 .textSelection(.enabled)
@@ -160,6 +160,11 @@ struct FieldRow: View {
 
     @Environment(AppModel.self) private var model
 
+    private func isCurrency(_ route: Route) -> Bool {
+        if case .currency = route { return true }
+        return false
+    }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(label)
@@ -168,7 +173,10 @@ struct FieldRow: View {
             if let route {
                 // A known name is shown before the raw ID; the ID stays one hover or copy away.
                 if let name = model.names[value] {
-                    Button(name) { model.open(route) }
+                    // A currency's name is its identity's name without the trailing "@".
+                    Button(isCurrency(route) && name.hasSuffix("@") ? String(name.dropLast()) : name) {
+                        model.open(route)
+                    }
                         .buttonStyle(.link)
                         .lineLimit(1)
                         .help(value)
@@ -277,7 +285,7 @@ struct JSONSection: View {
             DisclosureGroup(isExpanded: $expanded) {
                 VStack(alignment: .leading, spacing: 8) {
                     if json.count > Self.displayLimit {
-                        Text("Showing the first part of a large document. Copy to get all of it.")
+                        Text("This is the first part of a large document. Use Copy to get the full document.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -292,7 +300,7 @@ struct JSONSection: View {
                 .padding(.top, 8)
             } label: {
                 HStack {
-                    Text(expanded ? "Hide" : "Show the data as the daemon reported it")
+                    Text(expanded ? "Hide" : "Show the data from the node")
                         .foregroundStyle(.secondary)
                     Spacer()
                     CopyButton(text: json)
@@ -311,5 +319,20 @@ struct CoinAmount: View {
         (Text(Format.coins(sats)).monospacedDigit()
             + Text(" \(model.coin)").foregroundStyle(.secondary))
             .lineLimit(1)
+    }
+}
+
+/// A line of explanation. It carries a warning triangle only when it is a warning, so an
+/// icon always means something.
+struct Note: View {
+    let text: String
+    var warning = false
+
+    var body: some View {
+        if warning {
+            Label(text, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+        } else {
+            Text(text)
+        }
     }
 }

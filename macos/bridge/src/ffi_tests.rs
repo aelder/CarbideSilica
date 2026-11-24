@@ -230,6 +230,20 @@ async fn live_lookups_through_an_api() {
         listed.iter().find(|c| c.name.contains("Bridge.vETH"))
     );
     println!("estimate: {:?}", explorer.estimate("5000000".into()).await);
+    let pool = explorer
+        .fee_pool_series(tip_for_pool(&explorer).await, 360, 6)
+        .await;
+    println!(
+        "fee pool: {:?}",
+        pool.map(|p| p.iter().map(|x| (x.height, x.native)).collect::<Vec<_>>())
+    );
+    println!(
+        "inclusions: {:?}",
+        explorer
+            .inclusions("42f1195338518ec1bb4a08d6d156bbcbb67454fd68cbd3b92da7c5b96ea6824c".into())
+            .await
+    );
+    println!("known chains: {}", known_chains(false).len());
     let names = explorer
         .names(vec![
             "i5v3h9FWVdRFbNHU7DfcpGykQjRaHtMqu7".into(),
@@ -295,7 +309,7 @@ fn describes_identity_changes_in_plain_words() {
     );
     assert_eq!(
         identity_changes(Some(&second), &second),
-        ["Updated, with no change to control"]
+        ["Updated. Control did not change."]
     );
     let revoked = json!({"primaryaddresses": ["RA", "RB", "RC"], "minimumsignatures": 2, "flags": 0x8001,
         "revocationauthority": "iSelf", "recoveryauthority": "iVault", "timelock": 0});
@@ -446,4 +460,45 @@ fn names_currency_option_flags() {
     );
     assert_eq!(option_tags(Some(0x80)), ["Gateway"]);
     assert!(option_tags(None).is_empty());
+}
+
+#[test]
+fn reads_fee_pool_checkpoints_and_token_outputs() {
+    use serde_json::json;
+    let coinbase = json!({"vout": [{"scriptPubKey": {"addresses": ["R1"]}},
+        {"scriptPubKey": {"feepool": {"version": 1, "currencyvalues": {"iSys": 12.5}}}}]});
+    assert_eq!(fee_pool_native(&coinbase, "VRSC", Some("iSys")), Some(12.5));
+    let empty = json!({"vout": [{"scriptPubKey": {"feepool": {"currencyvalues": {}}}}]});
+    assert_eq!(fee_pool_native(&empty, "VRSC", Some("iSys")), Some(0.0));
+    assert_eq!(
+        fee_pool_native(&json!({"vout": [{"scriptPubKey": {}}]}), "VRSC", None),
+        None
+    );
+
+    assert!(holds_currency(
+        &json!({"reserve_balance": {"iToken": 1e-8}}),
+        "iToken"
+    ));
+    assert!(holds_currency(
+        &json!({"reserveoutput": {"currencyvalues": {"iToken": 1.0}}}),
+        "iToken"
+    ));
+    assert!(!holds_currency(
+        &json!({"reserve_balance": {"iOther": 1.0}, "identityprimary": {"name": "iToken"}}),
+        "iToken"
+    ));
+}
+
+#[test]
+fn takes_the_ip_from_a_peer_address() {
+    assert_eq!(peer_ip("203.0.113.18:27485"), "203.0.113.18");
+    assert_eq!(
+        peer_ip("[2a01:4f9:4a:18dd::131]:27485"),
+        "2a01:4f9:4a:18dd::131"
+    );
+    assert_eq!(peer_ip("203.0.113.18"), "203.0.113.18");
+}
+
+async fn tip_for_pool(explorer: &Explorer) -> u64 {
+    explorer.chain_status().await.unwrap().blocks
 }

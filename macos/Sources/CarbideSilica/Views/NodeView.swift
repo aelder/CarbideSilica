@@ -16,16 +16,17 @@ struct NodeView: View {
                     }
                     PeersRadarCard(node: node)
                     PeersCard(node: node)
+                    PeerControlsCard(node: node)
                     BranchesCard()
                 }
             } else if let error = model.nodeError ?? model.statusError {
                 ContentUnavailableView {
-                    Label("Node not reachable", systemImage: "server.rack")
+                    Label("No connection to the node", systemImage: "server.rack")
                 } description: {
                     Text(error)
                 }
             } else {
-                ProgressView("Asking the node…")
+                ProgressView("Connecting to the node…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -61,7 +62,7 @@ private struct SyncCard: View {
 
     var body: some View {
         let syncing = isSyncing(node)
-        Card(syncing ? "Syncing the chain" : "Up to date") {
+        Card(syncing ? "Synchronization in progress" : "Synchronized") {
             if syncing, let tip = node.tipTime {
                 (Text("Validating blocks from ")
                     + Text(
@@ -70,7 +71,7 @@ private struct SyncCard: View {
                     ).fontWeight(.semibold))
                     .font(.title3)
             } else if !syncing {
-                Text("Every block has been validated. New blocks are checked as they arrive.")
+                Text("The node has validated all blocks. It validates each new block on arrival.")
                     .foregroundStyle(.secondary)
             }
 
@@ -79,7 +80,7 @@ private struct SyncCard: View {
             }
             .frame(height: 62)
             .accessibilityLabel(
-                "Sync progress: \(Format.percent(fraction)) of the chain validated")
+                "Synchronization progress: \(Format.percent(fraction)) of the chain validated")
 
             HStack(spacing: 28) {
                 Stat(
@@ -95,7 +96,7 @@ private struct SyncCard: View {
                         label: "Speed",
                         value: speed.map { "\(Int($0.rounded())) blocks/s" } ?? "Measuring…",
                         detail: nil)
-                    Stat(label: "Time left", value: timeLeft, detail: "at the current speed")
+                    Stat(label: "Time remaining", value: timeLeft, detail: "at the current speed")
                 }
                 if let waiting = node.mempoolCount, !syncing {
                     Stat(label: "Waiting", value: "\(waiting)", detail: "unconfirmed transactions")
@@ -103,8 +104,8 @@ private struct SyncCard: View {
             }
             if syncing {
                 Text(
-                    "Year marks assume a steady block rate, so they are approximate. "
-                        + "Busier periods of the chain take longer to validate."
+                    "The year marks are approximate. They assume a constant block rate. "
+                        + "Blocks with more transactions take longer to validate."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -134,9 +135,9 @@ private struct SyncCard: View {
         guard let speed, speed > 0.5, let longest = node.longestChain else { return "–" }
         let seconds = Double(longest - node.blocks) / speed
         let hours = seconds / 3600
-        if hours >= 48 { return "about \(Int((hours / 24).rounded())) days" }
-        if hours >= 1 { return "about \(Int(hours)) h \(Int(hours.truncatingRemainder(dividingBy: 1) * 60)) min" }
-        return "about \(max(Int(seconds / 60), 1)) min"
+        if hours >= 48 { return "approximately \(Int((hours / 24).rounded())) days" }
+        if hours >= 1 { return "approximately \(Int(hours)) h \(Int(hours.truncatingRemainder(dividingBy: 1) * 60)) min" }
+        return "approximately \(max(Int(seconds / 60), 1)) min"
     }
 
     private func draw(_ context: GraphicsContext, _ size: CGSize) {
@@ -197,7 +198,7 @@ private struct SpeedCard: View {
     var body: some View {
         Card("Validation speed", trailing: "blocks per second") {
             if samples.count < 2 {
-                Text("Measuring. The trace appears after a few seconds.")
+                Text("Measurement in progress.")
                     .foregroundStyle(.secondary)
                     .frame(height: 120)
             } else {
@@ -228,21 +229,17 @@ private struct PeersCard: View {
     var body: some View {
         Card("Peers", trailing: node.peersError == nil ? "\(node.peers.count) connected" : nil) {
             if let error = node.peersError {
-                Label(
-                    node.source == .publicApi
-                        ? "Peers are only available from a local daemon." : error,
-                    systemImage: "info.circle"
-                )
-                .foregroundStyle(.secondary)
+                Text(node.source == .publicApi ? "Only a local node supplies peer data." : error)
+                    .foregroundStyle(.secondary)
             } else if node.peers.isEmpty {
-                Label("No peers connected. The node cannot sync until it finds one.",
+                Label("No peers are connected. The node cannot synchronize without a peer.",
                       systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
             } else {
                 VStack(spacing: 0) {
                     PeerColumns(
                         address: Text("Address"), direction: Text("Direction"),
-                        response: Text("Response time"), height: Text("Its height"),
+                        response: Text("Response time"), height: Text("Peer height"),
                         received: Text("Received"), sent: Text("Sent")
                     )
                     .font(.caption.weight(.medium))
@@ -268,9 +265,9 @@ private struct PeersCard: View {
                     }
                 }
                 Text(
-                    "\"Its height\" is the chain height the peer reported when it connected."
+                    "\"Peer height\" is the chain height that the peer reported when it connected."
                         + (isSyncing(node)
-                            ? " Response times read high during sync, because peers are busy sending blocks."
+                            ? " Response times are high during synchronization because the peers send many blocks."
                             : ""))
                     .font(.caption)
                     .foregroundStyle(.secondary)

@@ -66,7 +66,7 @@ struct TransactionFlowModel {
         if unknownInputs > 0 {
             notes.append(
                 "\(unknownInputs) input\(unknownInputs == 1 ? " has" : "s have") no recorded "
-                    + "amount from this source, so the fee can't be worked out.")
+                    + "amount from this source. The app cannot calculate the fee.")
         }
 
         var outputs: [FlowItem] = []
@@ -108,7 +108,7 @@ struct TransactionFlowModel {
                 outputs.append(
                     FlowItem(
                         id: 10_001, title: "Private address",
-                        detail: "amount hidden, includes the fee", sats: publicIn - publicOut,
+                        detail: "hidden amount, includes the fee", sats: publicIn - publicOut,
                         kind: .hidden))
             } else if !shielded {
                 fee = publicIn - publicOut
@@ -131,22 +131,22 @@ struct TransactionFlowModel {
         if coinbase {
             parts.append("Created \(amount(publicOut)) as the block reward.")
         } else if transaction.tags.contains("Stake") {
-            parts.append("Staked \(amount(publicIn)) to produce this block. The coins return to their owner.")
+            parts.append("Staked \(amount(publicIn)) to make this block. The coins go back to the owner.")
         } else if shielded {
-            parts.append("Moved funds through a private address. Hidden amounts are not shown.")
+            parts.append("This transaction uses a private address. The diagram does not show hidden amounts.")
         } else if !protocolTags.isEmpty {
             parts.append("\(protocolTags.prefix(3).joined(separator: ", ")).")
-            if publicIn > 0 { parts.append("\(amount(publicIn)) went in.") }
+            if publicIn > 0 { parts.append("The input was \(amount(publicIn)).") }
         } else if payments.count == 1, let payment = payments.first {
             parts.append("Paid \(amount(payment.sats)) to \(payment.title).")
         } else if payments.isEmpty, change > 0 {
-            parts.append("Moved \(amount(change)) between the sender's own addresses.")
+            parts.append("Moved \(amount(change)) between addresses of the sender.")
         } else {
             let sent = payments.map(\.sats).reduce(0, +)
             parts.append("Paid \(amount(sent)) to \(payments.count) recipients.")
         }
         if !coinbase, !transaction.tags.contains("Stake"), change > 0, !payments.isEmpty {
-            parts.append("\(amount(change)) came back as change.")
+            parts.append("\(amount(change)) went back to the sender as change.")
         }
         if let fee {
             parts.append("The fee was \(amount(fee)).")

@@ -20,7 +20,7 @@ struct DashboardView: View {
                             .foregroundStyle(.orange)
                     }
                     if !model.blocks.isEmpty {
-                        Card("Chain pulse", trailing: "last 25 minutes of blocks") {
+                        Card("Chain pulse", trailing: "blocks of the last 25 minutes") {
                             ChainPulse(
                                 blocks: model.blocks, live: model.syncFraction == nil,
                                 waiting: model.node?.mempoolCount)
@@ -57,22 +57,22 @@ private struct SyncBanner: View {
                 .progressViewStyle(.circular)
                 .controlSize(.small)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Your node is still syncing: \(fraction.formatted(.percent.precision(.fractionLength(1)))) validated")
+                Text("The node is not fully synchronized. \(fraction.formatted(.percent.precision(.fractionLength(1)))) of the chain is validated.")
                     .fontWeight(.semibold)
                 Text(detail).font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Show sync") { model.show(.node) }
+            Button("Show progress") { model.show(.node) }
         }
         .padding(14)
         .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var detail: String {
-        guard let tipTime else { return "What you see here is history, not the present." }
+        guard let tipTime else { return "This data is not current." }
         let date = Date(timeIntervalSince1970: TimeInterval(tipTime))
             .formatted(.dateTime.month(.wide).year())
-        return "Everything here is history from \(date). Recent blocks, addresses and identities won't be found yet."
+        return "This data is from \(date). The node cannot find newer blocks, addresses or identities at this time."
     }
 }
 
@@ -80,7 +80,7 @@ private struct StatusTiles: View {
     let status: ChainStatus
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 24) {
             Tile(label: "Height", value: Format.integer(status.blocks), detail: syncDetail)
             if let tip = status.tipTime {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -98,7 +98,7 @@ private struct StatusTiles: View {
             }
             Tile(
                 label: "Source",
-                value: status.source == .publicApi ? "Public API" : "Local daemon",
+                value: status.source == .publicApi ? "Public API" : "Local node",
                 detail: status.version.map { "Verus \($0)" })
         }
     }
@@ -120,7 +120,7 @@ private struct Tile: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.title2.weight(.semibold))
+                .font(.title3.weight(.semibold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -129,9 +129,7 @@ private struct Tile: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -251,7 +249,7 @@ private struct NotConnectedView: View {
             if model.connection?.apiEndpoint == nil {
                 Button("Use Public API") { model.enablePublicAPI() }
                     .help(
-                        "Send lookups to \(SettingsKey.defaultAPI) when the local daemon can't answer."
+                        "Send requests to \(SettingsKey.defaultAPI) when the local node cannot answer."
                     )
             }
             SettingsLink { Text("Settings…") }
@@ -260,9 +258,9 @@ private struct NotConnectedView: View {
 
     private func detail(_ connection: ConnectionInfo) -> String {
         if connection.configFound {
-            return "Tried the daemon at \(connection.daemonUrl)."
+            return "The app tried the node at \(connection.daemonUrl)."
         }
-        return "No daemon configuration was found for \(connection.chain). "
-            + "Tried \(connection.daemonUrl)."
+        return "The app found no node configuration for \(connection.chain). "
+            + "It tried \(connection.daemonUrl)."
     }
 }

@@ -106,7 +106,7 @@ struct RootView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Saved to Carbide's bookmark file, which the terminal app also reads.")
+            Text("The app saves the bookmark in the Carbide bookmark file. The terminal app uses the same file.")
         }
         .alert(
             "Bookmarks",
@@ -233,18 +233,42 @@ struct ConnectionBadge: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-            Text(text)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        // The badge is also the chain menu: every daemon configured on this Mac.
+        Menu {
+            Section("Chains on this Mac") {
+                ForEach(model.knownChainList, id: \.configFile) { chain in
+                    Button {
+                        model.switchChain(to: chain)
+                    } label: {
+                        if chain.chain == model.currentChain {
+                            Label(chainLabel(chain), systemImage: "checkmark")
+                        } else {
+                            Text(chainLabel(chain))
+                        }
+                    }
+                }
+            }
+            SettingsLink { Text("Connection Settings…") }
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 8, height: 8)
+                Text(text)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
         .padding(.horizontal, 6)
-        .help(model.statusError ?? "Connection status")
-        .accessibilityElement(children: .combine)
+        .help(model.statusError ?? "Connection status. Click to select a chain.")
+    }
+
+    /// PBaaS chains are stored under a hex folder name; show a short form of it.
+    private func chainLabel(_ chain: KnownChain) -> String {
+        chain.chain.count == 40 ? "PBaaS chain \(chain.chain.prefix(8))…" : chain.chain
     }
 
     private var color: Color {
@@ -256,7 +280,7 @@ struct ConnectionBadge: View {
         guard let status = model.status else {
             return model.statusError == nil ? "Connecting…" : "Not connected"
         }
-        let source = status.source == .publicApi ? "Public API" : "Local daemon"
+        let source = status.source == .publicApi ? "Public API" : "Local node"
         let network = status.testnet ? " testnet" : ""
         return "\(status.name)\(network) · \(Format.integer(status.blocks)) · \(source)"
     }

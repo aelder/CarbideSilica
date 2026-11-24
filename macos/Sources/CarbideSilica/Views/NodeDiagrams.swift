@@ -12,7 +12,7 @@ struct PeersRadarCard: View {
 
     var body: some View {
         if node.peersError == nil, !node.peers.isEmpty {
-            Card("Peers by response time", trailing: "closer is faster") {
+            Card("Peers by response time", trailing: "nearer is faster") {
                 GeometryReader { geometry in
                     Canvas { context, size in
                         draw(context, size)
@@ -39,8 +39,8 @@ struct PeersRadarCard: View {
 
     private var caption: String {
         guard let peer = node.peers.first(where: { $0.id == hovered }) else {
-            return "Each dot is a peer. Its distance from the centre is how long it takes to "
-                + "answer; its size is how much data it has sent."
+            return "Each dot is a peer. The distance from the centre shows the response time. "
+                + "The size shows the quantity of data received."
         }
         let time = peer.pingMs.map { $0 < 1000 ? "\(Int($0.rounded())) ms" : String(format: "%.1f s", $0 / 1000) }
             ?? "not measured"
@@ -127,11 +127,11 @@ struct BranchesCard: View {
     var body: some View {
         Card("Branches", trailing: loaded && failure == nil ? known : nil) {
             if let failure {
-                Label(failure, systemImage: "info.circle").foregroundStyle(.secondary)
+                Text(failure).foregroundStyle(.secondary)
             } else if !loaded {
                 ProgressView().frame(maxWidth: .infinity, minHeight: 80)
             } else if let active {
-                Label(summary(active), systemImage: recent.isEmpty ? "checkmark.circle" : "arrow.triangle.branch")
+                Text(summary(active))
                 if !recent.isEmpty {
                     GeometryReader { geometry in
                         Canvas { context, size in
@@ -160,7 +160,7 @@ struct BranchesCard: View {
                         .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
                 }
                 if let ahead = headersAhead(active) {
-                    Text("Headers are known up to block \(Format.integer(ahead)); blocks are validated up to \(Format.integer(active.height)).")
+                    Text("The node has headers to block \(Format.integer(ahead)). It has validated blocks to block \(Format.integer(active.height)).")
                         .font(.callout).foregroundStyle(.secondary)
                 }
             } else {
@@ -181,7 +181,7 @@ struct BranchesCard: View {
     private var known: String {
         let ahead = active.flatMap(headersAhead) == nil ? 0 : 1
         let count = max(tips.count - 1 - ahead, 0)
-        return "\(count) side branch\(count == 1 ? "" : "es") on record"
+        return "\(count) side branch\(count == 1 ? "" : "es") known"
     }
 
     /// Side branches that diverged within the window behind the tip.
@@ -202,18 +202,18 @@ struct BranchesCard: View {
 
     private func summary(_ active: ChainTip) -> String {
         if recent.isEmpty {
-            return "No side branches in the last \(window) blocks. The chain has been a single line."
+            return "The last \(window) blocks have no side branches."
         }
         let longest = recent.map(\.branchLength).max() ?? 0
         return "\(recent.count) side branch\(recent.count == 1 ? "" : "es") in the last \(window) blocks. "
-            + "The longest ran \(longest) block\(longest == 1 ? "" : "s") before losing out."
+            + "The longest side branch has \(longest) block\(longest == 1 ? "" : "s")."
     }
 
     private func meaning(_ status: String) -> String {
         switch status {
-        case "valid-fork": "fully validated, then overtaken"
-        case "valid-headers": "headers valid, blocks not all fetched"
-        case "headers-only": "headers seen, blocks not fetched"
+        case "valid-fork": "validated, then replaced"
+        case "valid-headers": "headers valid, some blocks not downloaded"
+        case "headers-only": "headers only, blocks not downloaded"
         case "invalid": "contains an invalid block"
         default: status
         }
@@ -221,7 +221,7 @@ struct BranchesCard: View {
 
     private var caption: String {
         guard let tip = recent.first(where: { $0.hash == hovered }) else {
-            return "The top line is the active chain. Each branch below left it and stopped. Click one to open its last block."
+            return "The top line is the active chain. Each lower line is a side branch. Click a side branch to open its last block."
         }
         return "Branch ending at block \(Format.integer(tip.height)) · \(tip.branchLength) block"
             + "\(tip.branchLength == 1 ? "" : "s") long · \(meaning(tip.status))"

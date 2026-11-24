@@ -46,7 +46,7 @@ struct MarketplaceView: View {
                         Button("Refresh") { Task { await load() } }
                     }
                     if points.isEmpty {
-                        Text("No open offers match.").foregroundStyle(.secondary)
+                        Text("No open offers match the filter.").foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, minHeight: 200)
                     } else {
                         GeometryReader { geometry in
@@ -74,7 +74,7 @@ struct MarketplaceView: View {
                             .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
                     }
                     if excluded > 0 {
-                        Text("\(excluded) offer\(excluded == 1 ? " is" : "s are") priced in another currency or already expired, and not plotted.")
+                        Text("\(excluded) offer\(excluded == 1 ? " is" : "s are") not shown. The price is in a different currency, or the offer has expired.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -162,8 +162,8 @@ struct MarketplaceView: View {
 
     private var caption: String {
         guard let point = points.first(where: { $0.offer.txid == hovered }) else {
-            return "Left is closer to expiring. Higher is more expensive. Circles are for sale, "
-                + "squares are wanted, diamonds are swaps. Click one to open it."
+            return "Offers on the left expire sooner. Offers at the top cost more. A circle is a sale. "
+                + "A square is a request to buy. A diamond is a swap. Click an offer to open it."
         }
         return "\(point.offer.subject) · \(label(point.offer.kind).lowercased()) at "
             + "\(Format.amount(point.offer.price)) \(model.coin) · \(timeLeft(point.hours))"
@@ -254,7 +254,7 @@ struct MarketplaceView: View {
                 at: CGPoint(x: xFor(hours), y: plotBottom + 12), anchor: .center)
         }
         context.draw(
-            Text("time left before the offer expires (log scale) →").font(.caption2).foregroundStyle(.secondary),
+            Text("time before the offer expires (log scale)").font(.caption2).foregroundStyle(.secondary),
             at: CGPoint(x: size.width - 12, y: plotBottom + 28), anchor: .trailing)
         context.draw(
             Text("Price in \(model.coin) (log scale)").font(.caption2).foregroundStyle(.secondary),

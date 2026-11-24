@@ -8,7 +8,7 @@ struct ProtocolLinksCard: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Card("Refers to", trailing: "\(links.count) link\(links.count == 1 ? "" : "s")") {
+        Card("References", trailing: "\(links.count) link\(links.count == 1 ? "" : "s")") {
             VStack(spacing: 0) {
                 ForEach(Array(links.enumerated()), id: \.offset) { index, link in
                     if index > 0 { Divider() }
@@ -48,10 +48,10 @@ struct WitnessCard: View {
     @State private var running = false
 
     var body: some View {
-        Card("Who signed this", trailing: "\(root.label) · output \(root.output)") {
+        Card("Signers", trailing: "\(root.label) · output \(root.output)") {
             if let report {
                 if report.signatures.isEmpty {
-                    Text("No signatures were found in the evidence that could be reached.")
+                    Text("The available evidence contains no signatures.")
                         .foregroundStyle(.secondary)
                 } else {
                     VStack(spacing: 0) {
@@ -82,14 +82,14 @@ struct WitnessCard: View {
                     Label(issue, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.secondary)
                 }
                 Text(
-                    "Checked \(report.transactionsChecked) transactions and \(report.outputsChecked) outputs. "
-                        + "This lists reachable evidence. It is not a quorum count, and signatures are not verified here."
+                    "The search examined \(report.transactionsChecked) transactions and \(report.outputsChecked) outputs. "
+                        + "The list shows the available evidence only. It is not a quorum count. The app does not verify signatures."
                 )
                 .font(.caption).foregroundStyle(.secondary)
             } else if running {
                 HStack(spacing: 10) {
                     ProgressView().controlSize(.small)
-                    Text("Following the evidence…").foregroundStyle(.secondary)
+                    Text("Searching the evidence…").foregroundStyle(.secondary)
                 }
             } else {
                 if let failure {
@@ -99,7 +99,7 @@ struct WitnessCard: View {
                     Text("Find the identities that signed for or against this notarization.")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("See signers") { Task { await run() } }
+                    Button("Find signers") { Task { await run() } }
                 }
             }
         }
@@ -147,7 +147,7 @@ struct BytesView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Text(data.count > shown.count ? "\(data.count) bytes; showing the first \(shown.count)." : "\(data.count) bytes.")
+            Text(data.count > shown.count ? "\(data.count) bytes. The view shows the first \(shown.count)." : "\(data.count) bytes.")
                 .font(.caption).foregroundStyle(.secondary).padding(.top, 4)
         }
         .font(.callout.monospaced())

@@ -44,9 +44,9 @@ struct ConfidenceMark: View {
     private var meaning: String {
         switch level {
         case .verified: "Proven by exact match or replay."
-        case .observed: "Reported by a source at a known block. Not yet complete."
-        case .candidate: "A reasoned guess, not a fact."
-        case .unknown: "A gap in what can be shown."
+        case .observed: "A source reported this at a known block. The trace is not complete."
+        case .candidate: "An estimate. Not confirmed."
+        case .unknown: "The data is not available."
         }
     }
 }
@@ -64,7 +64,7 @@ struct TransferTraceCard: View {
     @State private var showEvidence = false
 
     var body: some View {
-        Card("Follow this transfer", trailing: "\(root.label) · output \(root.output)") {
+        Card("Transfer trace", trailing: "\(root.label) · output \(root.output)") {
             if let trace {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     ConfidenceMark(level: trace.confidence)
@@ -81,15 +81,14 @@ struct TransferTraceCard: View {
                 }
 
                 if let stop = trace.stop {
-                    Label(stop, systemImage: "pause.circle")
-                        .foregroundStyle(.secondary)
+                    Text(stop).foregroundStyle(.secondary)
                 }
                 if let search = trace.search {
                     HStack {
                         Text(
                             "Searched blocks \(Format.integer(search.first)) to \(Format.integer(search.last)) "
                                 + "(\(search.windows) window\(search.windows == 1 ? "" : "s")). "
-                                + "Not finding it there doesn't mean it never arrived."
+                                + "The transfer can be in a block outside this range."
                         )
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -126,7 +125,7 @@ struct TransferTraceCard: View {
             } else if running {
                 HStack(spacing: 10) {
                     ProgressView().controlSize(.small)
-                    Text("Following the transfer through its export and import…")
+                    Text("Tracing the transfer…")
                         .foregroundStyle(.secondary)
                 }
             } else {
@@ -134,10 +133,10 @@ struct TransferTraceCard: View {
                     Label(failure, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
                 }
                 HStack {
-                    Text("Trace where this went: its export batch, the matching import, and what was received.")
+                    Text("Trace this transfer through its export, its import and its result.")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Follow") { Task { await run(scanFrom: nil) } }
+                    Button("Trace") { Task { await run(scanFrom: nil) } }
                         .keyboardShortcut(.defaultAction)
                 }
             }

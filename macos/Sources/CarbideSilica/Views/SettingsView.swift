@@ -23,27 +23,27 @@ struct SettingsView: View {
                 Toggle("Testnet", isOn: $testnet)
                 HStack {
                     TextField(
-                        "Daemon config file", text: $configFile,
+                        "Node configuration file", text: $configFile,
                         prompt: Text("Standard location"))
                     Button("Choose…", action: chooseConfigFile)
                 }
             } header: {
-                Text("Local daemon")
+                Text("Local node")
             } footer: {
                 Text(daemonSummary)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Toggle("Use a public API when the local daemon can't answer", isOn: $apiEnabled)
+                Toggle("Use a public API when the local node cannot answer", isOn: $apiEnabled)
                 TextField("API address", text: $apiURL, prompt: Text(SettingsKey.defaultAPI))
                     .disabled(!apiEnabled)
             } header: {
                 Text("Public API")
             } footer: {
                 Text(
-                    "When this is on, lookups the local daemon can't answer, including the "
-                        + "addresses and identities you search for, are sent to this server."
+                    "When this setting is on, the app sends requests to this server if the local node cannot answer. "
+                        + "The requests include the addresses and identities that you search for."
                 )
                 .foregroundStyle(.secondary)
             }
@@ -53,7 +53,7 @@ struct SettingsView: View {
             } header: {
                 Text("Display")
             } footer: {
-                Text("Applies to dates on pages opened from now on.").foregroundStyle(.secondary)
+                Text("The setting applies to pages that you open after the change.").foregroundStyle(.secondary)
             }
 
             Section {
@@ -69,7 +69,7 @@ struct SettingsView: View {
             } header: {
                 Text("Storage")
             } footer: {
-                Text("The cache holds data that transfer tracing and witness lookups have fetched. Bookmarks and settings are kept separately.")
+                Text("The cache contains data from transfer traces and witness searches. It does not contain bookmarks or settings.")
                     .foregroundStyle(.secondary)
             }
 
@@ -92,7 +92,7 @@ struct SettingsView: View {
                 cache = model.explorer?.cacheInfo()
             }
         } message: {
-            Text("Cached lookups are removed and fetched again when needed. Bookmarks and settings are not affected.")
+            Text("The app deletes the cached data and downloads it again when necessary. Bookmarks and settings do not change.")
         }
         .frame(width: 560)
         .fixedSize(horizontal: false, vertical: true)
@@ -104,10 +104,10 @@ struct SettingsView: View {
         }
         let file = connection.configFile ?? "none"
         if connection.configFound {
-            let credentials = connection.hasCredentials ? "" : " It has no RPC credentials."
-            return "Using \(file) and the daemon at \(connection.daemonUrl).\(credentials)"
+            let credentials = connection.hasCredentials ? "" : " The file has no RPC credentials."
+            return "The app uses \(file) and the node at \(connection.daemonUrl).\(credentials)"
         }
-        return "No config file found (looked for \(file)). Trying \(connection.daemonUrl)."
+        return "The app found no configuration file at \(file). It tries \(connection.daemonUrl)."
     }
 
     private func chooseConfigFile() {
@@ -115,7 +115,7 @@ struct SettingsView: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.showsHiddenFiles = true
-        panel.message = "Choose the Verus daemon's .conf file"
+        panel.message = "Select the .conf file of the Verus node"
         panel.directoryURL = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appendingPathComponent("Komodo/VRSC")

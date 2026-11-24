@@ -37,14 +37,30 @@ Like Carbide, it is read-only. It never creates or signs transactions.
   investigation code
 - A hex and text view for unrecognised output data
 - Times in UTC or local, and cache size and clearing, in Settings
+- Fee pool chart, read from each block's coinbase checkpoint
+- Peer management: add node, ping, disconnect, ban and clear bans, each confirmed, and
+  the daemon's log lines for a peer
+- Shared keys and authorities: identities that used the same addresses in a past window
+- Tokenized control: follows an identity's control token to its current holder
+- Registration payments, and a transaction's block history across side branches
+- A chain menu on the connection badge, listing every daemon configured on this Mac
 
 `CarbideSilica -open <object>` opens a block, transaction, address, identity or
 currency at launch, like Carbide's `--open`.
 
-Not here yet: the fee pool chart, several chains at once, peer actions (ping, ban,
-disconnect), the peer log, per-transaction reorg history, tokenized-control tracing,
-registration payment breakdowns and the historical reverse lookup. The last three
-live in Carbide's terminal layer and need to be lifted out of it first.
+Known limits, where the app does less than Carbide:
+
+- Tokenized control is followed from the token's definition transaction. A token minted
+  at launch isn't traced yet.
+- Registration payments and identity origin are inferred from the transaction. Carbide
+  verifies them against the issuer's fee rules.
+- Block history reads the side branches the daemon still holds. Carbide also keeps its
+  own record of what it observed.
+- One chain is shown at a time. Transfers are followed into other chains configured on
+  this Mac, but there is no side-by-side view.
+
+Peer management is the only place the app changes anything on the daemon. It never
+creates or signs transactions.
 
 Following a transfer uses Carbide's SQLite cache, kept in
 `~/Library/Caches/verus-carbide`. It holds only what has been looked up.

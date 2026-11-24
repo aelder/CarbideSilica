@@ -22,7 +22,7 @@ struct IdentityView: View {
                     Button {
                         model.open(.currency(name: address))
                     } label: {
-                        Label("View its currency", systemImage: "circle.hexagongrid")
+                        Label("Show the currency", systemImage: "circle.hexagongrid")
                     }
                 }
 
@@ -66,8 +66,15 @@ struct IdentityView: View {
                         route: { .identity(name: $0) }, monospaced: true)
                 }
 
+                // CIdentity flag 4: control of the identity is held by a token.
+                if let flags = identity.flags, flags & 4 != 0 {
+                    TokenControlCard(identity: identity)
+                }
+
                 IdentityHistoryCard(
                     name: identity.identityAddress ?? name, identityAddress: identity.identityAddress)
+
+                ReverseLookupCard(identity: identity)
 
                 Card("Latest update") {
                     if let height = identity.blockHeight {
@@ -96,6 +103,7 @@ struct IdentityView: View {
         var tags: [String] = []
         if let status = identity.status { tags.append(status.capitalized) }
         if identity.definesCurrency { tags.append("Currency defined") }
+        if let flags = identity.flags, flags & 4 != 0 { tags.append("Tokenized control") }
         return tags
     }
 }

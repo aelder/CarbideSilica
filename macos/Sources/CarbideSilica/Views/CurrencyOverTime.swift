@@ -61,12 +61,12 @@ struct CurrencyOverTimeCard: View {
                 Label(failure, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
             } else if points.count < 2 {
-                Text("No recorded history in this range.").foregroundStyle(.secondary)
+                Text("The range contains no recorded data.").foregroundStyle(.secondary)
             } else {
                 Slider(
                     value: Binding(get: { index }, set: { index = $0.rounded() }),
                     in: 0...Double(points.count - 1))
-                    .accessibilityLabel("Moment in time")
+                    .accessibilityLabel("Date")
                 VStack(spacing: 0) {
                     row(title: "Supply", subtitle: currency.name, values: points.map(\.supply), digits: 2)
                     ForEach(reserveIDs, id: \.self) { id in
@@ -129,7 +129,7 @@ struct CurrencyOverTimeCard: View {
         else { return nil }
         let date = Date(timeIntervalSince1970: TimeInterval(time))
             .formatted(date: .abbreviated, time: .omitted)
-        return "Supply has not changed since about \(date): no conversions were recorded at the sampled blocks after that."
+        return "The supply has not changed since approximately \(date). The sampled blocks after that date show no conversions."
     }
 
     /// A sample counts as activity when the latest batch differs from the previous sample's.
@@ -147,7 +147,7 @@ struct CurrencyOverTimeCard: View {
         return HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Activity").fontWeight(.semibold)
-                Text("conversions seen").font(.caption).foregroundStyle(.secondary)
+                Text("conversions found").font(.caption).foregroundStyle(.secondary)
             }
             .frame(width: 130, alignment: .leading)
             Canvas { context, size in

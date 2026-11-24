@@ -60,8 +60,8 @@ fn readable(error: &anyhow::Error) -> String {
         return message.trim().to_string();
     }
     if text.contains("error sending request") {
-        return "Could not reach the Verus daemon. Check that it is running, or enable a public \
-                API in Settings."
+        return "The app cannot connect to the Verus node. Make sure that the node is running, or enable \
+                a public API in Settings."
             .into();
     }
     text
@@ -578,6 +578,65 @@ pub struct CacheInfo {
     pub bytes: u64,
 }
 
+/// The fee pool's balance as recorded in one block's coinbase.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FeePoolPoint {
+    pub height: u64,
+    pub time: u64,
+    /// The chain's own coin held in the fee pool. `None` when the block has no checkpoint.
+    pub native: Option<f64>,
+}
+
+/// An identity that shared an address or authority with another during a window of blocks.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SharedIdentity {
+    /// What was shared: "Primary address", "Revocation authority" or "Recovery authority".
+    pub relation: String,
+    pub via: String,
+    pub name: String,
+    pub identity_address: Option<String>,
+}
+
+/// A block a transaction appears in.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct Inclusion {
+    pub block_hash: String,
+    pub height: Option<u64>,
+    /// True when the block is on the active chain.
+    pub active: bool,
+}
+
+/// Where an identity's control token is now.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct TokenHolder {
+    pub confidence: Confidence,
+    /// The address holding the token, when the trail reached an unspent output with one.
+    pub holder: Option<String>,
+    pub summary: String,
+    pub hops: u32,
+    pub txid: Option<String>,
+    pub output: Option<u32>,
+}
+
+/// A change the app can ask the local daemon to make to its peer connections.
+#[derive(Debug, Clone, uniffi::Enum)]
+pub enum PeerAction {
+    AddNode { address: String },
+    PingAll,
+    Disconnect { address: String },
+    Ban { ip: String },
+    ClearBans,
+}
+
+/// A daemon configuration found on this computer.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct KnownChain {
+    /// The name to connect with: VRSC, vrsctest, or a PBaaS chain's folder name.
+    pub chain: String,
+    pub config_file: String,
+    pub testnet: bool,
+}
+
 /// Where a search query leads.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum Route {
@@ -596,6 +655,8 @@ pub struct Explorer {
     config: Config,
     api_endpoint: Option<String>,
     config_found: bool,
+    /// Other chains configured on this computer, so traces can follow transfers into them.
+    other_chains: Vec<Config>,
     /// Names already resolved for identity and currency IDs.
     names: std::sync::Mutex<std::collections::HashMap<String, String>>,
 }
@@ -606,6 +667,12 @@ const MAX_NAME_LOOKUPS: usize = 48;
 const MAX_OFFERS: usize = 4000;
 const MAX_SERIES_BLOCKS: u32 = 1500;
 const SIMPLE_ESTIMATE_BLOCKS: u64 = 43_200;
+const MAX_FEE_POOL_SAMPLES: u32 = 120;
+const REVERSE_WINDOW: u64 = 1_000;
+const MAX_BRANCH_WALK: u64 = 20;
+const MAX_TOKEN_HOPS: u32 = 32;
+const LOG_TAIL_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_LOG_LINES: usize = 200;
 const MAX_HISTORY_TIMES: usize = 60;
 const MAX_HISTORY_SAMPLES: u32 = 200;
 const MAX_BLOCK_TX_BODIES: usize = 150;
@@ -733,14 +800,14 @@ impl Explorer {
                 {
                     Route::Transaction { txid: hash }
                 } else {
-                    return Err(fail("No block or transaction has that hash."));
+                    return Err(fail("No block or transaction has this hash."));
                 }
             }
             ObjectRoute::BlockTime(time) => Route::Block {
                 id: self.block_near(&time).await?.to_string(),
             },
             ObjectRoute::Estimate(_) => {
-                return Err(fail("Future block estimates are not available here yet."));
+                return Err(fail("Use the estimator in Charts for a future block."));
             }
             ObjectRoute::Address(address) => Route::Address { address },
             ObjectRoute::Identity(name) => Route::Identity { name },
@@ -748,8 +815,8 @@ impl Explorer {
                 Some(name) => Route::Currency { name: name.into() },
                 None => {
                     return Err(fail(
-                        "Not recognised. Enter a block height or hash, a transaction ID, a \
-                             date, an address, an identity (name@) or a currency (name@@).",
+                        "The app does not recognize this text. Enter a block height, a hash, a \
+                             transaction ID, a date, an address, an identity (name@) or a currency (name@@).",
                     ));
                 }
             },
@@ -903,7 +970,7 @@ impl Explorer {
             .system_id
             .get()
             .cloned()
-            .ok_or_else(|| fail("The chain's system ID is not known yet."))?;
+            .ok_or_else(|| fail("The system ID of the chain is not known."))?;
         let root = crate::world::OutpointRef {
             system_id,
             txid: txid.trim().to_string(),
@@ -917,8 +984,7 @@ impl Explorer {
             target: None,
             known_imports: Vec::new(),
         };
-        let trail =
-            crate::defi::investigate(vec![self.config.clone()], root, seed, plan, None).await;
+        let trail = crate::defi::investigate(self.all_configs(), root, seed, plan, None).await;
         for endpoint in &self.config.daemon.api_pool.endpoints {
             *endpoint
                 .retry_after
@@ -1065,7 +1131,7 @@ impl Explorer {
                 measured_from: estimate.calibration.start.height,
                 measured_to: estimate.calibration.tip.height,
                 source: format!(
-                    "Carbide's calibrated rate · {}",
+                    "Calibrated rate from Carbide · {}",
                     estimate.calibration.source_label
                 ),
             });
@@ -1079,13 +1145,13 @@ impl Explorer {
             .settle(fetch_block(&self.client, BlockId::Height(start_height)).await)?
             .result;
         if tip_height <= start_height || tip.time <= start.time {
-            return Err(fail("Not enough chain history to estimate from."));
+            return Err(fail("The chain history is too short for an estimate."));
         }
         let rate = (tip.time - start.time) as f64 / (tip_height - start_height) as f64;
         let (height, time) = match target {
             Target::Height(height) => {
                 if height <= tip_height {
-                    return Err(fail("That block already exists. Search for it instead."));
+                    return Err(fail("That block exists. Search for the block."));
                 }
                 (
                     height,
@@ -1094,7 +1160,7 @@ impl Explorer {
             }
             Target::Time(time) => {
                 if time <= tip.time as i64 {
-                    return Err(fail("That moment has passed. Search for the date instead."));
+                    return Err(fail("That date is in the past. Search for the date."));
                 }
                 (
                     tip_height + ((time - tip.time as i64) as f64 / rate) as u64,
@@ -1108,7 +1174,7 @@ impl Explorer {
             seconds_per_block: rate,
             measured_from: start_height,
             measured_to: tip_height,
-            source: "Plain average of the last 30 days".into(),
+            source: "Average of the last 30 days".into(),
         })
     }
 
@@ -1151,7 +1217,7 @@ impl Explorer {
             .system_id
             .get()
             .cloned()
-            .ok_or_else(|| fail("The chain's system ID is not known yet."))?;
+            .ok_or_else(|| fail("The system ID of the chain is not known."))?;
         let root = crate::world::OutpointRef {
             system_id,
             txid: txid.trim().to_string(),
@@ -1221,7 +1287,7 @@ impl Explorer {
             .system_id
             .get()
             .cloned()
-            .ok_or_else(|| fail("The chain's system ID is not known yet."))?;
+            .ok_or_else(|| fail("The system ID of the chain is not known."))?;
         let bookmark = crate::bookmarks::Bookmark::new(system_id, kind, target, description)?;
         Ok(self.book()?.add(bookmark)?)
     }
@@ -1250,6 +1316,297 @@ impl Explorer {
             crate::cache::Cache::clear_at(&self.config.cache_path)?;
         }
         Ok(())
+    }
+
+    /// The fee pool balance at up to `samples` evenly spaced blocks, oldest first. Each
+    /// comes from that block's coinbase, where the daemon records a checkpoint.
+    pub async fn fee_pool_series(
+        &self,
+        end_height: u64,
+        blocks: u32,
+        samples: u32,
+    ) -> Outcome<Vec<FeePoolPoint>> {
+        let samples = u64::from(samples.clamp(2, MAX_FEE_POOL_SAMPLES));
+        let span = u64::from(blocks.max(2));
+        let first = end_height.saturating_sub(span - 1).max(1);
+        let step = ((end_height - first) / (samples - 1)).max(1);
+        let chain = self.config.chain.name.clone();
+        let system = self.config.chain.system_id.get().map(|id| id.to_string());
+        let mut tasks = tokio::task::JoinSet::new();
+        let mut height = first;
+        while height <= end_height {
+            let client = self.client.clone();
+            let (chain, system) = (chain.clone(), system.clone());
+            tasks.spawn(async move {
+                let block = fetch_block(&client, BlockId::Height(height)).await?.result;
+                let coinbase = block.tx.first().context("block has no transactions")?;
+                let transaction = client.get_raw_transaction(&coinbase.txid).await?.result;
+                Ok::<_, anyhow::Error>(FeePoolPoint {
+                    height: block.height,
+                    time: block.time,
+                    native: fee_pool_native(&transaction, &chain, system.as_deref()),
+                })
+            });
+            height += step;
+        }
+        let mut points = Vec::new();
+        while let Some(joined) = tasks.join_next().await {
+            points.push(self.settle(joined.context("fee pool request stopped")?)?);
+        }
+        points.sort_by_key(|point| point.height);
+        Ok(points)
+    }
+
+    /// Identities that shared this identity's primary addresses or authorities during the
+    /// 1,000 blocks ending at `end_height`. Needs a daemon with the identity index.
+    pub async fn identities_sharing(
+        &self,
+        name: String,
+        end_height: u64,
+    ) -> Outcome<Vec<SharedIdentity>> {
+        let raw = self
+            .settle(self.client.get_identity(name.trim(), None).await)?
+            .result;
+        let identity = &raw["identity"];
+        let own = text(&identity["identityaddress"]);
+        let from = end_height.saturating_sub(REVERSE_WINDOW - 1);
+        let client = self.client.clone().probe_identity_index();
+        let mut found: Vec<SharedIdentity> = Vec::new();
+        let mut add = |relation: &str, via: &str, list: Vec<Value>| {
+            for entry in list {
+                let other = &entry["identity"];
+                let address = text(&other["identityaddress"]);
+                if address.is_some() && address == own {
+                    continue;
+                }
+                let name = text(&entry["friendlyname"])
+                    .or_else(|| text(&other["name"]).map(|name| format!("{name}@")))
+                    .or_else(|| address.clone())
+                    .unwrap_or_else(|| "unknown".into());
+                if !found
+                    .iter()
+                    .any(|seen| seen.name == name && seen.relation == relation)
+                {
+                    found.push(SharedIdentity {
+                        relation: relation.into(),
+                        via: via.into(),
+                        name,
+                        identity_address: address,
+                    });
+                }
+            }
+        };
+        for address in strings(&identity["primaryaddresses"]) {
+            let list = self.settle(
+                client
+                    .get_historical_identities_with_address(&address, from, end_height)
+                    .await,
+            )?;
+            add("Primary address", &address, list.result);
+        }
+        for (key, relation, recovery) in [
+            ("revocationauthority", "Revocation authority", false),
+            ("recoveryauthority", "Recovery authority", true),
+        ] {
+            if let Some(authority) = text(&identity[key]) {
+                let list = self.settle(
+                    client
+                        .get_historical_identities_with_authority(
+                            &authority, recovery, from, end_height,
+                        )
+                        .await,
+                )?;
+                add(relation, &authority, list.result);
+            }
+        }
+        Ok(found)
+    }
+
+    /// The blocks a transaction is known to be in: its block on the active chain, and any
+    /// block on a side branch the node still holds near that height.
+    pub async fn inclusions(&self, txid: String) -> Outcome<Vec<Inclusion>> {
+        let txid = txid.trim().to_string();
+        let raw = self
+            .settle(self.client.get_raw_transaction(&txid).await)?
+            .result;
+        let height = raw["height"].as_u64();
+        let mut found = Vec::new();
+        if let Some(hash) = text(&raw["blockhash"]) {
+            found.push(Inclusion {
+                block_hash: hash,
+                height,
+                active: raw["confirmations"].as_i64().unwrap_or(0) > 0,
+            });
+        }
+        let Some(height) = height else {
+            return Ok(found);
+        };
+        // Walk back along each validated side branch that spans this height.
+        for tip in self.chain_tips().await.unwrap_or_default() {
+            if tip.status != "valid-fork"
+                || tip.branch_length == 0
+                || tip.branch_length > MAX_BRANCH_WALK
+                || tip.height < height
+                || tip.height - tip.branch_length >= height
+            {
+                continue;
+            }
+            let mut hash = Some(tip.hash.clone());
+            for _ in 0..tip.branch_length {
+                let Some(current) = hash.take() else { break };
+                let Ok(block) =
+                    self.settle(fetch_block(&self.client, BlockId::Hash(current.clone())).await)
+                else {
+                    break;
+                };
+                if block.result.tx.iter().any(|tx| tx.txid == txid)
+                    && !found.iter().any(|seen| seen.block_hash == current)
+                {
+                    found.push(Inclusion {
+                        block_hash: current,
+                        height: Some(block.result.height),
+                        active: false,
+                    });
+                }
+                hash = block.result.previousblockhash;
+            }
+        }
+        Ok(found)
+    }
+
+    /// Follows an identity's control token from where it was issued to the output that
+    /// holds it now. Needs spent-output lookups from the source.
+    pub async fn token_holder(&self, identity_address: String) -> Outcome<TokenHolder> {
+        let id = identity_address.trim().to_string();
+        let currency = self.settle(self.client.get_currency(&id).await)?.result;
+        let Some(mut txid) = text(&currency["definitiontxid"]) else {
+            return Ok(token_gap(
+                "The currency of the control token has no recorded definition transaction.",
+                0,
+            ));
+        };
+        let mut output: Option<u32> = None;
+        for hop in 0..MAX_TOKEN_HOPS {
+            let transaction = self
+                .settle(self.client.get_raw_transaction(&txid).await)?
+                .result;
+            let outputs = transaction["vout"].as_array().cloned().unwrap_or_default();
+            let Some((index, holding)) = outputs
+                .iter()
+                .enumerate()
+                .find(|(_, out)| holds_currency(&out["scriptPubKey"], &id))
+            else {
+                return Ok(if hop == 0 {
+                    token_gap(
+                        "The definition transaction does not contain the token. The token was issued at launch. This trace cannot follow a launch.",
+                        hop,
+                    )
+                } else {
+                    token_gap(
+                        "The trace cannot find the token in the next transaction.",
+                        hop,
+                    )
+                });
+            };
+            output = Some(index as u32);
+            let spend = self.settle(
+                self.client
+                    .call_with_raw::<Value>(
+                        "getspentinfo",
+                        &[serde_json::json!({"txid": txid, "index": index})],
+                    )
+                    .await,
+            );
+            match spend {
+                Ok(spend) => match text(&spend.result["txid"]) {
+                    Some(next) => txid = next,
+                    None => {
+                        return Ok(token_gap(
+                            "The source returned no spending transaction.",
+                            hop,
+                        ));
+                    }
+                },
+                Err(error) => {
+                    let message = readable(&error);
+                    // An unspent output is the end of the trail: whoever holds it holds the token.
+                    if message
+                        .to_ascii_lowercase()
+                        .contains("unable to get spent info")
+                    {
+                        let holder = addresses(&holding["scriptPubKey"]).into_iter().next();
+                        return Ok(TokenHolder {
+                            confidence: if holder.is_some() { Confidence::Verified } else { Confidence::Observed },
+                            summary: match &holder {
+                                Some(holder) => format!("{holder} holds the token in an unspent output, after {hop} transfer{}.", if hop == 1 { "" } else { "s" }),
+                                None => "The token is in an unspent output that has no single holder address.".into(),
+                            },
+                            holder,
+                            hops: hop,
+                            txid: Some(txid),
+                            output,
+                        });
+                    }
+                    return Ok(token_gap(
+                        &format!("The spent-output request failed: {message}"),
+                        hop,
+                    ));
+                }
+            }
+        }
+        Ok(TokenHolder {
+            confidence: Confidence::Unknown,
+            holder: None,
+            summary: format!(
+                "The trace stopped after {MAX_TOKEN_HOPS} transfers and found no unspent output."
+            ),
+            hops: MAX_TOKEN_HOPS,
+            txid: Some(txid),
+            output,
+        })
+    }
+
+    /// Recent lines from the daemon's log that mention a peer. Local daemons only.
+    pub fn peer_log(&self, address: String) -> Outcome<Vec<String>> {
+        let ip = peer_ip(&address);
+        let path = crate::log_feed::daemon_log_path(self.config.daemon.config_file.as_deref())
+            .ok_or_else(|| fail("The location of the node log file is not known."))?;
+        let text = read_tail(&path, LOG_TAIL_BYTES)?;
+        let mut lines: Vec<String> = text
+            .lines()
+            .filter(|line| line.contains(&ip))
+            .map(str::to_owned)
+            .collect();
+        let skip = lines.len().saturating_sub(MAX_LOG_LINES);
+        Ok(lines.split_off(skip))
+    }
+
+    /// Asks the local daemon to change its peer connections. These are the only calls in
+    /// the bridge that change anything; none touches funds, keys or the chain.
+    pub async fn peer_action(&self, action: PeerAction) -> Outcome<()> {
+        use serde_json::json;
+        let (method, params) = match action {
+            PeerAction::AddNode { address } => {
+                ("addnode", vec![json!(address.trim()), json!("add")])
+            }
+            PeerAction::PingAll => ("ping", vec![]),
+            PeerAction::Disconnect { address } => ("disconnectnode", vec![json!(address.trim())]),
+            PeerAction::Ban { ip } => ("setban", vec![json!(peer_ip(&ip)), json!("add")]),
+            PeerAction::ClearBans => ("clearbanned", vec![]),
+        };
+        self.client.call_local(method, &params).await?;
+        Ok(())
+    }
+
+    /// Addresses the local daemon has banned.
+    pub async fn banned_peers(&self) -> Outcome<Vec<String>> {
+        let list = self.client.call_local("listbanned", &[]).await?;
+        Ok(list
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| text(&entry["address"]))
+            .collect())
     }
 
     /// `id` is a height or a block hash.
@@ -1555,13 +1912,13 @@ impl Explorer {
         if let Some(path) = &config_file {
             anyhow::ensure!(
                 path.is_absolute(),
-                "The daemon config path must be absolute."
+                "The path of the node configuration file must be absolute."
             );
             args.push("--conf".into());
             args.push(path.display().to_string());
         }
         let cli = Cli::try_parse_from(args).context("invalid connection options")?;
-        let mut config = Config::load(&cli).context("failed to load daemon configuration")?;
+        let mut config = Config::load(&cli).context("the node configuration did not load")?;
         let config_found = config
             .daemon
             .config_file
@@ -1594,6 +1951,26 @@ impl Explorer {
         }
         config.daemon.api_pool = Arc::new(ApiPool::new(config.chain.name.clone(), endpoints, None));
 
+        // Other chains with a config here, loaded the same way, for cross-chain traces.
+        let own = config.daemon.config_file.clone();
+        let other_chains = known_chains(network == Network::Testnet)
+            .into_iter()
+            .filter(|known| own.as_deref() != Some(std::path::Path::new(&known.config_file)))
+            .filter_map(|known| {
+                let mut args = vec![
+                    "carbide".to_string(),
+                    "--chain".into(),
+                    known.chain,
+                    "--conf".into(),
+                    known.config_file,
+                ];
+                if network == Network::Testnet {
+                    args.push("--testnet".into());
+                }
+                Config::load(&Cli::try_parse_from(args).ok()?).ok()
+            })
+            .collect();
+
         // No cache storage: the desktop app does not share the terminal's SQLite cache yet.
         let client = RpcClient::new(config.daemon.clone())?.noninteractive();
         Ok(Self {
@@ -1601,6 +1978,7 @@ impl Explorer {
             config,
             api_endpoint,
             config_found,
+            other_chains,
             names: Default::default(),
         })
     }
@@ -1623,6 +2001,13 @@ impl Explorer {
             Some(base) if !base.is_empty() => format!("{base}@"),
             _ => name.to_string(),
         }
+    }
+
+    /// This chain first, then every other chain configured on this computer.
+    fn all_configs(&self) -> Vec<Config> {
+        let mut configs = vec![self.config.clone()];
+        configs.extend(self.other_chains.iter().cloned());
+        configs
     }
 
     fn book(&self) -> Result<crate::bookmarks::Book> {
@@ -1837,7 +2222,7 @@ fn identity_changes(previous: Option<&Value>, current: &Value) -> Vec<String> {
         changes.push("Attached data changed".into());
     }
     if changes.is_empty() {
-        changes.push("Updated, with no change to control".into());
+        changes.push("Updated. Control did not change.".into());
     }
     changes
 }
@@ -1852,8 +2237,8 @@ fn coin_amount(amount: &crate::defi::Amount) -> CurrencyAmount {
 /// Carbide reports a stop with the failing RPC attached. Say the common cause plainly.
 fn plain_stop(message: &str) -> String {
     if message.contains("-32601") || message.contains("Method not found") {
-        return "This data source doesn't allow the lookup needed to go further. A fully synced \
-                local daemon can complete the trace."
+        return "This data source does not permit the necessary request. A fully synchronized \
+                local node can complete the trace."
             .into();
     }
     message.to_string()
@@ -1904,7 +2289,7 @@ fn transfer_trace(trail: crate::defi::Trail) -> TransferTrace {
         .collect();
     let (verdict, confidence) = match trail.legs.last().map(|leg| leg.stage) {
         Some(Stage::Received) => (
-            "Received. The result output was replayed exactly.",
+            "Received. The replay matches the result output.",
             Confidence::Verified,
         ),
         Some(Stage::Refunded) => (
@@ -1913,28 +2298,25 @@ fn transfer_trace(trail: crate::defi::Trail) -> TransferTrace {
         ),
         Some(Stage::Forwarded) => ("Forwarded to the next system.", Confidence::Verified),
         Some(Stage::Burned) => (
-            "Burned. The supply change was verified.",
+            "Burned. The supply change is verified.",
             Confidence::Verified,
         ),
         Some(Stage::Imported | Stage::BurnUnverified) => (
-            "Imported, but the result output has not been matched.",
+            "Imported. The result output is not matched.",
             Confidence::Observed,
         ),
         Some(Stage::Exported) => (
-            "Exported. Its arrival has not been found in the blocks searched.",
+            "Exported. The searched blocks do not contain the import.",
             Confidence::Observed,
         ),
-        Some(Stage::Pending) => ("Waiting to be exported.", Confidence::Observed),
-        Some(Stage::Unconfirmed) => ("Not yet confirmed in a block.", Confidence::Observed),
-        Some(Stage::Unspent) => ("Not yet picked up for export.", Confidence::Unknown),
+        Some(Stage::Pending) => ("Not exported at this time.", Confidence::Observed),
+        Some(Stage::Unconfirmed) => ("Not confirmed in a block.", Confidence::Observed),
+        Some(Stage::Unspent) => ("Not included in an export.", Confidence::Unknown),
         Some(Stage::Observed) => (
-            "Seen at its source. Nothing further is established.",
+            "Found at the source. No further data is available.",
             Confidence::Observed,
         ),
-        None => (
-            "Nothing could be established for this output.",
-            Confidence::Unknown,
-        ),
+        None => ("No data is available for this output.", Confidence::Unknown),
     };
     TransferTrace {
         verdict: verdict.to_string(),
@@ -2182,6 +2564,110 @@ fn block_point(block: &Value) -> BlockPoint {
         mining_difficulty: (!staked).then(|| block["difficulty"].as_f64()).flatten(),
         staking_difficulty: staked.then(|| staking_difficulty(block)).flatten(),
     }
+}
+
+/// The chain's own coin in a coinbase's fee pool checkpoint, keyed by name or system ID.
+fn fee_pool_native(transaction: &Value, chain: &str, system: Option<&str>) -> Option<f64> {
+    transaction["vout"].as_array()?.iter().find_map(|output| {
+        let values = output["scriptPubKey"]["feepool"]["currencyvalues"].as_object()?;
+        Some(
+            values
+                .iter()
+                .find(|(key, _)| key.eq_ignore_ascii_case(chain) || Some(key.as_str()) == system)
+                .and_then(|(_, amount)| amount.as_f64())
+                // A checkpoint may omit a currency to mean zero.
+                .unwrap_or(0.0),
+        )
+    })
+}
+
+/// True when a script holds a positive amount of the given currency.
+fn holds_currency(script: &Value, currency: &str) -> bool {
+    match script {
+        Value::Object(map) => map.iter().any(|(key, value)| {
+            (key == currency && value.as_f64().is_some_and(|amount| amount > 0.0))
+                || holds_currency(value, currency)
+        }),
+        Value::Array(items) => items.iter().any(|item| holds_currency(item, currency)),
+        _ => false,
+    }
+}
+
+fn token_gap(reason: &str, hops: u32) -> TokenHolder {
+    TokenHolder {
+        confidence: Confidence::Unknown,
+        holder: None,
+        summary: reason.to_string(),
+        hops,
+        txid: None,
+        output: None,
+    }
+}
+
+/// The IP part of a peer address such as `203.0.113.18:27485` or `[2001:db8::1]:27485`.
+fn peer_ip(address: &str) -> String {
+    let address = address.trim();
+    if let Some(rest) = address.strip_prefix('[') {
+        return rest.split(']').next().unwrap_or(rest).to_string();
+    }
+    match address.rsplit_once(':') {
+        Some((ip, port)) if !ip.contains(':') && port.bytes().all(|b| b.is_ascii_digit()) => {
+            ip.to_string()
+        }
+        _ => address.to_string(),
+    }
+}
+
+/// The last `limit` bytes of a file as text, starting at a line boundary.
+fn read_tail(path: &std::path::Path, limit: u64) -> Result<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file =
+        std::fs::File::open(path).with_context(|| format!("could not open {}", path.display()))?;
+    let length = file.metadata()?.len();
+    file.seek(SeekFrom::Start(length.saturating_sub(limit)))?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    let text = String::from_utf8_lossy(&bytes);
+    Ok(match (length > limit, text.split_once('\n')) {
+        (true, Some((_, rest))) => rest.to_string(),
+        _ => text.into_owned(),
+    })
+}
+
+/// Daemon configurations in the standard macOS locations: the main chain and any PBaaS
+/// chains. Reads folder names only; it does not open wallets or contact any daemon.
+#[uniffi::export]
+pub fn known_chains(testnet: bool) -> Vec<KnownChain> {
+    let network = Network::from_testnet(testnet);
+    let mut chains = Vec::new();
+    let main = if testnet { "vrsctest" } else { "VRSC" };
+    if let Some(path) = platform_config_path(main, network) {
+        chains.push(KnownChain {
+            chain: main.into(),
+            config_file: path.display().to_string(),
+            testnet,
+        });
+    }
+    let Some(base) = directories::BaseDirs::new() else {
+        return chains;
+    };
+    let root = base
+        .home_dir()
+        .join("Library/Application Support")
+        .join(if testnet { "VerusTest" } else { "Verus" })
+        .join("pbaas");
+    for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let config = entry.path().join(format!("{name}.conf"));
+        if name.len() == 40 && name.bytes().all(|b| b.is_ascii_hexdigit()) && config.is_file() {
+            chains.push(KnownChain {
+                chain: name,
+                config_file: config.display().to_string(),
+                testnet,
+            });
+        }
+    }
+    chains
 }
 
 fn block_row(block: &BlockSummary) -> BlockRow {

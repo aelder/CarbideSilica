@@ -8,6 +8,7 @@ enum SettingsKey {
     static let testnet = "testnet"
     static let configFile = "configFile"
     static let apiEnabled = "apiEnabled"
+    static let chainConfigs = "chainConfigs"
     static let useUTC = "useUTC"
     static let apiURL = "apiURL"
 
@@ -139,6 +140,29 @@ final class AppModel {
         guard let query = arguments["open"] as? String, !query.isEmpty else { return }
         searchText = query
         Task { await search() }
+    }
+
+    /// Daemon configurations found on this Mac, for the chain menu.
+    var knownChainList: [KnownChain] {
+        knownChains(testnet: UserDefaults.standard.bool(forKey: SettingsKey.testnet))
+    }
+
+    var currentChain: String {
+        UserDefaults.standard.string(forKey: SettingsKey.chain) ?? "VRSC"
+    }
+
+    /// Switches to another configured chain. Each chain remembers the config file it was
+    /// last used with, so a custom path for one chain survives a visit to another.
+    func switchChain(to chain: KnownChain) {
+        let defaults = UserDefaults.standard
+        var remembered = defaults.dictionary(forKey: SettingsKey.chainConfigs) as? [String: String] ?? [:]
+        remembered[currentChain] = defaults.string(forKey: SettingsKey.configFile) ?? ""
+        defaults.set(remembered, forKey: SettingsKey.chainConfigs)
+        defaults.set(chain.chain, forKey: SettingsKey.chain)
+        defaults.set(remembered[chain.chain] ?? chain.configFile, forKey: SettingsKey.configFile)
+        path = []
+        recent = []
+        connect()
     }
 
     /// Turns on the public API fallback. Only called from an explicit user action.

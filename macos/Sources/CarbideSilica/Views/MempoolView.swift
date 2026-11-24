@@ -12,24 +12,19 @@ struct MempoolView: View {
 
     var body: some View {
         Page {
-            Card("Waiting to be confirmed", trailing: summary) {
+            Card("Unconfirmed transactions", trailing: summary) {
                 if let failure {
-                    Label(
-                        model.status?.source == .publicApi
-                            ? "The mempool is only available from a local daemon." : failure,
-                        systemImage: "info.circle"
-                    )
-                    .foregroundStyle(.secondary)
+                    Text(model.status?.source == .publicApi ? "Only a local node supplies the mempool." : failure)
+                        .foregroundStyle(.secondary)
                 } else if !loaded {
                     ProgressView().frame(maxWidth: .infinity, minHeight: 200)
                 } else if rows.isEmpty {
                     VStack(spacing: 6) {
-                        Image(systemName: "tray").font(.largeTitle).foregroundStyle(.secondary)
-                        Text("Nothing is waiting.").font(.title3)
+                        Text("No unconfirmed transactions.").font(.title3)
                         Text(
                             model.syncFraction == nil
-                                ? "Every transaction the node has seen is in a block."
-                                : "A node that is still syncing doesn't collect waiting transactions."
+                                ? "All known transactions are in a block."
+                                : "A node does not collect unconfirmed transactions during synchronization."
                         )
                         .foregroundStyle(.secondary)
                     }
@@ -81,13 +76,13 @@ struct MempoolView: View {
 
     private var caption: String {
         guard let row = rows.first(where: { $0.txid == hovered }) else {
-            return "Each tile is a waiting transaction, sized by its bytes and darker the longer "
-                + "it has waited. Click one to open it."
+            return "Each tile is an unconfirmed transaction. A larger tile has more bytes. A darker tile "
+                + "is older. Click a tile to open it."
         }
         var parts = [row.tags.first ?? "Transaction", Format.bytes(row.size)]
         if let time = row.time { parts.append("waiting \(Format.age(time).replacingOccurrences(of: " ago", with: ""))") }
         if let fee = row.feeSats { parts.append("fee \(Format.coins(fee)) \(model.coin)") }
-        if row.depends > 0 { parts.append("depends on \(row.depends) other waiting") }
+        if row.depends > 0 { parts.append("depends on \(row.depends) unconfirmed") }
         return parts.joined(separator: " · ")
     }
 

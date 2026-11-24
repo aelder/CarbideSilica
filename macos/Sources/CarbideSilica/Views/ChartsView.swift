@@ -32,6 +32,7 @@ struct ChartsView: View {
         case mining = "Mining difficulty"
         case staking = "Staking difficulty"
         case mix = "Staked share"
+        case feePool = "Fee pool"
         var id: String { rawValue }
     }
 
@@ -60,15 +61,19 @@ struct ChartsView: View {
                     ProgressView("Loading blocks…").frame(maxWidth: .infinity, minHeight: 280)
                 } else if let failure {
                     Label(failure, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                } else if metric == .feePool, let end = points.last?.height {
+                    FeePoolChart(
+                        endHeight: end, blocks: UInt32(points.count),
+                        viaAPI: model.status?.source == .publicApi)
                 } else {
                     chart.frame(height: 280)
                     Text(summary).font(.callout)
                     if limited {
-                        Text("Showing the latest \(apiLimit) blocks. A public API serves blocks slowly; a local daemon loads the full span.")
+                        Text("The chart shows the latest \(apiLimit) blocks. A public API supplies blocks slowly. A local node supplies the full range.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if model.syncFraction != nil {
-                        Text("The node is still syncing, so this is history, not the present.")
+                        Text("The node is not fully synchronized. This data is not current.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -134,6 +139,8 @@ struct ChartsView: View {
             return points.compactMap { point in
                 point.stakingDifficulty.map { Sample(id: point.height, date: date(point), value: $0, staked: true) }
             }
+        case .feePool:
+            return []
         case .mix:
             guard points.count >= mixWindow else { return [] }
             var staked = points.prefix(mixWindow).filter(\.staked).count
@@ -155,7 +162,7 @@ struct ChartsView: View {
     private var chart: some View {
         let samples = series
         if samples.isEmpty {
-            Text(metric == .mix ? "This needs at least \(mixWindow) blocks. Choose a longer span." : "No blocks of this kind in the range.")
+            Text(metric == .mix ? "This chart needs a minimum of \(mixWindow) blocks. Select a longer range." : "The range contains no blocks of this type.")
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -178,6 +185,8 @@ struct ChartsView: View {
                             .foregroundStyle(metric == .mining ? Color.orange : Color.purple)
                             .interpolationMethod(.monotone)
                     }
+                case .feePool:
+                    RuleMark(y: .value("None", 0))
                 case .mix:
                     ForEach(samples) { sample in
                         LineMark(x: .value("Time", sample.date), y: .value("Staked share", sample.value))
@@ -220,7 +229,7 @@ struct ChartsView: View {
         switch metric {
         case .intervals: "\(Int(value)) s"
         case .mix: Format.percent(value)
-        case .mining, .staking: Format.difficulty(value)
+        case .mining, .staking, .feePool: Format.difficulty(value)
         }
     }
 
@@ -233,20 +242,22 @@ struct ChartsView: View {
         case .intervals:
             let slow = values.filter { $0 > 180 }.count
             let longest = samples.max { $0.value < $1.value }
-            var text = "Blocks arrived every \(Int(mean.rounded())) seconds on average."
+            var text = "The average block interval was \(Int(mean.rounded())) seconds."
             if let longest {
-                text += " The longest wait was \(Int(longest.value) / 60) min \(Int(longest.value) % 60) s, before block \(Format.integer(longest.id))."
+                text += " The longest interval was \(Int(longest.value) / 60) min \(Int(longest.value) % 60) s, before block \(Format.integer(longest.id))."
             }
-            text += slow == 0 ? " None took over three minutes." : " \(slow) took over three minutes."
-            return text + " Click a bar to open its block."
+            text += slow == 0 ? " No interval was longer than 3 minutes." : " \(slow) intervals were longer than 3 minutes."
+            return text + " Click a bar to open the block."
         case .mining, .staking:
             let first = values.first ?? 0
             let last = values.last ?? 0
             let change = first > 0 ? (last - first) / first : 0
-            let direction = abs(change) < 0.02 ? "about level" : change > 0 ? "up \(Format.percent(change))" : "down \(Format.percent(-change))"
-            return "\(metric.rawValue) is \(Format.difficulty(last)), \(direction) across this range."
+            let direction = abs(change) < 0.02 ? "almost the same as" : change > 0 ? "\(Format.percent(change)) higher than" : "\(Format.percent(-change)) lower than"
+            return "\(metric.rawValue) is \(Format.difficulty(last)). This is \(direction) the value at the start of the range."
+        case .feePool:
+            return ""
         case .mix:
-            return "Over the last \(mixWindow) blocks, \(Format.percent(values.last ?? 0)) were staked. The dashed line is an even split with mining."
+            return "In the last \(mixWindow) blocks, \(Format.percent(values.last ?? 0)) were staked blocks. The dashed line shows 50%."
         }
     }
 }
@@ -262,7 +273,7 @@ private struct EstimatorCard: View {
     var body: some View {
         Card("Future block estimate") {
             HStack {
-                TextField("Target", text: $query, prompt: Text("A future height or date: 5000000, 2028-11-08, in 2 hours"))
+                TextField("Target", text: $query, prompt: Text("Height or date. Examples: 5000000, 2028-11-08, in 2 hours"))
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { Task { await run() } }
                 Button("Estimate") { Task { await run() } }
@@ -275,11 +286,11 @@ private struct EstimatorCard: View {
             } else if let result {
                 Text(sentence(result)).font(.title3)
                 Text(
-                    "Based on \(result.secondsPerBlock.formatted(.number.precision(.fractionLength(2)))) seconds per block, "
-                        + "measured from block \(Format.integer(result.measuredFrom)) to \(Format.integer(result.measuredTo)). \(result.source)."
+                    "The rate is \(result.secondsPerBlock.formatted(.number.precision(.fractionLength(2)))) seconds for each block, "
+                        + "measured from block \(Format.integer(result.measuredFrom)) to block \(Format.integer(result.measuredTo)). Source: \(result.source)."
                 )
                 .font(.callout).foregroundStyle(.secondary)
-                Text("An estimate, not a schedule: it assumes blocks keep arriving at the measured rate.")
+                Text("This is an estimate. It assumes that the block rate does not change.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -289,7 +300,7 @@ private struct EstimatorCard: View {
         let date = Date(timeIntervalSince1970: TimeInterval(estimate.time))
         let when = date.formatted(date: .abbreviated, time: .shortened)
         let relative = date.formatted(.relative(presentation: .named))
-        return "Block \(Format.integer(estimate.height)) is expected around \(when) (\(relative))."
+        return "The estimated time of block \(Format.integer(estimate.height)) is \(when) (\(relative))."
     }
 
     private func run() async {

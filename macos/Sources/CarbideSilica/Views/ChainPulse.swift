@@ -79,15 +79,15 @@ struct ChainPulse: View {
 
     private var caption: String {
         guard let hash = hovered, let index = blocks.firstIndex(where: { $0.hash == hash }) else {
-            return "Squares are mined, circles are staked. The bar above each is its transaction "
-                + "count. Click a block to open it."
+            return "A square is a mined block. A circle is a staked block. The bar shows the number of "
+                + "transactions. Click a block to open it."
         }
         let block = blocks[index]
         var text = "Block \(Format.integer(block.height)) · \(block.staked ? "staked" : "mined") · "
             + "\(block.transactionCount) transaction\(block.transactionCount == 1 ? "" : "s")"
         if index + 1 < blocks.count {
             let gap = Int(block.time) - Int(blocks[index + 1].time)
-            text += " · \(Self.duration(Double(gap))) after the one before"
+            text += " · \(Self.duration(Double(gap))) after the previous block"
         }
         return text
     }
