@@ -29,6 +29,8 @@ struct PlacePage<Content: View>: View {
                 .padding(24)
                 .frame(maxWidth: 1100, alignment: .leading)
                 .overlayPreferenceValue(StopMarksKey.self) { StopCollector(marks: $0, cursor: cursor) }
+                .overlayPreferenceValue(CardMarksKey.self) { CardCollector(marks: $0, cursor: cursor) }
+                .id(PageCursor.topID)
                 .frame(maxWidth: .infinity)
             }
             .modifier(CursorHost(cursor: cursor, proxy: proxy))

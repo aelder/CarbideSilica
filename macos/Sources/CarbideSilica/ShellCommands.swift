@@ -14,6 +14,8 @@ final class ShellState {
     var bookmarkRequests = 0
     /// Incremented to ask the root view to show the estimator entry.
     var estimateRequests = 0
+    /// True while the command list is open.
+    var paletteShown = false
 
     /// Keeps the forward history in step with the navigation path, however the path changed:
     /// a menu command, the toolbar's back button, a link or a search.
@@ -135,7 +137,7 @@ struct ShellCommands: Commands {
             Toggle("Show Names for IDs", isOn: $showsNames)
                 .keyboardShortcut("i", modifiers: [.command, .shift])
             Toggle("Show Dates for Heights", isOn: $showsDates)
-                .keyboardShortcut("d", modifiers: [.command, .option])
+                .keyboardShortcut("d", modifiers: [.command, .shift])
             Toggle("Show Times in UTC", isOn: $useUTC)
                 .keyboardShortcut("u", modifiers: [.command, .option])
             Divider()
@@ -174,6 +176,8 @@ struct ShellCommands: Commands {
                 .keyboardShortcut("]", modifiers: [.command, .option])
                 .disabled(!canStep(next: true))
             Divider()
+            Button("Go To or Do…") { shell.paletteShown = true }
+                .keyboardShortcut("k", modifiers: .command)
             Button("Estimate a Future Block…") { shell.estimateRequests += 1 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
             Divider()

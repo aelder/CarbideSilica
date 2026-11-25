@@ -66,6 +66,8 @@ struct Page<Content: View>: View {
                 .padding(24)
                 .frame(maxWidth: 1100, alignment: .leading)
                 .overlayPreferenceValue(StopMarksKey.self) { StopCollector(marks: $0, cursor: cursor) }
+                .overlayPreferenceValue(CardMarksKey.self) { CardCollector(marks: $0, cursor: cursor) }
+                .id(PageCursor.topID)
                 .frame(maxWidth: .infinity)
             }
             .modifier(CursorHost(cursor: cursor, proxy: proxy))
@@ -103,7 +105,12 @@ struct Card<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .environment(\.stopGroup, title)
+        .anchorPreference(key: CardMarksKey.self, value: .bounds) { [CardMark(title: title, bounds: $0)] }
+        .id(Self.anchor(title))
     }
+
+    /// The scroll target of the card with this title.
+    static func anchor(_ title: String) -> String { "card:" + title }
 }
 
 /// The heading of a detail page: the title, an optional ID and tags. The window title
@@ -299,13 +306,16 @@ struct JSONSection: View {
     let json: String
     var showNames: Bool?
     var showDates: Bool?
+    /// The file name that Save offers, with the object in it.
+    var filename = "carbide.json"
     @State private var expanded = false
+    @Environment(\.pageCursor) private var cursor
 
     var body: some View {
         Card("Raw JSON") {
             DisclosureGroup(isExpanded: $expanded) {
                 if expanded {
-                    JSONTreeView(json: json, showNames: showNames, showDates: showDates)
+                    JSONTreeView(json: json, showNames: showNames, showDates: showDates, filename: filename)
                         .padding(.top, 8)
                 }
             } label: {
@@ -314,6 +324,23 @@ struct JSONSection: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     CopyButton(text: json)
+                }
+            }
+        }
+        // Tab shows the JSON and goes to it. Tab again hides it and goes to the top.
+        .onAppear {
+            cursor?.toggleJSON = {
+                expanded.toggle()
+                if expanded {
+                    // The tree gets its height after it reads the JSON. Go to the card when
+                    // it opens, and again when the tree is there.
+                    for delay in [0.15, 0.7] {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                            if expanded { cursor?.scroll(toCard: "Raw JSON") }
+                        }
+                    }
+                } else {
+                    cursor?.scrollToTop()
                 }
             }
         }

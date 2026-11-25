@@ -299,6 +299,7 @@ struct BytesView: View {
 
     @State private var cursor = 0
     @FocusState private var focused: Bool
+    @Environment(\.pageCursor) private var pageCursor
 
     private static let columns = 16
     private static let pageRows = 16
@@ -323,6 +324,10 @@ struct BytesView: View {
                 ? "The pushes did not decode. These are the script bytes after OP_RETURN."
                 : "The payload bytes of every push, joined in order.")
                 .font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Text("Copy all the bytes as hexadecimal").font(.caption).foregroundStyle(.secondary)
+                CopyButton(text: hex)
+            }
             LazyVStack(alignment: .leading, spacing: 1) {
                 ForEach(Array(stride(from: 0, to: shown.count, by: Self.columns)), id: \.self) { offset in
                     row(offset: offset, bytes: shown)
@@ -341,6 +346,9 @@ struct BytesView: View {
             move(press.key, count: shown.count)
             return .handled
         }
+        // While the bytes have the keyboard, the arrow keys move the byte cursor.
+        .onChange(of: focused) { _, now in pageCursor?.suspended = now }
+        .onDisappear { pageCursor?.suspended = false }
         .accessibilityLabel("Bytes. The cursor is at byte \(cursor).")
     }
 

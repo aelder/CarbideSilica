@@ -19,6 +19,8 @@ struct TransactionView: View {
     /// Requests to start an investigation card, by card ID. Each request increments.
     @State private var starts: [String: Int] = [:]
     @State private var scrollTarget: String?
+    /// The transactions of the block that holds this one, in order.
+    @State private var siblings: [String] = []
     /// Carbide's verified registration payment annotations, by output.
     @State private var paymentAnnotations: [UInt32: String] = [:]
     /// The row of the statement whose inputs and outputs are marked in the lists.
@@ -42,6 +44,23 @@ struct TransactionView: View {
             .publishInvestigations(investigations(transaction))
             // The terminal's key for the block of a transaction.
             .publishKeys(transaction.blockHash.map { hash in ["b": { model.open(.block(id: hash)) }] } ?? [:])
+            // n and p go to the transaction after and before this one in its block, in place.
+            .publishAdjacent(
+                AdjacentObjects(
+                    noun: "Transaction in Block",
+                    previous: sibling(of: transaction.txid, by: -1).map { txid in
+                        { model.step(to: .transaction(txid: txid)) }
+                    },
+                    next: sibling(of: transaction.txid, by: 1).map { txid in
+                        { model.step(to: .transaction(txid: txid)) }
+                    }))
+            .task(id: "siblings|\(transaction.blockHash ?? "")") {
+                guard let hash = transaction.blockHash, let explorer = model.explorer else {
+                    siblings = []
+                    return
+                }
+                siblings = (try? await explorer.block(id: hash))?.transactions.map(\.txid) ?? []
+            }
             .task(id: transaction.txid) {
                 marked = nil
                 consumePendingTrace(transaction)
@@ -136,7 +155,7 @@ struct TransactionView: View {
                     .id("inclusions")
             }
 
-            JSONSection(json: transaction.json, showNames: names, showDates: dates)
+            JSONSection(json: transaction.json, showNames: names, showDates: dates, filename: "tx-\(transaction.txid).json")
         }
     }
 
@@ -166,6 +185,12 @@ struct TransactionView: View {
             protocolLinks: { scrollTarget = "links" },
             inclusions: transaction.height == nil ? nil : { scrollTarget = "inclusions" }
         )
+    }
+
+    /// The transaction a number of places from this one in its block.
+    private func sibling(of txid: String, by step: Int) -> String? {
+        guard let index = siblings.firstIndex(of: txid), siblings.indices.contains(index + step) else { return nil }
+        return siblings[index + step]
     }
 
     /// The output that the cursor of the page is in.

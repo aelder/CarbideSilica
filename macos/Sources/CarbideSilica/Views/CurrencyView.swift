@@ -233,7 +233,7 @@ private struct CurrencyPage: View {
             NotarizationLanesCard(currency: currency, route: route)
                 .id("notarizations")
 
-            JSONSection(json: currency.json)
+            JSONSection(json: currency.json, filename: "currency-\(currency.currencyId ?? currency.name).json")
         }
         .task(id: currency.currencyId) {
             await model.resolveNames(

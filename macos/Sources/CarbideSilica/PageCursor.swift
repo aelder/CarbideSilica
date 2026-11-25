@@ -35,6 +35,24 @@ final class PageCursor {
     @ObservationIgnored var adjacent: AdjacentObjects?
     @ObservationIgnored var investigations: InvestigationActions?
     @ObservationIgnored var place: PlaceActions?
+    /// The titles of the cards of the page, from the top down. The command list goes to them.
+    @ObservationIgnored var cards: [String] = []
+    /// Shows or hides the raw JSON of the page. Nil for a page with no JSON.
+    @ObservationIgnored var toggleJSON: (() -> Void)?
+    /// Saves the raw JSON, while the page shows it.
+    @ObservationIgnored var saveJSON: (() -> Void)?
+    /// True while a part of the page has the arrow keys, such as the byte view.
+    @ObservationIgnored var suspended = false
+
+    func scroll(toCard title: String) {
+        withAnimation { proxy?.scrollTo(Card<EmptyView>.anchor(title), anchor: .top) }
+    }
+
+    func scrollToTop() {
+        withAnimation { proxy?.scrollTo(PageCursor.topID, anchor: .top) }
+    }
+
+    static let topID = "page-top"
 
     var selected: CursorStop? { stops.first { $0.id == selection } }
     var hasStops: Bool { enabled && !stops.isEmpty }
@@ -102,6 +120,48 @@ struct StopMark {
     /// Changes when the stop opens a different thing with the same identity.
     let token: String
     let bounds: Anchor<CGRect>
+}
+
+extension CardCollector {
+    fileprivate func ordered(_ geometry: GeometryProxy) -> [String] {
+        var placed: [(title: String, rect: CGRect)] = []
+        for mark in marks {
+            placed.append((mark.title, geometry[mark.bounds]))
+        }
+        placed.sort { a, b in
+            let (rowA, rowB) = (Int(a.rect.minY / 24), Int(b.rect.minY / 24))
+            return rowA != rowB ? rowA < rowB : a.rect.minX < b.rect.minX
+        }
+        var seen = Set<String>()
+        return placed.map(\.title).filter { seen.insert($0).inserted }
+    }
+}
+
+/// The title of a card and where it is on the page.
+struct CardMark {
+    let title: String
+    let bounds: Anchor<CGRect>
+}
+
+struct CardMarksKey: PreferenceKey {
+    static var defaultValue: [CardMark] { [] }
+    static func reduce(value: inout [CardMark], nextValue: () -> [CardMark]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+/// Gives the titles of the cards of a page to its cursor, from the top down.
+struct CardCollector: View {
+    let marks: [CardMark]
+    let cursor: PageCursor
+
+    var body: some View {
+        GeometryReader { geometry in
+            let titles = ordered(geometry)
+            Color.clear.onChange(of: titles, initial: true) { cursor.cards = titles }
+        }
+        .allowsHitTesting(false)
+    }
 }
 
 struct StopMarksKey: PreferenceKey {
@@ -309,8 +369,30 @@ final class KeyLayer {
 
     /// Returns the event when the key is not one of the app's keys here.
     private func handle(_ event: NSEvent) -> NSEvent? {
+        // Esc in a text field: the field does what it does, and then the keyboard leaves
+        // it, so that the keys of the page work again.
+        if event.keyCode == 53, let window = event.window, window === self.window,
+            window.attachedSheet == nil, (window.firstResponder as? NSTextView)?.isEditable == true
+        {
+            DispatchQueue.main.async {
+                if (window.firstResponder as? NSTextView)?.isEditable == true {
+                    window.makeFirstResponder(nil)
+                }
+            }
+            return event
+        }
+        // Command-C with no text selected copies the value under the cursor.
+        if event.keyCode == 8, event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command,
+            let window = event.window, window === self.window, window.attachedSheet == nil,
+            (window.firstResponder as? NSTextView).map({ $0.selectedRange().length == 0 && !$0.isEditable }) ?? true,
+            let text = shell?.cursor.flatMap({ $0.enabled ? $0 : nil })?.selected?.copy
+        {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            return nil
+        }
         guard let model, let shell, let window = event.window, window === self.window,
-            window.attachedSheet == nil,
+            window.attachedSheet == nil, !shell.paletteShown,
             event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
             // A field that the user types in keeps its keys. Text that is only selectable does not.
             (window.firstResponder as? NSTextView)?.isEditable != true
@@ -329,7 +411,12 @@ final class KeyLayer {
             _ = shell.goBack(model)
             return done
         case 36, 76, 124:  // Return, Enter, Right
+            guard cursor?.suspended != true else { return event }
             return cursor?.openSelected() == true ? done : event
+        case 125 where cursor?.suspended == true, 126 where cursor?.suspended == true,
+            121 where cursor?.suspended == true, 116 where cursor?.suspended == true,
+            115 where cursor?.suspended == true, 119 where cursor?.suspended == true:
+            return event
         case 125, 126:  // Down, Up
             guard let cursor, cursor.hasStops else { return event }
             cursor.move(by: event.keyCode == 125 ? 1 : -1)
@@ -342,7 +429,11 @@ final class KeyLayer {
             guard let cursor, cursor.hasStops else { return event }
             cursor.goToEnd(last: event.keyCode == 119)
             return done
-        case 48:  // Tab
+        case 48:  // Tab: the raw JSON of the page. On a page with no JSON, the next card.
+            if let toggle = cursor?.toggleJSON {
+                toggle()
+                return done
+            }
             guard let cursor, cursor.hasStops else { return event }
             cursor.moveGroup(forward: !shift)
             return done
@@ -380,6 +471,10 @@ final class KeyLayer {
             guard let text = cursor?.selected?.copy else { return event }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
+            return done
+        case "s":
+            guard let save = cursor?.saveJSON else { return event }
+            save()
             return done
         case "d": model.show(.dashboard); return done
         case "m": model.show(.mempool); return done

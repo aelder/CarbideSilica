@@ -255,6 +255,7 @@ struct JSONTreeView: View {
     @State private var openStrings: Set<String> = []
     @State private var marks: [String: JsonMark] = [:]
     @State private var selected: String?
+    @Environment(\.pageCursor) private var cursor
     @AppStorage(DisplayKey.showsNames) private var showsNamesSetting = true
     @AppStorage(DisplayKey.showsDates) private var showsDatesSetting = false
 
@@ -291,6 +292,8 @@ struct JSONTreeView: View {
                 ProgressView().controlSize(.small)
             }
         }
+        .onAppear { cursor?.saveJSON = { save() } }
+        .onDisappear { cursor?.saveJSON = nil }
         .task(id: json) {
             let text = json
             let parsed = await Task.detached { try? JSONReader.parse(text) }.value
@@ -372,6 +375,16 @@ struct JSONTreeView: View {
         .contentShape(Rectangle())
         .onTapGesture { selected = row.pointer }
         .contextMenu { menu(row) }
+        // The cursor of the page: y copies the value, Return follows an ID or opens a node.
+        .cursorStop(
+            token: row.pointer + (marks[row.pointer]?.target ?? ""), copy: row.node.copyText
+        ) {
+            if let mark = marks[row.pointer], let target = mark.target, let route = Self.route(mark, target: target) {
+                model.open(route)
+            } else if row.node.isContainer {
+                toggle(row.pointer)
+            }
+        }
     }
 
     @ViewBuilder private func value(_ row: JSONRow) -> some View {

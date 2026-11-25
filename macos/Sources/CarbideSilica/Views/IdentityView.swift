@@ -94,7 +94,7 @@ private struct IdentityPage: View {
                 AddressActivityList(address: timeline.identityAddress)
             }
 
-            JSONSection(json: state.json)
+            JSONSection(json: state.json, filename: "id-\(timeline.identityAddress).json")
         }
         .publishAdjacent(AdjacentObjects(
                 noun: "Version",

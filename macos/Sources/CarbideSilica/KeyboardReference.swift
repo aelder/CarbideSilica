@@ -35,7 +35,8 @@ struct KeyboardReference: View {
         (
             "Search and history",
             [
-                Entry(keys: "⌘F", action: "Search", terminal: "/"),
+                Entry(keys: "⌘K", action: "The command list: each command and each card of the open page. Type some letters, then Return.", terminal: "none"),
+                Entry(keys: "⌘F", action: "Search. In the field, Up and Down go through the earlier searches, and Esc stops a search that runs.", terminal: "/"),
                 Entry(keys: "⌘[", action: "Back. At a place in the sidebar, go to the dashboard.", terminal: "h, Left, Backspace, Esc"),
                 Entry(keys: "⌘]", action: "Forward", terminal: "none"),
                 Entry(keys: "⌥⌘[", action: "Previous block or identity version", terminal: "[ or p"),
@@ -59,7 +60,7 @@ struct KeyboardReference: View {
             "Display",
             [
                 Entry(keys: "⇧⌘I", action: "Show names or raw IDs for identities and currencies", terminal: "Shift-I"),
-                Entry(keys: "⌥⌘D", action: "Show dates for heights, confirmations and timestamps", terminal: "Shift-D"),
+                Entry(keys: "⇧⌘D", action: "Show dates for heights, confirmations and timestamps", terminal: "Shift-D"),
                 Entry(keys: "⌥⌘U", action: "Show times in UTC or local time", terminal: "t in Help"),
                 Entry(keys: "⌥⌘S", action: "Dashboard: stream blocks", terminal: "Home in the block list"),
                 Entry(keys: "⌥⌘L", action: "Mempool: tiles or list", terminal: "none"),
@@ -82,10 +83,11 @@ struct KeyboardReference: View {
                 Entry(keys: "Return, l, →", action: "Open the row or the link under the cursor", terminal: "Enter, l, Right"),
                 Entry(keys: "Esc", action: "Go back one page. At a place in the sidebar, go to the dashboard.", terminal: "Esc"),
                 Entry(keys: "h, ←, Delete", action: "Go back one page", terminal: "h, Left, Backspace"),
-                Entry(keys: "Tab, ⇧Tab", action: "Go to the first row or link of the next card, or of the card before", terminal: "Tab on the dashboard"),
+                Entry(keys: "Tab", action: "Show the raw JSON of the page and go to it. Tab again hides it. In the JSON, the cursor moves through its lines, Return follows an ID or opens a node, and s saves the file.", terminal: "Tab, s"),
+                Entry(keys: "Tab, ⇧Tab", action: "On a page with no JSON: go to the next card, or to the card before", terminal: "Tab on the dashboard"),
                 Entry(keys: "Page Up, Page Down", action: "Move the cursor 10 places", terminal: "PgUp, PgDn"),
                 Entry(keys: "Home, End", action: "Go to the first or the last row or link of the page", terminal: "Home, End"),
-                Entry(keys: "y", action: "Copy the full value under the cursor", terminal: "y in JSON"),
+                Entry(keys: "y, ⌘C", action: "Copy the full value under the cursor. ⌘C copies selected text when text is selected.", terminal: "y in JSON"),
             ]
         ),
         (
@@ -94,7 +96,7 @@ struct KeyboardReference: View {
                 Entry(keys: "d m o c `", action: "Dashboard, mempool, marketplace, currencies, node and peers", terminal: "d m o c `"),
                 Entry(keys: "F2 F6 F9", action: "Sources, bookmarks, charts", terminal: "F2 F6 F9"),
                 Entry(keys: "/", action: "Search", terminal: "/"),
-                Entry(keys: "n or ], p or [", action: "Next or previous block or identity version, in place", terminal: "n ] p ["),
+                Entry(keys: "n or ], p or [", action: "Next or previous block, identity version, or transaction of the same block, in place", terminal: "n ] p ["),
                 Entry(keys: "r, F5", action: "Read the page again", terminal: "r, F5"),
                 Entry(keys: "b", action: "Transaction: open its block", terminal: "b"),
                 Entry(keys: "a", action: "Block on a side branch: open the active block at that height", terminal: "a"),
@@ -111,7 +113,7 @@ struct KeyboardReference: View {
         (
             "Where the keys do not apply",
             [
-                Entry(keys: "In a text field", action: "The keys type text. Esc leaves the search field.", terminal: "the same"),
+                Entry(keys: "In a text field", action: "The keys type text. Esc leaves the field.", terminal: "the same"),
                 Entry(keys: "In a dialog", action: "Return and Esc answer the dialog", terminal: "the same"),
                 Entry(keys: "Charts", action: "The charts have their own keys. The line below the charts lists them.", terminal: "the same keys"),
                 Entry(keys: "⌘Q", action: "Quit", terminal: "q"),

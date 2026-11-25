@@ -127,7 +127,7 @@ struct BlockView: View {
 
                 BlockBranchesCard(hash: block.row.hash)
 
-                JSONSection(json: block.json, showNames: showNames, showDates: showDates)
+                JSONSection(json: block.json, showNames: showNames, showDates: showDates, filename: "block-\(block.row.height).json")
             }
     }
 

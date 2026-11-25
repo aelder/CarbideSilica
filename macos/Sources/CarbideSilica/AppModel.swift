@@ -81,6 +81,7 @@ final class AppModel {
     /// Incremented to ask the search field to take keyboard focus.
     var searchFocusRequests = 0
     private(set) var isSearching = false
+    @ObservationIgnored private var searchRun = 0
     var searchError: String?
 
     /// Primary requests that wait for the person's decision about a public API, oldest first.
@@ -486,16 +487,39 @@ final class AppModel {
             return
         }
         isSearching = true
-        defer { isSearching = false }
+        searchRun += 1
+        let run = searchRun
         do {
             let route = try await explorer.resolve(query: query)
+            // The user stopped this search, or started a different one.
+            guard run == searchRun else { return }
+            isSearching = false
             searchText = ""
+            recordSearch(query)
             // A search starts a new trail, as in the terminal app.
             path = [route]
             remember(route)
         } catch {
+            guard run == searchRun else { return }
+            isSearching = false
             searchError = describe(error)
         }
+    }
+
+    /// Stops the search that runs. The app does not use its answer.
+    func cancelSearch() {
+        searchRun += 1
+        isSearching = false
+    }
+
+    /// The searches that found something, newest first. The app keeps 30.
+    private(set) var searchHistory: [String] = UserDefaults.standard.stringArray(forKey: "searchHistory") ?? []
+
+    private func recordSearch(_ query: String) {
+        searchHistory.removeAll { $0 == query }
+        searchHistory.insert(query, at: 0)
+        searchHistory = Array(searchHistory.prefix(30))
+        UserDefaults.standard.set(searchHistory, forKey: "searchHistory")
     }
 
     func open(_ route: Route) {

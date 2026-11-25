@@ -43,7 +43,7 @@ struct AddressView: View {
                     AddressActivityList(address: overview.address, onStale: { refreshes += 1 })
                 }
 
-                JSONSection(json: overview.json)
+                JSONSection(json: overview.json, filename: "address-\(overview.address).json")
             }
             .publishPlace(PlaceActions(refresh: { refreshes += 1 }))
             .task(id: overview.address) {

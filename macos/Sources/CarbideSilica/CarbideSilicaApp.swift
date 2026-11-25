@@ -79,6 +79,11 @@ struct RootView: View {
                 }
             }
         }
+        // While the command list is open, the page behind it takes no keys and no clicks.
+        .disabled(shell.paletteShown)
+        .overlay {
+            if shell.paletteShown { CommandPalette() }
+        }
         .background(MainWindowReader())
         .onAppear {
             KeyLayer.shared.install(model: model, shell: shell)
@@ -257,6 +262,22 @@ struct Sidebar: View {
 struct SearchField: View {
     @Environment(AppModel.self) private var model
     @FocusState private var focused: Bool
+    /// The place in the earlier searches. Nil when the text is the user's own.
+    @State private var historyPlace: Int?
+
+    private func recall(_ step: Int) -> KeyPress.Result {
+        let history = model.searchHistory
+        guard !history.isEmpty else { return .ignored }
+        let next = (historyPlace ?? -1) + step
+        if next < 0 {
+            historyPlace = nil
+            model.searchText = ""
+        } else {
+            historyPlace = min(next, history.count - 1)
+            model.searchText = history[min(next, history.count - 1)]
+        }
+        return .handled
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -272,13 +293,24 @@ struct SearchField: View {
             )
             .textFieldStyle(.plain)
             .focused($focused)
-            .onSubmit { Task { await model.search() } }
-            // Esc cancels the input, as in the terminal.
-            .onExitCommand {
-                model.searchText = ""
-                focused = false
+            .onSubmit {
+                historyPlace = nil
+                Task { await model.search() }
             }
-            .disabled(model.isSearching)
+            // Esc stops a search that runs. If no search runs, it cancels the input, as
+            // in the terminal.
+            .onExitCommand {
+                if model.isSearching {
+                    model.cancelSearch()
+                } else {
+                    model.searchText = ""
+                    focused = false
+                }
+                historyPlace = nil
+            }
+            // Up and Down go through the earlier searches.
+            .onKeyPress(.upArrow) { recall(1) }
+            .onKeyPress(.downArrow) { recall(-1) }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
