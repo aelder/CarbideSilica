@@ -320,6 +320,17 @@ pub struct CurrencyPoint {
     pub reserves: Vec<ReservePoint>,
 }
 
+/// The states of a currency over a range of blocks.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct CurrencyHistory {
+    pub points: Vec<CurrencyPoint>,
+    /// For a currency of a different system: the last block of this chain that a
+    /// confirmed notarization of that system commits to. The range stops there.
+    pub limit: Option<u64>,
+    /// False when the node was slow and the app stopped before the end of the range.
+    pub complete: bool,
+}
+
 /// How well a fact is established. Carbide's many provenance labels reduce to these four.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum Confidence {
@@ -448,6 +459,10 @@ const MAX_BRANCH_WALK: u64 = 20;
 const LOG_TAIL_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_LOG_LINES: usize = 200;
 const MAX_HISTORY_SAMPLES: u32 = 200;
+/// The states of one request to the node.
+const HISTORY_CHUNK: u64 = 15;
+/// The app asks for no more states after this time.
+const HISTORY_BUDGET: std::time::Duration = std::time::Duration::from_secs(20);
 const MAX_BLOCK_TX_BODIES: usize = 150;
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -630,24 +645,46 @@ impl Explorer {
         from_height: u64,
         to_height: u64,
         samples: u32,
-    ) -> Outcome<Vec<CurrencyPoint>> {
+    ) -> Outcome<CurrencyHistory> {
         let name = name.trim().trim_end_matches('@');
+        // The node finds a state after the last confirmed notarization of a different
+        // system from each block since then. That can take minutes for one state, and
+        // the node answers no other request during that time.
+        let limit = self.state_limit(name).await;
+        let to_height = limit.map_or(to_height, |limit| to_height.min(limit));
         if to_height <= from_height {
-            return Err(fail("The range is empty."));
+            return match limit {
+                Some(_) => Ok(CurrencyHistory { points: Vec::new(), limit, complete: true }),
+                None => Err(fail("The range is empty.")),
+            };
         }
         let samples = u64::from(samples.clamp(2, MAX_HISTORY_SAMPLES));
         let step = ((to_height - from_height) / (samples - 1)).max(1);
-        let range = format!("{from_height},{to_height},{step}");
-        let output = self.settle(
-            self.client
-                .call_with_raw::<Vec<Value>>(
-                    "getcurrencystate",
-                    &[Value::from(name), Value::from(range)],
-                )
-                .await,
-        )?;
-        Ok(output
-            .result
+        // Short requests in sequence: the node can answer other requests between them,
+        // and the app can stop when the node is slow.
+        let started = std::time::Instant::now();
+        let mut entries: Vec<Value> = Vec::new();
+        let mut complete = true;
+        let mut first = from_height;
+        while first <= to_height {
+            let last = (first + (HISTORY_CHUNK - 1) * step).min(to_height);
+            let range = format!("{first},{last},{step}");
+            let output = self.settle(
+                self.client
+                    .call_with_raw::<Vec<Value>>(
+                        "getcurrencystate",
+                        &[Value::from(name), Value::from(range)],
+                    )
+                    .await,
+            )?;
+            entries.extend(output.result);
+            first += HISTORY_CHUNK * step;
+            if first <= to_height && started.elapsed() > HISTORY_BUDGET {
+                complete = false;
+                break;
+            }
+        }
+        let points = entries
             .iter()
             .enumerate()
             .map(|(index, entry)| {
@@ -677,7 +714,8 @@ impl Explorer {
                         .collect(),
                 }
             })
-            .collect())
+            .collect();
+        Ok(CurrencyHistory { points, limit, complete })
     }
 
     /// Every chain tip the node knows, tallest first: the active chain and any side branches.

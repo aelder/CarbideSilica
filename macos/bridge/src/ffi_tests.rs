@@ -254,7 +254,8 @@ async fn live_lookups_through_an_api() {
         .currency_history("Bridge.vETH".into(), tip - 43200, tip, 6)
         .await
         .unwrap();
-    for point in &points {
+    assert!(points.complete && points.limit.is_none());
+    for point in &points.points {
         println!(
             "  p #{} {:?} supply {:?} reserves {}",
             point.height,

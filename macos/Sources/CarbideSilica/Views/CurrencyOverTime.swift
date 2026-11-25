@@ -20,6 +20,10 @@ struct CurrencyOverTimeCard: View {
     @Environment(AppModel.self) private var model
     @State private var span = Span.year
     @State private var points: [CurrencyPoint] = []
+    /// The last block that this chain has a confirmed state for, for a currency of a different system.
+    @State private var limit: UInt64?
+    /// False when the node was slow and the values stop before the end of the range.
+    @State private var complete = true
     @State private var index: Double = 0
     @State private var failure: String?
     @State private var loading = true
@@ -75,8 +79,10 @@ struct CurrencyOverTimeCard: View {
                 Label(failure, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
             } else if points.count < 2 {
+                limitNote
                 Text("The range contains no recorded data.").foregroundStyle(.secondary)
             } else {
+                limitNote
                 Slider(
                     value: Binding(get: { index }, set: { index = $0.rounded() }),
                     in: 0...Double(points.count - 1))
@@ -107,6 +113,18 @@ struct CurrencyOverTimeCard: View {
         }
     }
 
+    @ViewBuilder
+    private var limitNote: some View {
+        if let limit {
+            Text("This chain has no confirmed state of \(currency.name) after block \(Format.integer(limit)). The values stop at that block.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if !complete, let last = points.last {
+            Note(text: "The node was slow. The values stop at block \(Format.integer(last.height)), before the end of the range.", warning: true)
+        }
+    }
+
     private var selected: CurrencyPoint? {
         guard !points.isEmpty else { return nil }
         return points[min(Int(index), points.count - 1)]
@@ -128,7 +146,7 @@ struct CurrencyOverTimeCard: View {
         guard let time = point.time else { return "Block \(Format.integer(point.height))" }
         let date = Date(timeIntervalSince1970: TimeInterval(time))
             .formatted(date: .abbreviated, time: .omitted)
-        return Int(index) == points.count - 1 ? "\(date) · latest" : date
+        return Int(index) == points.count - 1 && limit == nil && complete ? "\(date) · latest" : date
     }
 
     /// Says so when nothing has changed for the latter part of the range, which a flat
@@ -351,12 +369,16 @@ struct CurrencyOverTimeCard: View {
             let loaded = try await model.requireExplorer().currencyHistory(
                 name: currency.currencyId ?? currency.name, fromHeight: from, toHeight: tip,
                 samples: samples)
-            points = loaded
-            index = Double(max(loaded.count - 1, 0))
+            points = loaded.points
+            limit = loaded.limit
+            complete = loaded.complete
+            index = Double(max(loaded.points.count - 1, 0))
         } catch is CancellationError {
             return
         } catch {
             points = []
+            limit = nil
+            complete = true
             failure = describe(error)
         }
         loading = false
