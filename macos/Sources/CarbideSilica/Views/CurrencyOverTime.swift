@@ -2,12 +2,18 @@ import CarbideCore
 import Charts
 import SwiftUI
 
-/// A currency's supply and reserve prices across time, with one cursor through all of them.
+/// A currency's supply and the value of its reserves across time, with one cursor through
+/// all of them.
 ///
-/// Dragging the slider moves every figure together, so two moments can be compared without
-/// remembering numbers. Each point is the currency's recorded state at a real block.
+/// The node gives the price of a basket in each reserve. A line of that price goes up
+/// when the reserve loses value, which a person reads the other way. Thus the card shows
+/// the basket and each reserve in one unit that the person selects, as lines on one
+/// scale that start at 100. Dragging the slider moves every figure together. Each point
+/// is the currency's recorded state at a real block.
 struct CurrencyOverTimeCard: View {
     let currency: CurrencyDetail
+    /// The reserve that values are shown in. Nil for a currency with no reserves.
+    var unit: String?
     /// Asks for the exact state at the block under the cursor.
     var onChoose: ((UInt64) -> Void)?
 
@@ -77,13 +83,9 @@ struct CurrencyOverTimeCard: View {
                     .accessibilityLabel("Date")
                 VStack(spacing: 0) {
                     row(title: "Supply", subtitle: currency.name, values: points.map(\.supply), digits: 2)
-                    ForEach(reserveIDs, id: \.self) { id in
+                    if let unit, reserveIDs.contains(unit) {
                         Divider()
-                        row(
-                            title: reserveName(id), subtitle: "price per unit",
-                            values: points.map { point in
-                                point.reserves.first { $0.currencyId == id }?.priceInReserve
-                            }, digits: 6)
+                        indexed(unit)
                     }
                 }
                 Divider()
@@ -93,7 +95,7 @@ struct CurrencyOverTimeCard: View {
                 }
                 if let point = selected, !point.reserves.isEmpty {
                     Divider().padding(.vertical, 4)
-                    PoolBatchView(currencyName: currency.name, point: point, name: reserveName)
+                    PoolBatchView(currencyName: currency.name, point: point, unit: unit, name: reserveName)
                 }
             }
         }
@@ -178,6 +180,113 @@ struct CurrencyOverTimeCard: View {
                 .frame(width: 130, alignment: .trailing)
         }
         .padding(.vertical, 7)
+    }
+
+    // MARK: The lines from 100
+
+    private struct IndexLine: Identifiable {
+        let id: String
+        let name: String
+        let basket: Bool
+        let color: Color
+        /// The value in the unit at each sample, as a part of the first known value, times 100.
+        let values: [Double?]
+    }
+
+    private static let palette: [Color] = [.orange, .purple, .green, .red, .cyan, .pink, .brown, .mint, .indigo, .yellow]
+
+    private func lines(_ unit: String) -> [IndexLine] {
+        func price(_ point: CurrencyPoint, _ id: String) -> Double? {
+            point.reserves.first { $0.currencyId == id }?.priceInReserve.flatMap { $0 > 0 ? $0 : nil }
+        }
+        func rebased(_ raw: [Double?]) -> [Double?] {
+            guard let base = raw.compactMap({ $0 }).first, base > 0 else { return raw.map { _ in nil } }
+            return raw.map { $0.map { $0 / base * 100 } }
+        }
+        var result = [
+            IndexLine(
+                id: "basket", name: currency.name, basket: true, color: .primary,
+                values: rebased(points.map { price($0, unit) }))
+        ]
+        for (position, id) in reserveIDs.enumerated() where id != unit {
+            result.append(
+                IndexLine(
+                    id: id, name: reserveName(id), basket: false,
+                    color: Self.palette[position % Self.palette.count],
+                    values: rebased(points.map { BasketMath.worth(price($0, id), price($0, unit)) })))
+        }
+        return result
+    }
+
+    private func indexed(_ unit: String) -> some View {
+        let lines = lines(unit)
+        let position = min(Int(index), max(points.count - 1, 0))
+        let known = lines.flatMap { $0.values.compactMap { $0 } }
+        let low = min(known.min() ?? 90, 95)
+        let high = max(known.max() ?? 110, 105)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Value").fontWeight(.semibold)
+                    Text("in \(reserveName(unit))").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text("start of range = 100").font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(width: 130, alignment: .leading)
+                Chart {
+                    RuleMark(y: .value("Start", 100)).foregroundStyle(Color.secondary.opacity(0.6))
+                    ForEach(lines) { line in
+                        ForEach(Array(line.values.enumerated()), id: \.offset) { offset, value in
+                            if let value {
+                                LineMark(
+                                    x: .value("Sample", offset), y: .value("Value", value),
+                                    series: .value("Currency", line.id))
+                                    .foregroundStyle(line.color)
+                                    .lineStyle(StrokeStyle(lineWidth: line.basket ? 2.6 : 1.5))
+                            }
+                        }
+                    }
+                    RuleMark(x: .value("Sample", position))
+                        .foregroundStyle(Color.primary.opacity(0.55))
+                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                }
+                .chartXAxis(.hidden)
+                .chartYAxis {
+                    // The labels are inside the plot, so that the plot has the width of the
+                    // lines above and below it and one cursor goes through all of them.
+                    AxisMarks(preset: .inset, position: .leading)
+                }
+                .chartXScale(domain: 0...max(points.count - 1, 1))
+                .chartYScale(domain: (low - 3)...(high + 3))
+                .chartLegend(.hidden)
+                .frame(height: 220)
+                .accessibilityLabel("The value of \(currency.name) and of each reserve in \(reserveName(unit)), from 100 at the start")
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(lines) { line in
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 1.5).fill(line.color)
+                                .frame(width: 14, height: line.basket ? 4 : 2.5)
+                            Text(line.name).fontWeight(line.basket ? .semibold : .regular).lineLimit(1)
+                            Spacer(minLength: 4)
+                            Text(line.values[position].map(Self.changeText) ?? "–").monospacedDigit()
+                        }
+                        .font(.caption)
+                    }
+                    Text("at the cursor").font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(width: 130)
+            }
+            Text(
+                "A line at 80 means that the currency lost 20 of each 100 of its value in \(reserveName(unit)) since "
+                    + "the start of the range. The heavy line is \(currency.name). The values are the pool's own rates.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 7)
+    }
+
+    private static func changeText(_ value: Double) -> String {
+        let change = value - 100
+        return "\(change >= 0 ? "+" : "−")\(abs(change).formatted(.number.precision(.fractionLength(1))))"
     }
 
     @ViewBuilder

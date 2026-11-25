@@ -388,6 +388,39 @@ pub struct KnownImport {
     pub height: u64,
 }
 
+/// A stage of a transfer that the evidence reached.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum TraceStage {
+    Sent,
+    Exported,
+    Imported,
+    /// A result output that the replay matched: received, refunded, forwarded or burned.
+    Result,
+}
+
+/// A stage of a transfer with the block that holds it. The page puts the stages on one
+/// axis of blocks, so that a wait is a length.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TraceMoment {
+    pub stage: TraceStage,
+    pub system_id: String,
+    pub txid: String,
+    pub output: u32,
+    /// None when the transaction is not in a block, or is on a system that this
+    /// computer does not have.
+    pub height: Option<u64>,
+    pub time: Option<u64>,
+}
+
+/// The export batch that took a transfer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct TraceBatch {
+    /// The number of transfers in the export.
+    pub size: u32,
+    /// The position of this transfer in the batch, from 0.
+    pub place: u32,
+}
+
 /// A transfer followed from its source output as far as the evidence reaches.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct TransferTrace {
@@ -405,6 +438,13 @@ pub struct TransferTrace {
     /// The leg the search applies to.
     pub search_root: Option<Outpoint>,
     pub import_heights: Vec<KnownImport>,
+    /// The stages that the evidence reached, in the order of the trail.
+    pub moments: Vec<TraceMoment>,
+    /// The export batch of the first leg.
+    pub batch: Option<TraceBatch>,
+    /// Other outputs of the import that went to the destination address. The replay
+    /// tells the result from them.
+    pub candidates: u32,
 }
 
 #[derive(Debug, Clone, uniffi::Enum)]
@@ -829,6 +869,7 @@ impl Explorer {
                 .filter_map(|known| Some((known.root.reference()?, known.height)))
                 .collect(),
         };
+        let seed_copy = seed.clone();
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let relay = tokio::spawn(async move {
             while let Some(trail) = receiver.recv().await {
@@ -840,8 +881,10 @@ impl Explorer {
         let _ = relay.await;
         leg_slots().insert(format!("{}:{output}", txid.trim()), trail.legs.clone());
         progress_slots().remove(&token);
+        let mut trace = transfer_trace(trail);
+        self.place_moments(&mut trace, &seed_copy).await;
         self.forgive();
-        Ok(transfer_trace(trail))
+        Ok(trace)
     }
 
     /// The trail so far for a running `trace_transfer`. None before the first report.
@@ -3065,8 +3108,89 @@ fn plain_stop(message: &str) -> String {
 }
 
 /// Reduces Carbide's trail to what the app draws, keeping its stage wording.
+impl Explorer {
+    /// Finds the block of each stage on this chain. A stage on another system has no
+    /// height here: the import height of its leg is in the leg.
+    async fn place_moments(&self, trace: &mut TransferTrace, seed: &Value) {
+        let local = self.config.chain.system_id.get().map(ToString::to_string);
+        let mut wanted: Vec<String> = Vec::new();
+        for moment in &trace.moments {
+            if Some(&moment.system_id) == local.as_ref() && !wanted.contains(&moment.txid) {
+                wanted.push(moment.txid.clone());
+            }
+        }
+        let mut found = self.fetch_transactions(&wanted).await;
+        if let Some(txid) = seed["txid"].as_str() {
+            found.entry(txid.to_string()).or_insert_with(|| seed.clone());
+        }
+        for moment in &mut trace.moments {
+            if let Some(raw) = found.get(&moment.txid).filter(|raw| raw["blockhash"].is_string()) {
+                moment.height = raw["height"].as_u64();
+                moment.time = raw["blocktime"].as_u64().filter(|time| *time > 0);
+            }
+        }
+    }
+}
+
+/// The stage that an entry of Carbide's trail stands for. Entries that are context, such
+/// as the import notarization and the address candidates, are not a stage.
+fn trace_stage(position: usize, label: &str) -> Option<TraceStage> {
+    match label {
+        _ if position == 0 => Some(TraceStage::Sent),
+        "Export" => Some(TraceStage::Exported),
+        "Import" => Some(TraceStage::Imported),
+        "Replayed next-leg transfer" => Some(TraceStage::Sent),
+        "Direct transfer result" => Some(TraceStage::Result),
+        label if label.starts_with("Replayed ") => Some(TraceStage::Result),
+        _ => None,
+    }
+}
+
+/// The batch from the detail of Carbide's export entry: "source input 2; batch inputs
+/// 1..12; ...". The end of the range is not in the batch.
+fn trace_batch(detail: &str) -> Option<TraceBatch> {
+    let after = |text: &str, key: &str| -> Option<String> {
+        let rest = &text[text.find(key)? + key.len()..];
+        Some(rest.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect())
+    };
+    let input: u32 = after(detail, "source input ")?.parse().ok()?;
+    let range = after(detail, "batch inputs ")?;
+    let (first, end) = range.split_once("..")?;
+    let (first, end): (u32, u32) = (first.parse().ok()?, end.parse().ok()?);
+    (end > first && input >= first && input < end).then_some(TraceBatch {
+        size: end - first,
+        place: input - first,
+    })
+}
+
 fn transfer_trace(trail: crate::defi::Trail) -> TransferTrace {
     use crate::defi::Stage;
+    let moments = trail
+        .entries
+        .iter()
+        .enumerate()
+        .filter_map(|(position, entry)| {
+            let stage = trace_stage(position, &entry.label)?;
+            Some(TraceMoment {
+                stage,
+                system_id: entry.output.system_id.to_string(),
+                txid: entry.output.txid.clone(),
+                output: entry.output.vout,
+                height: None,
+                time: None,
+            })
+        })
+        .collect();
+    let batch = trail
+        .entries
+        .iter()
+        .find(|entry| entry.label == "Export")
+        .and_then(|entry| trace_batch(&entry.detail));
+    let candidates = trail
+        .entries
+        .iter()
+        .filter(|entry| entry.label == "Destination-address candidate")
+        .count() as u32;
     let legs: Vec<TraceLeg> = trail.legs.iter().map(trace_leg).collect();
     let (verdict, confidence) = match trail.legs.last().map(|leg| leg.stage) {
         Some(Stage::Received) => (
@@ -3138,6 +3262,9 @@ fn transfer_trace(trail: crate::defi::Trail) -> TransferTrace {
                 height: *height,
             })
             .collect(),
+        moments,
+        batch,
+        candidates,
     }
 }
 

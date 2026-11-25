@@ -1,0 +1,277 @@
+<title>Notarization Research</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column. What the notarizations are, then what the lanes show, then the methods of each field, then the real record drawn two ways, then the choice. */
+:root {
+  --bg: #f5f7f8; --surface: #ffffff; --line: #d9e0e4; --fg: #15212b; --muted: #5b6b78;
+  --accent: #0d6b82; --accent-soft: #dcedf2;
+  --mined: #b4690f; --staked: #7448b0; --warn: #b3372f; --ok: #2f7d4f;
+  --display: "Space Grotesk", "Avenir Next", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 34px; letter-spacing: -0.01em; } h2 { font-size: 24px; } h3 { font-size: 16px; }
+p { margin: 0; max-width: 70ch; }
+a { color: var(--accent); }
+.lede { font-size: 17px; color: var(--muted); }
+.note { color: var(--muted); font-size: 13.5px; }
+.figures { display: flex; flex-wrap: wrap; gap: 14px 34px; font-variant-numeric: tabular-nums; }
+.figures div { display: flex; flex-direction: column; min-width: 0; }
+.figures b { font-family: var(--display); font-size: 26px; font-weight: 600; line-height: 1.15; }
+.figures span { font-size: 13px; color: var(--muted); max-width: 26ch; }
+figure { margin: 0; }
+.plot { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.plot .scroll { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 560px; height: auto; color: var(--fg); font-family: var(--body); }
+.plot figcaption { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+.plot .tag { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 36px; }
+.fields div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fields p { font-size: 14px; }
+.fields .take { color: var(--muted); }
+ol.steps, ul.plain { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; max-width: 74ch; }
+.src { font-size: 13.5px; columns: 2 320px; column-gap: 36px; padding-left: 18px; margin: 0; }
+.src li { break-inside: avoid; margin-bottom: 6px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 14px; min-width: 640px; width: 100%; }
+th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
+
+/* The worked examples. */
+.bench { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.forms { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.forms button { font: inherit; font-size: 13px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.forms button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.forms button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.say { font-size: 17px; max-width: 78ch; }
+.stage { overflow-x: auto; }
+.stage svg { display: block; width: 100%; min-width: 640px; height: auto; color: var(--fg); font-family: var(--body); }
+.see { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+</style>
+
+<main>
+<section>
+  <h1>Notarization Research</h1>
+  <p class="lede">How the leading fields show the checkpoints that one chain keeps of a different chain, and what that means for the notarization lanes on the Currency page. Each figure uses the notarizations that the local Verus node has of vETH and of the other systems.</p>
+  <p>The short answer: the lanes draw each notarization as a tie between two lines. The picture does not answer the first question, which is "is this link alive". On the chain today the answer is no: no system has had a confirmed notarization for 174,905 blocks, where the usual interval was 11. The fields that watch a link between two systems show the time since the last checkpoint against the usual rhythm first. They show the checkpoints that wait as a chain with its branches, and they keep the full record as a list.</p>
+</section>
+
+<section>
+  <h2>What the notarizations are</h2>
+  <div class="figures" id="figs"></div>
+  <figure class="plot"><span class="tag">Blocks between confirmed notarizations of vETH, and the wait now</span><div class="scroll" id="rhythm"></div>
+    <figcaption>Each dot is the number of VRSC blocks between two confirmed notarizations in sequence, for the last 159 intervals. The scale is logarithmic: each step to the right is ten times more. The mark at the right is the time since the last confirmed notarization.</figcaption></figure>
+  <ul class="plain">
+    <li><b>A notarization is a checkpoint.</b> It commits to a block height of this chain and a block height of the other system. Transfers between the two systems need a confirmed notarization that is recent.</li>
+    <li><b>The rhythm was steady.</b> For vETH, the median interval between confirmed notarizations was 11 blocks, 9 of each 10 were below 29, and the longest was 70.</li>
+    <li><b>All systems stopped at one time.</b> The last notarizations of vETH, vDEX, vARRR and CHIPS that the node has commit to VRSC blocks 4,162,651 to 4,162,711. That is 121 days before this study.</li>
+    <li><b>Notarizations wait in a chain with branches.</b> The node has 10 entries for vETH after the last confirmed one. Five are a chain that goes forward, to VRSC block 4,271,973. Four are the same root as the confirmed one, posted again and again on a branch that does not go forward.</li>
+    <li><b>The two heights are a pair, not two times.</b> A notarization is in a VRSC block one block after the VRSC height that it commits to. The height of the other system is a figure of that system.</li>
+    <li><b>The other systems have a short record here.</b> For vDEX, vARRR and CHIPS the node gives two entries each.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What the lanes show today</h2>
+  <ul class="plain">
+    <li><b>Two lanes with one time.</b> The lanes are the two systems, and each tie is a line between them at the time of the notarization. The line is vertical, thus the second lane repeats the first.</li>
+    <li><b>The state of the link is one line of text.</b> A warning says that the last confirmed notarization is 174,881 blocks old. The picture gives the same space to that fact as to each tie.</li>
+    <li><b>There is no usual interval.</b> The page does not say that 11 blocks is usual, thus a person cannot tell if 174,881 is long.</li>
+    <li><b>The branches are flags on rows.</b> Four of the ten rows have "On a side branch". The page does not show that they are one branch, or that they are the same root four times.</li>
+    <li><b>The rows are in the node's order.</b> The newest entry is first, and the rows of the two branches are mixed.</li>
+    <li><b>The checks of the proof roots are good.</b> Each row says if the app checked the root on the chain that owns it, and why not. This part stays.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What the leading fields do</h2>
+  <div class="fields">
+    <div>
+      <h3>Rollup monitors</h3>
+      <p>L2BEAT has a liveness section for each rollup: the usual interval between state updates, and a list of anomalies. An anomaly is stated against the usual: "No state updates for 6 hours. These occur each 6 hours on average."</p>
+      <p class="take">For Carbide Silica: state the time since the last confirmed notarization against the usual interval, in one sentence.</p>
+    </div>
+    <div>
+      <h3>Light clients between chains</h3>
+      <p>An IBC light client has a trusting period. When no update arrives in that period, the client is expired, and transfers stop until a governance decision. The tools for operators show the last update and the time that remains.</p>
+      <p class="take">For Carbide Silica: a link has a state, not only a list of events: current, late, or stopped.</p>
+    </div>
+    <div>
+      <h3>Finality in proof-of-stake</h3>
+      <p>Ethereum separates a checkpoint that is justified from one that is final, and the chain is said not to finalize when the last final checkpoint is more than two epochs old. Explorers show the last final epoch as the first figure.</p>
+      <p class="take">For Carbide Silica: confirmed and not confirmed are two different marks, and the last confirmed one is the anchor of the picture.</p>
+    </div>
+    <div>
+      <h3>Status pages</h3>
+      <p>The status pages of services show one bar for each day of the last 90, and the time since the last heartbeat. A person reads the state of the service in one look and sees when it changed.</p>
+      <p class="take">For Carbide Silica: a rhythm strip. The usual intervals as dots, and the wait now as one mark on the same scale.</p>
+    </div>
+    <div>
+      <h3>Version control</h3>
+      <p>The tools for Git draw a history with branches as a commit graph: one mark for each commit, a line to its parent, and one lane for each branch. The rule of the readable graphs is that the first parent keeps its lane, thus the main line is straight.</p>
+      <p class="take">For Carbide Silica: the entries after the last confirmed one as a graph. The chain that goes forward is the straight line, and a branch is a second line.</p>
+    </div>
+    <div>
+      <h3>Work on large histories</h3>
+      <p>The study of Githru found that commit graphs do not scale without grouping, and it joins runs of similar commits into one mark.</p>
+      <p class="take">For Carbide Silica: a root that is posted again without change is one mark with a count.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>The notarizations of vETH, drawn two ways</h2>
+  <p>Select a form. The first is the lanes of the page today. The second is the proposal.</p>
+  <div class="bench">
+    <div class="forms" id="forms" role="group" aria-label="Form"></div>
+    <p class="say" id="say"></p>
+    <div class="stage" id="stage"></div>
+    <p class="see" id="see"></p>
+  </div>
+</section>
+
+<section>
+  <h2>How the forms compare</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Question</th><th>Lanes today</th><th>State, rhythm and graph</th></tr></thead>
+    <tbody>
+      <tr><td>Is the link alive</td><td>A warning line</td><td>The first sentence, with one word for the state</td></tr>
+      <tr><td>Is the wait unusual</td><td>Not shown</td><td>The mark against the dots of the usual intervals</td></tr>
+      <tr><td>What waits for confirmation</td><td>Dashed ties</td><td>The straight line of the graph, with the heights of each entry</td></tr>
+      <tr><td>What is a side branch</td><td>A flag on each row</td><td>A second line that leaves the first at one mark</td></tr>
+      <tr><td>Is an entry a repeat</td><td>Not shown</td><td>One mark with a count</td></tr>
+      <tr><td>The two heights of an entry</td><td>The ends of a tie, with no figures</td><td>Two figures below each mark</td></tr>
+      <tr><td>The check of each proof root</td><td>In each row</td><td>In each row, as now</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Recommendation</h2>
+  <p>Replace the two lanes with a state sentence, a rhythm strip and a graph of the entries that wait. Keep the rows, in the order of the graph.</p>
+  <ol class="steps">
+    <li><b>One sentence with the state.</b> "Stopped. VRSC last confirmed a notarization of vETH at block 4,162,712, 121 days ago. The usual interval was 11 blocks."</li>
+    <li><b>Three states.</b> Current: the wait is in the range of the record. Late: the wait is longer than each interval of the record. Stopped: the wait is more than 100 times the longest interval. The page says which rule applies.</li>
+    <li><b>A rhythm strip.</b> The intervals between the confirmed notarizations that the app can follow back, as dots on one scale, and the wait now as one mark. It is the form of the wait plot of the chain pulse.</li>
+    <li><b>A graph of what waits.</b> The last confirmed notarization at the left. Each later entry is a mark with a line to the entry that it builds on. The chain that the node calls best is the straight line. Each mark has the two heights that it commits to, and its age.</li>
+    <li><b>Repeats are one mark.</b> Entries in sequence with the same heights are one mark with a count: "the same root, 4 times".</li>
+    <li><b>The rows follow the graph.</b> First the best chain from the newest entry back, then each branch. A selection of a mark goes to its row.</li>
+    <li><b>The checks stay.</b> Each row keeps the proof roots, the inclusion and the check on the owning chain.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>What stays as Carbide gives it</h2>
+  <ul class="plain">
+    <li>The entries, the branches and the best chain are the node's own answer to one request.</li>
+    <li>"Confirmed" is only the entry that the node gives as the last confirmed one.</li>
+    <li>The app does not check a block of a system that this computer does not have, and it says why.</li>
+    <li>The state is a description of the record. The app does not say why a link stopped.</li>
+    <li>The view of the other system, when this computer has a node for it, and the bookmark of a view.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Limits of this study</h2>
+  <ul class="plain">
+    <li>The node has one link with a long record, vETH. The rhythm of the other systems was not measured: the study could follow their records back one step only.</li>
+    <li>All links were stopped during the study. The forms for a link that is current are designed, not seen on live data.</li>
+    <li>The study did not look for the cause of the stop.</li>
+    <li>The limit of 100 times for "stopped" is a choice of this study, not a rule of the protocol.</li>
+    <li>The pages of L2BEAT and of the IBC tools were read as summaries of their own documents.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sources</h2>
+  <ol class="src">
+    <li><a href="https://medium.com/l2beat/tracking-time-to-finality-of-l2-transactions-051d32f5d5ba">L2BEAT</a>. Tracking liveness: intervals between state updates and anomalies.</li>
+    <li><a href="https://docs.cosmos.network/ibc/next/architecture/adr-026-ibc-client-recovery-mechanisms">Cosmos IBC</a>. ADR 026: expired clients and their recovery.</li>
+    <li><a href="https://www.alchemy.com/overviews/ethereum-commitment-levels">Alchemy</a>. Ethereum commitment levels: justified and finalized.</li>
+    <li><a href="https://support.atlassian.com/statuspage/docs/display-historical-uptime-of-components">Atlassian Statuspage</a>. Historical uptime of components.</li>
+    <li><a href="https://pvigier.github.io/2019/05/06/commit-graph-drawing-algorithms.html">Vigier</a>. Commit graph drawing algorithms.</li>
+    <li><a href="https://arxiv.org/pdf/2009.03115v1">Kim and others</a>. Githru: visual analytics for Git histories. IEEE VIS, 2020.</li>
+  </ol>
+</section>
+</main>
+
+<script>
+const DATA = {"tip":4337617,"gaps":[10,29,15,68,14,20,5,9,12,8,25,5,11,9,11,27,7,7,24,8,9,17,9,12,8,20,10,10,12,33,10,7,15,5,19,28,4,23,5,19,11,9,12,13,9,12,12,4,15,23,17,21,5,7,20,11,11,8,12,50,9,26,5,14,13,9,6,11,5,24,8,20,8,15,11,20,6,20,14,25,12,17,11,37,3,20,13,9,7,27,5,39,11,20,16,50,3,20,9,14,6,25,6,32,8,17,4,56,7,14,1,33,11,28,17,5,8,11,11,24,5,9,8,44,8,70,8,11,10,11,10,8,10,12,10,13,7,18,15,56,9,12,18,26,6,17,5,19,8,23,6,37,4,15,10,5,12,7,11],"since":174905,"median":11,"confirmed":{"index":0,"vr":4162711,"nh":25591412,"side":false},"entries":[{"index":0,"vr":4162711,"nh":25591412,"side":false},{"index":1,"vr":4162711,"nh":25591412,"side":true},{"index":2,"vr":4208712,"nh":25828151,"side":false},{"index":3,"vr":4162711,"nh":25591412,"side":true},{"index":4,"vr":4237996,"nh":25976636,"side":false},{"index":5,"vr":4162711,"nh":25591412,"side":true},{"index":6,"vr":4238174,"nh":25979802,"side":false},{"index":7,"vr":4162711,"nh":25591412,"side":true},{"index":8,"vr":4271962,"nh":26152796,"side":false},{"index":9,"vr":4271973,"nh":26152796,"side":false}],"best":[{"vr":4162711,"nh":25591412,"count":1},{"vr":4208712,"nh":25828151,"count":1},{"vr":4237996,"nh":25976636,"count":1},{"vr":4238174,"nh":25979802,"count":1},{"vr":4271973,"nh":26152796,"count":2}],"side":{"count":4,"vr":4162711,"nh":25591412},"say":"Stopped. VRSC last confirmed a notarization of vETH at block 4,162,712, 121 days ago. The usual interval was 11 blocks. 5 later entries wait on the best chain.","sayToday":"The last confirmed notarization commits to VRSC block 4,162,711, 174,881 blocks ago (approximately 121 days). 9 unconfirmed in the current view.","figs":[["174,905","VRSC blocks since the last confirmed notarization of vETH"],["11","blocks was the usual interval"],["70","blocks was the longest interval in the record"],["4 of 4","other systems stopped in the same 60 blocks"],["4 of 10","entries for vETH are one root posted again"]]};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = id => document.getElementById(id);
+const n0 = x => x.toLocaleString("en-US");
+const days = blocks => blocks >= 2880 ? `${Math.round(blocks / 1440)} days` : blocks >= 120 ? `${Math.round(blocks / 60)} hours` : `${blocks} minutes`;
+
+function rhythm() {
+  const W = 760, left = 20, right = W - 50, lo = 0, hi = 6, sx = v => left + (Math.log10(Math.max(v, 1)) - lo) / (hi - lo) * (right - left);
+  let out = `<line x1="${left}" y1="96" x2="${right}" y2="96" stroke="var(--muted)"/>`;
+  for (let p = 0; p <= 6; p++) out += `<line x1="${sx(10 ** p)}" y1="92" x2="${sx(10 ** p)}" y2="100" stroke="var(--muted)"/><text x="${sx(10 ** p)}" y="114" font-size="11" text-anchor="middle" fill="var(--muted)">${n0(10 ** p)} ${p === 0 ? "block" : "blocks"}</text>`;
+  const stack = {};
+  for (const g of DATA.gaps) { const x = Math.round(sx(g) / 7) * 7; stack[x] = (stack[x] || 0) + 1; if (stack[x] <= 10) out += `<circle cx="${x}" cy="${90 - stack[x] * 6.2}" r="2.6" fill="var(--accent)"/>`; }
+  const x = sx(DATA.since);
+  out += `<line x1="${x}" y1="20" x2="${x}" y2="96" stroke="var(--warn)" stroke-width="2.5"/><text x="${x - 8}" y="30" font-size="12.5" font-weight="600" text-anchor="end" fill="var(--warn)">now: ${n0(DATA.since)} blocks</text><text x="${sx(DATA.median)}" y="12" font-size="12" text-anchor="middle" fill="currentColor">usual: ${DATA.median} blocks</text>`;
+  return `<svg viewBox="0 0 ${W} 120" role="img" aria-label="The usual intervals between confirmed notarizations and the wait now">${out}</svg>`;
+}
+
+/* The lanes today: each entry is a tie between the two systems at the height it commits to. */
+function lanes() {
+  const W = 760, left = 70, right = W - 40, h0 = DATA.confirmed.vr - 4000, h1 = DATA.tip, sx = h => left + (h - h0) / (h1 - h0) * (right - left);
+  let out = `<text x="0" y="44" font-size="12.5" font-weight="600" fill="currentColor">VRSC</text><text x="0" y="124" font-size="12.5" font-weight="600" fill="currentColor">vETH</text><rect x="${left}" y="36" width="${right - left}" height="8" rx="4" fill="var(--line)"/><rect x="${left}" y="116" width="${right - left}" height="8" rx="4" fill="var(--line)"/>`;
+  for (const e of DATA.entries) {
+    const x = sx(e.vr), c = e.index === 0 ? "var(--accent)" : e.side ? "var(--warn)" : "var(--muted)";
+    out += `<line x1="${x.toFixed(1)}" y1="40" x2="${x.toFixed(1)}" y2="120" stroke="${c}" stroke-width="${e.index === 0 ? 2.4 : 1.4}"${e.index === 0 ? "" : ' stroke-dasharray="4 3"'}/><circle cx="${x.toFixed(1)}" cy="40" r="4" fill="${c}"/><circle cx="${x.toFixed(1)}" cy="120" r="4" fill="${c}"/>`;
+  }
+  out += `<line x1="${sx(DATA.confirmed.vr)}" y1="22" x2="${sx(h1)}" y2="22" stroke="var(--mined)" stroke-dasharray="3 3"/><text x="${(sx(DATA.confirmed.vr) + sx(h1)) / 2}" y="16" font-size="11" font-weight="600" text-anchor="middle" fill="var(--mined)">not confirmed since</text><line x1="${sx(h1)}" y1="28" x2="${sx(h1)}" y2="52" stroke="currentColor"/><text x="${sx(h1)}" y="64" font-size="11" text-anchor="middle" fill="currentColor">now</text>`;
+  return `<svg viewBox="0 0 ${W} 140" role="img" aria-label="The notarizations as ties between the VRSC lane and the vETH lane">${out}</svg>`;
+}
+
+/* The proposal: the entries that wait as a graph. Repeats of one root are one mark. */
+function graph() {
+  const W = 760, y0 = 60, y1 = 150, left = 110, step = (W - left - 60) / Math.max(DATA.best.length - 1, 1);
+  const label = (x, y, e, below) => `<text x="${x}" y="${y + (below ? 24 : -30)}" font-size="11.5" text-anchor="middle" fill="currentColor" style="font-variant-numeric: tabular-nums">VRSC ${n0(e.vr)}</text><text x="${x}" y="${y + (below ? 38 : -16)}" font-size="11" text-anchor="middle" fill="var(--muted)" style="font-variant-numeric: tabular-nums">vETH ${n0(e.nh)}</text>`;
+  let out = `<line x1="${left}" y1="${y0}" x2="${left + step * (DATA.best.length - 1)}" y2="${y0}" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4"/>`;
+  DATA.best.forEach((e, i) => {
+    const x = left + i * step;
+    out += i === 0 ? `<circle cx="${x}" cy="${y0}" r="9" fill="var(--accent)"/>` : `<circle cx="${x}" cy="${y0}" r="7" fill="var(--surface)" stroke="currentColor" stroke-width="1.8"/>`;
+    if (e.count > 1) out += `<text x="${x}" y="${y0 + 4}" font-size="10" font-weight="700" text-anchor="middle" fill="currentColor">${e.count}</text>`;
+    out += label(x, y0, e, false) + `<text x="${x}" y="${y0 + 24}" font-size="11" text-anchor="middle" fill="var(--muted)">${i === 0 ? "confirmed, " : ""}${days(DATA.tip - e.vr)} ago</text>`;
+  });
+  if (DATA.side) {
+    const x = left + step * 0.7;
+    out += `<path d="M${left} ${y0} C${left + 30} ${y0} ${x - 40} ${y1} ${x} ${y1}" fill="none" stroke="var(--warn)" stroke-width="1.6" stroke-dasharray="5 4"/><circle cx="${x}" cy="${y1}" r="9" fill="var(--surface)" stroke="var(--warn)" stroke-width="1.8"/><text x="${x}" y="${y1 + 4}" font-size="10.5" font-weight="700" text-anchor="middle" fill="var(--warn)">${DATA.side.count}</text><text x="${x + 18}" y="${y1 - 2}" font-size="12" fill="currentColor">Side branch: the confirmed root, posted again ${DATA.side.count} times</text><text x="${x + 18}" y="${y1 + 14}" font-size="11" fill="var(--muted)">VRSC ${n0(DATA.side.vr)} · vETH ${n0(DATA.side.nh)}</text>`;
+  }
+  out += `<text x="0" y="${y0 + 4}" font-size="12" font-weight="600" fill="currentColor">Best chain</text>`;
+  return rhythm().replace("</svg>", "").replace(/<svg[^>]*>/, `<svg viewBox="0 0 ${W} 320" role="img" aria-label="The rhythm of confirmed notarizations, and the entries that wait as a graph">`) + `<g transform="translate(0,140)">${out}</g></svg>`;
+}
+
+const state = { form: "new" };
+function render() {
+  $("forms").innerHTML = "Form: " + [["today", "Lanes today"], ["new", "Proposal"]].map(f => `<button type="button" data-form="${f[0]}" aria-pressed="${f[0] === state.form}">${f[1]}</button>`).join("");
+  $("say").textContent = state.form === "new" ? DATA.say : DATA.sayToday;
+  $("stage").innerHTML = state.form === "new" ? graph() : lanes();
+  $("see").textContent = state.form === "new" ? "The strip says that the wait is about 16,000 times the usual interval. The graph says what waits: five entries on the best chain, and one root that was posted again four times on a branch." : "Ten ties. Five are at one place at the left, because they commit to the same block. The picture does not say which ties are one branch, or what interval is usual.";
+}
+function start() {
+  $("figs").innerHTML = DATA.figs.map(f => `<div><b>${f[0]}</b><span>${f[1]}</span></div>`).join("");
+  $("rhythm").innerHTML = rhythm();
+  $("forms").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.form = b.dataset.form; render(); } });
+  render();
+}
+start();
+</script>

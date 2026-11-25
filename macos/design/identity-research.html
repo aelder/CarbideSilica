@@ -1,0 +1,310 @@
+<title>Identity Research</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column. What an identity is, then what the page shows, then the methods of each field, then real identities drawn two ways, then the choice. */
+:root {
+  --bg: #f5f7f8; --surface: #ffffff; --line: #d9e0e4; --fg: #15212b; --muted: #5b6b78;
+  --accent: #0d6b82; --accent-soft: #dcedf2;
+  --mined: #b4690f; --staked: #7448b0; --warn: #b3372f; --ok: #2f7d4f;
+  --display: "Space Grotesk", "Avenir Next", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 34px; letter-spacing: -0.01em; } h2 { font-size: 24px; } h3 { font-size: 16px; }
+p { margin: 0; max-width: 70ch; }
+a { color: var(--accent); }
+.lede { font-size: 17px; color: var(--muted); }
+.note { color: var(--muted); font-size: 13.5px; }
+.figures { display: flex; flex-wrap: wrap; gap: 14px 34px; font-variant-numeric: tabular-nums; }
+.figures div { display: flex; flex-direction: column; min-width: 0; }
+.figures b { font-family: var(--display); font-size: 26px; font-weight: 600; line-height: 1.15; }
+.figures span { font-size: 13px; color: var(--muted); max-width: 26ch; }
+figure { margin: 0; }
+.plot { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.plot .scroll { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 560px; height: auto; color: var(--fg); font-family: var(--body); }
+.plot figcaption { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+.plot .tag { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 36px; }
+.fields div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fields p { font-size: 14px; }
+.fields .take { color: var(--muted); }
+ol.steps, ul.plain { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; max-width: 74ch; }
+.src { font-size: 13.5px; columns: 2 320px; column-gap: 36px; padding-left: 18px; margin: 0; }
+.src li { break-inside: avoid; margin-bottom: 6px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 14px; min-width: 640px; width: 100%; }
+th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
+
+/* The worked examples. */
+.bench { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.picker, .forms { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.picker button, .forms button { font: inherit; font-size: 13px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.picker button[aria-pressed="true"], .forms button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.picker button:focus-visible, .forms button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.say { font-size: 17px; max-width: 78ch; }
+.stage { overflow-x: auto; }
+.stage svg { display: block; width: 100%; min-width: 620px; height: auto; color: var(--fg); font-family: var(--body); }
+.see { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+.powers td:first-child { font-weight: 600; white-space: nowrap; }
+.powers { min-width: 520px; }
+</style>
+
+<main>
+<section>
+  <h1>Identity Research</h1>
+  <p class="lede">How the leading fields show who controls an account and how that control changed, and what that means for the control diagram and the version line on the Identity page. Each figure uses identities on the Verus chain, read from the local node.</p>
+  <p>The short answer: the page today answers "who holds each power" with a drawing of boxes and lines, and it shows the history as a row of dots and a long list. The drawing has three fixed parts for each identity, thus it is a table in the form of a diagram. It leaves out the lock, which half of the identities in this study use, and which is what most updates change. The fields that show control well give a table of powers, the outcome of each failure in words, and one history with a lane for each power.</p>
+</section>
+
+<section>
+  <h2>What an identity is</h2>
+  <div class="figures" id="figs"></div>
+  <figure class="plot"><span class="tag">Who can revoke and recover, for 69 identities</span><div class="scroll" id="patterns"></div>
+    <figcaption>The identities are those that received an output in 800 blocks: 300 with much DeFi activity and 500 recent blocks. They are not a sample of all identities.</figcaption></figure>
+  <figure class="plot"><span class="tag">What 334 updates changed</span><div class="scroll" id="changes"></div>
+    <figcaption>One update can change more than one part. The updates are all versions after the first of the 69 identities.</figcaption></figure>
+  <ul class="plain">
+    <li><b>One key is the rule.</b> 68 of the 69 identities have one primary address. One has two addresses and needs one signature.</li>
+    <li><b>There are three patterns of control.</b> 30 identities have one identity that can revoke and a different one that can recover. 22 have one identity for the two powers. 16 are their own authority, and a lost or stolen key has no remedy.</li>
+    <li><b>Half use the lock.</b> 33 of 69 have a lock now. With a lock, funds cannot move until an unlock is requested and a set number of blocks pass. The delays in the sample are from 480 blocks, about 8 hours, to 525,600 blocks, about one year.</li>
+    <li><b>Most updates are the lock.</b> 241 of 334 updates changed the lock and nothing else of control. The keys changed in 41, and an authority in fewer than 40.</li>
+    <li><b>Revocation is used.</b> 12 of the 69 were revoked at some time and are active again.</li>
+    <li><b>Histories are short, with exceptions.</b> The median identity has 3 versions. Six have more than 20, and the longest has 33.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What the page shows today</h2>
+  <ul class="plain">
+    <li><b>The control drawing is three boxes for each identity.</b> A key on the left, the identity in the middle, and the two authorities on the right. The layout is the same each time, thus the lines carry no data.</li>
+    <li><b>The outcomes are behind tabs.</b> "Stolen keys" and "Recovery" are two more versions of the drawing. A person sees one case at a time and must remember the others.</li>
+    <li><b>The lock is not in the drawing.</b> It is one line in the list of fields below. For a locked identity, the lock decides if a thief can move funds before the owner acts.</li>
+    <li><b>The version line marks lock changes as "other data".</b> A blue mark is a change of who controls the identity, and a grey mark is all other changes. Seven of each ten marks in the sample are lock changes, and they are grey.</li>
+    <li><b>The history of the authorities is a list with two rows for each version.</b> One identity with 21 versions and no change of its authorities gets 42 rows that say the same thing.</li>
+    <li><b>The page does not say who controls the authorities.</b> If the same key controls the identity and its recovery identity, the recovery adds nothing.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What the leading fields do</h2>
+  <div class="fields">
+    <div>
+      <h3>Shared wallets</h3>
+      <p>Safe shows the control of an account as a list and one figure: the owners, and the number of them that must sign, such as "2 out of 3". Its inspection tool shows the owners, the threshold, the modules and the guards of an account in one view.</p>
+      <p class="take">For Carbide Silica: the keys and the number of signatures as one line of text. A list is sufficient.</p>
+    </div>
+    <div>
+      <h3>Recovery by guardians</h3>
+      <p>Wallets with social recovery explain themselves by cases: a lost key, a stolen key, a guardian that does not answer. Each case has its outcome in words, and a waiting time in which the owner can stop a false recovery.</p>
+      <p class="take">For Carbide Silica: the outcomes of a lost key and a stolen key, in words, with the names of this identity's authorities. All cases in view at one time.</p>
+    </div>
+    <div>
+      <h3>Security models</h3>
+      <p>Lampson's access control matrix is the standard form for "who can do what": a row for each party, a column for each action. Its known limit is that it is one moment and does not show change.</p>
+      <p class="take">For Carbide Silica: a table of the powers and their holders for the version in view, and a second form for the change through time.</p>
+    </div>
+    <div>
+      <h3>Vault designs</h3>
+      <p>The Bitcoin vault proposals explain a delayed withdrawal as a sequence on a time line: the request, the delay, and the moment that funds can move. In the delay, a recovery key can pull the funds back. The delay is the protection, and the explanations show its length.</p>
+      <p class="take">For Carbide Silica: say the delay of the lock in blocks and in time, and say what the authorities can do in that time.</p>
+    </div>
+    <div>
+      <h3>Operations dashboards</h3>
+      <p>Grafana's state timeline shows the state of each item as a horizontal band through time. The length of a bar is the time in that state, and equal states in sequence are one bar.</p>
+      <p class="take">For Carbide Silica: one lane for each power. An authority that did not change in 21 versions is one bar, not 42 rows.</p>
+    </div>
+    <div>
+      <h3>Personal histories</h3>
+      <p>Plaisant and others made LifeLines for records of persons: facets as lanes, periods as lines, and events as marks, with the full history on one screen. Their aim was that a person does not miss a part of the record.</p>
+      <p class="take">For Carbide Silica: the full life of the identity on one line of block heights, with a revocation as a mark that is hard to miss.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Real identities, drawn two ways</h2>
+  <p>Select an identity, then a form. The first form is the control drawing and the version line of the page today. The second is the proposal.</p>
+  <div class="bench">
+    <div class="picker" id="picker" role="group" aria-label="Identity"></div>
+    <div class="forms" id="forms" role="group" aria-label="Form"></div>
+    <p class="say" id="say"></p>
+    <div id="table"></div>
+    <div class="stage" id="stage"></div>
+    <p class="see" id="see"></p>
+  </div>
+  <p class="note">The lanes have one step for each version, and the line above them shows the true block of each version. In the lanes, a change of colour is a change of holder. In the lock lane, a solid bar is a lock and a striped bar is an unlock that waits for its height. A red band is a time when the identity was revoked.</p>
+</section>
+
+<section>
+  <h2>How the forms compare</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Question</th><th>Drawing, tabs and dots today</th><th>Table, outcomes and lanes</th></tr></thead>
+    <tbody>
+      <tr><td>Who holds each power</td><td>Boxes with lines</td><td>A table with one row for each power</td></tr>
+      <tr><td>What if the key is lost or stolen</td><td>One tab for each case</td><td>Two sentences, in view together</td></tr>
+      <tr><td>Is the identity its own authority</td><td>A dashed line</td><td>The sentence says that there is no remedy</td></tr>
+      <tr><td>Are the funds locked, and for how long</td><td>One line in the field list</td><td>A row of the table, in blocks and in time, and a lane</td></tr>
+      <tr><td>When did control change</td><td>Blue dots on a line</td><td>The place where a lane changes colour</td></tr>
+      <tr><td>Through which versions did one holder have a power</td><td>Two rows for each version in a list</td><td>The length of one bar</td></tr>
+      <tr><td>Was the identity revoked at some time</td><td>A red dot</td><td>A red band across the lanes</td></tr>
+      <tr><td>What did each update change</td><td>Words below the line, for one version</td><td>The lane that has a break at that tick</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Recommendation</h2>
+  <p>Replace the control drawing with a table of powers and two sentences of outcomes. Replace the version dots and the list of earlier authorities with lanes that have one step for each version.</p>
+  <ol class="steps">
+    <li><b>One sentence first.</b> "One key controls Cape Town@. Medina@ can revoke it and Davos@ can recover it. The funds are locked: an unlock takes 2,880 blocks, about 2 days."</li>
+    <li><b>A table of four powers.</b> Spend and update, revoke, recover, and the lock. Each row has the holder as a link and one line that says what the power does.</li>
+    <li><b>Two outcomes in words.</b> "If the key is lost" and "If the key is stolen", made from the rows of the table. An identity that is its own authority gets the words "no other identity can stop or recover it".</li>
+    <li><b>Lanes for the history.</b> One lane each for the keys, the revoke authority, the recover authority and the lock. Each version is one step, because the updates of an identity frequently come in groups of some days with years between them. A time line above the lanes shows the true block of each version, as the version line does now. A bar is the versions for which one value was in effect, and a selection of a step shows that version.</li>
+    <li><b>Revocation is a band.</b> The versions in which the identity was revoked have a red band across all lanes.</li>
+    <li><b>The lock has three states.</b> Locked with a delay, unlock requested with the height at which it takes effect, and no lock.</li>
+    <li><b>One step into the authorities.</b> For each authority that is a different identity, one line says if it shares a primary address with this identity. Carbide already finds shared addresses.</li>
+    <li><b>The evidence list keeps what is not in the lanes.</b> The registration, the funding candidates, the referral chain and the import provenance stay. The rows of unchanged earlier authorities go, because the lanes show them.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>What stays as Carbide gives it</h2>
+  <ul class="plain">
+    <li>The fields of each version, the status, and the steps between versions.</li>
+    <li>The evidence with its levels of confidence, and the funding candidates as candidates.</li>
+    <li>The referral chain and the payments of the registration.</li>
+    <li>The page for a tokenized identity, where a token holds the control.</li>
+    <li>The outcomes say what the protocol permits. They do not say who a person is or what a person will do.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Limits of this study</h2>
+  <ul class="plain">
+    <li>The 69 identities are those that received an output in 800 blocks. Identities that stake or trade are frequent in that set. The proportions for all identities can be different.</li>
+    <li>No identity in the sample has tokenized control, and one has more than one primary address.</li>
+    <li>The outcomes of the lock are from the description of Verus Vault. The study did not read the consensus code.</li>
+    <li>The first form on the page is a drawing by the rules of the app, not a screen capture.</li>
+    <li>The page does not test the forms with people.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sources</h2>
+  <ol class="src">
+    <li><a href="https://docs.safe.global/advanced/smart-account-concepts">Safe</a>. Smart account concepts: owners, threshold, modules and guards.</li>
+    <li><a href="https://iptf.ethereum.org/patterns/pattern-social-recovery/">Ethereum IPTF</a>. Pattern: social recovery.</li>
+    <li><a href="https://en.wikipedia.org/wiki/Access_control_matrix">Access control matrix</a>. Lampson, 1971.</li>
+    <li><a href="https://www.github.com/bitcoin/bips/blob/master/bip-0345.mediawiki">BIP 345</a>. OP_VAULT: delayed withdrawals with recovery.</li>
+    <li><a href="https://grafana.com/docs/grafana/next/visualizations/panels-visualizations/visualizations/state-timeline/">Grafana</a>. State timeline.</li>
+    <li><a href="https://www.cs.umd.edu/~ben/papers/Plaisant1996LifeLines.pdf">Plaisant, Milash, Rose, Widoff and Shneiderman</a>. LifeLines: Visualizing Personal Histories. CHI, 1996.</li>
+    <li><a href="https://medium.com/veruscoin/how-verus-tames-the-wild-private-key-3cc3b05c266">Verus</a>. How Verus Tames the Wild Private Key: revocation, recovery and Vault.</li>
+  </ol>
+</section>
+</main>
+
+<script>
+const DATA = {"tip":4337590,"ids":[{"title":"Two authorities and a lock","name":"Cape Town","versions":[{"h":2056174,"keys":"1 of 1: RDXEeR…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2056500,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"none","revoked":false,"control":true},{"h":2098624,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"none","revoked":false,"control":false},{"h":2099309,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1","revoked":false,"control":false},{"h":2159176,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"until 2159197","revoked":false,"control":false},{"h":2159285,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1440","revoked":false,"control":false},{"h":2796682,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"until 2798142","revoked":false,"control":false},{"h":2798433,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1440","revoked":false,"control":false},{"h":3163001,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"until 3164461","revoked":false,"control":false},{"h":3244712,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 720","revoked":false,"control":false},{"h":3252856,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"until 3253596","revoked":false,"control":false},{"h":3323815,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1400","revoked":false,"control":false},{"h":3323815,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1440","revoked":false,"control":false},{"h":3365565,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"until 3367025","revoked":false,"control":false},{"h":3377388,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1440","revoked":false,"control":false},{"h":3377955,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"until 3379415","revoked":false,"control":false},{"h":3379491,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1440","revoked":false,"control":false},{"h":3417076,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"until 3418536","revoked":false,"control":false},{"h":3479581,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1420","revoked":false,"control":false},{"h":3681396,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"until 3682836","revoked":false,"control":false},{"h":3894082,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1440","revoked":false,"control":false},{"h":3894082,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1440","revoked":false,"control":false},{"h":3894082,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 1440","revoked":false,"control":false},{"h":3894207,"keys":"1 of 1: RDXEeR…","revoke":"Medina","recover":"Davos","lock":"delay 2880","revoked":false,"control":false}],"now":{"keys":["RDXEeRiwdPZnUyZtULNhyppcuLFgCuZTwj"],"revoke":"Medina","recover":"Davos"},"say":"One key controls Cape Town@. Medina@ can revoke it and Davos@ can recover it. The funds are locked: an unlock takes 2,880 blocks, about 2 days.","sayToday":"One key controls Cape Town@. The holder of the key can spend funds and update the identity.","powers":[["Spend and update","1 of 1 key: RDXEeR…","Moves funds and changes the identity."],["Revoke","Medina@","Stops all use of the identity at once."],["Recover","Davos@","Sets new keys for a revoked identity."],["Lock","Delay of 2,880 blocks","Funds cannot move until 2 days after an unlock is requested."]],"lost":"Davos@ can set a new key, after a revocation.","stolen":"Medina@ can stop the identity, then Davos@ can set a new key. A thief must request an unlock and then wait about 2 days.","seeToday":"Three boxes and a row of dots. Most of the dots are grey: they are lock changes, and the drawing does not show the lock.","seeNew":"The two authorities are one bar each from the first version to the present. The lock lane shows each lock and each unlock."},{"title":"One authority","name":"czubaka","versions":[{"h":1999501,"keys":"1 of 1: RCvcMA…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":1999508,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"none","revoked":false,"control":true},{"h":2000082,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 2058353","revoked":false,"control":false},{"h":2058566,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 2113405","revoked":false,"control":false},{"h":2113542,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 2202047","revoked":false,"control":false},{"h":2202323,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 2346322","revoked":false,"control":false},{"h":2348101,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 2443132","revoked":false,"control":false},{"h":2451501,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 2588263","revoked":false,"control":false},{"h":2591459,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 2722000","revoked":false,"control":false},{"h":2722156,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 2812613","revoked":false,"control":false},{"h":2813699,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 2900100","revoked":false,"control":false},{"h":2901002,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 3045001","revoked":false,"control":false},{"h":3052823,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 3182600","revoked":false,"control":false},{"h":3187325,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 3316924","revoked":false,"control":false},{"h":3317108,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 3417924","revoked":false,"control":false},{"h":3428753,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 3518924","revoked":false,"control":false},{"h":3522987,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 3652585","revoked":false,"control":false},{"h":3655848,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 3786000","revoked":false,"control":false},{"h":3786193,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 3915787","revoked":false,"control":false},{"h":3922210,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 4051809","revoked":false,"control":false},{"h":4052178,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 4182000","revoked":false,"control":false},{"h":4186867,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 4245000","revoked":false,"control":false},{"h":4258671,"keys":"1 of 1: RCvcMA…","revoke":"chewbacca","recover":"chewbacca","lock":"until 4347950","revoked":false,"control":false}],"now":{"keys":["RCvcMAcVwnRhajkRwH3pPYothW3LtR8K54"],"revoke":"chewbacca","recover":"chewbacca"},"say":"One key controls czubaka@. chewbacca@ can revoke and recover it. The funds are locked until block 4,347,950, about 7 days from now.","sayToday":"One key controls czubaka@. The holder of the key can spend funds and update the identity.","powers":[["Spend and update","1 of 1 key: RCvcMA…","Moves funds and changes the identity."],["Revoke","chewbacca@","Stops all use of the identity at once."],["Recover","chewbacca@","Sets new keys for a revoked identity."],["Lock","Until block 4,347,950","Funds cannot move before that block."]],"lost":"chewbacca@ can set a new key, after a revocation.","stolen":"chewbacca@ can stop the identity, then chewbacca@ can set a new key. A thief cannot move funds before block 4,347,950.","seeToday":"The same three boxes, with one name in two of them.","seeNew":"One identity holds the two powers. The lanes show if that was true from the start."},{"title":"Its own authority","name":"Verus Coin Foundation","versions":[{"h":800232,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2545944,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2549386,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2549960,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2552503,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2559824,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2559839,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2572240,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2580855,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2580857,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2580933,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2582870,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2588620,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2588652,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":2588672,"keys":"1 of 1: REpxm9…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false}],"now":{"keys":["REpxm9bCLMiHRNVPA9unPBWixie7uHFA5C"],"revoke":"self","recover":"self"},"say":"One key controls Verus Coin Foundation@. It is its own authority: no other identity can revoke or recover it.","sayToday":"One key controls Verus Coin Foundation@. The holder of the key can spend funds and update the identity.","powers":[["Spend and update","1 of 1 key: REpxm9…","Moves funds and changes the identity."],["Revoke","The identity itself","Stops all use of the identity at once."],["Recover","The identity itself","Sets new keys for a revoked identity."],["Lock","None","Funds can move at once."]],"lost":"No other identity can recover it. The funds are lost.","stolen":"No other identity can stop the thief.","seeToday":"Two dashed lines say that the identity holds the two powers itself. The page does not say what follows from that.","seeNew":"The sentence and the two outcomes say it in words: no other identity can stop or recover it."},{"title":"Revoked and recovered","name":"hodl","versions":[{"h":3491408,"keys":"1 of 1: RRAUfD…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":false},{"h":3497606,"keys":"1 of 1: RRAUfD…","revoke":"pk","recover":"6","lock":"none","revoked":false,"control":true},{"h":3497608,"keys":"1 of 1: RRAUfD…","revoke":"pk","recover":"6","lock":"delay 1440","revoked":false,"control":false},{"h":3497613,"keys":"1 of 1: RGcdKY…","revoke":"pk","recover":"6","lock":"delay 1440","revoked":false,"control":true},{"h":3497716,"keys":"1 of 1: RGNvwF…","revoke":"pk","recover":"6","lock":"delay 1440","revoked":false,"control":true},{"h":3497722,"keys":"1 of 1: RGNvwF…","revoke":"pk","recover":"6","lock":"none","revoked":true,"control":false},{"h":3497731,"keys":"1 of 1: RRVCri…","revoke":"self","recover":"self","lock":"none","revoked":false,"control":true},{"h":3497741,"keys":"1 of 1: RRVCri…","revoke":"pk","recover":"6","lock":"none","revoked":false,"control":true},{"h":3497753,"keys":"1 of 1: RRVCri…","revoke":"pk","recover":"6","lock":"delay 1200","revoked":false,"control":false},{"h":3497767,"keys":"1 of 1: RGoAvw…","revoke":"pk","recover":"6","lock":"delay 1200","revoked":false,"control":true},{"h":3497780,"keys":"1 of 1: RGoAvw…","revoke":"6","recover":"6","lock":"delay 1200","revoked":false,"control":true},{"h":3497789,"keys":"1 of 1: RGoAvw…","revoke":"pk","recover":"6","lock":"delay 1200","revoked":false,"control":true},{"h":3497813,"keys":"1 of 1: RG6r4w…","revoke":"pk","recover":"6","lock":"delay 1200","revoked":false,"control":true},{"h":3497820,"keys":"1 of 1: REJx64…","revoke":"pk","recover":"6","lock":"delay 1200","revoked":false,"control":true},{"h":3497824,"keys":"1 of 1: RTWcX2…","revoke":"pk","recover":"6","lock":"delay 1200","revoked":false,"control":true},{"h":3497876,"keys":"1 of 1: RTWcX2…","revoke":"pk","recover":"6","lock":"none","revoked":true,"control":false},{"h":3498012,"keys":"1 of 1: RTWcX2…","revoke":"pk","recover":"6","lock":"none","revoked":false,"control":false},{"h":3498020,"keys":"1 of 1: RTWcX2…","revoke":"pk","recover":"6","lock":"delay 50000","revoked":false,"control":false},{"h":3498033,"keys":"1 of 1: RVEZdC…","revoke":"pk","recover":"6","lock":"delay 50000","revoked":false,"control":true},{"h":3498045,"keys":"1 of 1: RVEZdC…","revoke":"pk","recover":"6","lock":"until 3548065","revoked":false,"control":false},{"h":3498077,"keys":"1 of 1: RVEZdC…","revoke":"pk","recover":"6","lock":"none","revoked":true,"control":false},{"h":3499229,"keys":"1 of 1: RLkVby…","revoke":"pk","recover":"6","lock":"none","revoked":false,"control":true},{"h":3499234,"keys":"1 of 1: RLkVby…","revoke":"pk","recover":"6","lock":"delay 10","revoked":false,"control":false},{"h":3499265,"keys":"1 of 1: RTtRmj…","revoke":"pk","recover":"6","lock":"delay 10","revoked":false,"control":true},{"h":3500033,"keys":"1 of 1: RTtRmj…","revoke":"pk","recover":"6","lock":"until 3500063","revoked":false,"control":false},{"h":3500320,"keys":"1 of 1: RTtRmj…","revoke":"pk","recover":"6","lock":"delay 500","revoked":false,"control":false},{"h":3500355,"keys":"1 of 1: RTtRmj…","revoke":"pk","recover":"6","lock":"none","revoked":true,"control":false},{"h":3500373,"keys":"1 of 1: RPqWmn…","revoke":"pk","recover":"6","lock":"none","revoked":false,"control":true},{"h":3500410,"keys":"1 of 1: RPqWmn…","revoke":"pk","recover":"6","lock":"delay 14400","revoked":false,"control":false},{"h":3500413,"keys":"1 of 1: RPqWmn…","revoke":"pk","recover":"6","lock":"none","revoked":true,"control":false},{"h":3500415,"keys":"1 of 1: RPqWmn…","revoke":"pk","recover":"6","lock":"none","revoked":false,"control":false},{"h":3500419,"keys":"1 of 1: RPqWmn…","revoke":"pk","recover":"6","lock":"delay 49980","revoked":false,"control":false},{"h":3501446,"keys":"1 of 1: RMyPpE…","revoke":"pk","recover":"6","lock":"delay 49980","revoked":false,"control":true}],"now":{"keys":["RMyPpEVQQYz9Rfngvxth1NBGuwaJg3ZSwV"],"revoke":"pk","recover":"6"},"say":"One key controls hodl@. pk@ can revoke it and 6@ can recover it. The funds are locked: an unlock takes 49,980 blocks, about 35 days.","sayToday":"One key controls hodl@. The holder of the key can spend funds and update the identity.","powers":[["Spend and update","1 of 1 key: RMyPpE…","Moves funds and changes the identity."],["Revoke","pk@","Stops all use of the identity at once."],["Recover","6@","Sets new keys for a revoked identity."],["Lock","Delay of 49,980 blocks","Funds cannot move until 35 days after an unlock is requested."]],"lost":"6@ can set a new key, after a revocation.","stolen":"pk@ can stop the identity, then 6@ can set a new key. A thief must request an unlock and then wait about 35 days.","seeToday":"Red dots among the others. The time that the identity was revoked is not shown.","seeNew":"The red band is the time that the identity was revoked. The lanes show what changed at the recovery."},{"title":"Locked to a height","name":"Hydrogen","versions":[{"h":1797928,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"none","revoked":false,"control":false},{"h":1798402,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"none","revoked":true,"control":false},{"h":1798404,"keys":"1 of 1: RYNbZ5…","revoke":"Helium","recover":"Helium","lock":"none","revoked":false,"control":true},{"h":1798406,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"none","revoked":false,"control":true},{"h":1798430,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"none","revoked":false,"control":false},{"h":1799470,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"none","revoked":true,"control":false},{"h":1799476,"keys":"1 of 1: RL9vTh…","revoke":"Helium","recover":"Helium","lock":"none","revoked":false,"control":true},{"h":1799488,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"none","revoked":false,"control":true},{"h":1799609,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"none","revoked":true,"control":false},{"h":1799612,"keys":"1 of 1: RL9vTh…","revoke":"Helium","recover":"Helium","lock":"none","revoked":false,"control":true},{"h":1799625,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"none","revoked":false,"control":true},{"h":1800823,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"until 2525600","revoked":false,"control":false},{"h":2389381,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"until 2525600","revoked":false,"control":false},{"h":2525911,"keys":"1 of 1: RYY6ZQ…","revoke":"Helium","recover":"Helium","lock":"until 5000000","revoked":false,"control":false}],"now":{"keys":["RYY6ZQQSnJntJavJ5dGmvVssfCbUuqdoSU"],"revoke":"Helium","recover":"Helium"},"say":"One key controls Hydrogen@. Helium@ can revoke and recover it. The funds are locked until block 5,000,000, about 1.3 years from now.","sayToday":"One key controls Hydrogen@. The holder of the key can spend funds and update the identity.","powers":[["Spend and update","1 of 1 key: RYY6ZQ…","Moves funds and changes the identity."],["Revoke","Helium@","Stops all use of the identity at once."],["Recover","Helium@","Sets new keys for a revoked identity."],["Lock","Until block 5,000,000","Funds cannot move before that block."]],"lost":"Helium@ can set a new key, after a revocation.","stolen":"Helium@ can stop the identity, then Helium@ can set a new key. A thief cannot move funds before block 5,000,000.","seeToday":"The drawing is the same as for an identity with no lock.","seeNew":"The lock is a row of the table and a lane. The funds cannot move before a set block."}],"patterns":[["One identity revokes, a different one recovers",30],["One identity revokes and recovers",22],["The identity is its own authority",16],["Recovers itself, a different identity revokes",1]],"changes":[["The lock",241],["The keys",41],["The revoke authority",35],["Content",33],["The recover authority",32],["Nothing of these",13],["The private address",10]],"figs":[["68 of 69","identities have one key"],["16 of 69","are their own authority"],["33 of 69","have a lock now"],["241 of 334","updates changed the lock"],["12 of 69","were revoked at some time"]]};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = id => document.getElementById(id);
+const PAL = ["var(--accent)", "var(--staked)", "var(--mined)", "var(--ok)", "var(--muted)"];
+
+function bars(rows, label) {
+  const W = 760, max = Math.max(...rows.map(r => r[1])); let y = 4, out = "";
+  for (const [name, n] of rows) {
+    out += `<text x="0" y="${y + 13}" font-size="13" fill="currentColor">${esc(name)}</text><rect x="300" y="${y + 2}" width="${(n / max * 380).toFixed(1)}" height="14" fill="var(--accent)" opacity="0.85"/><text x="${(306 + n / max * 380).toFixed(1)}" y="${y + 14}" font-size="12.5" fill="currentColor">${n}</text>`;
+    y += 24;
+  }
+  return `<svg viewBox="0 0 ${W} ${y}" role="img" aria-label="${label}">${out}</svg>`;
+}
+
+/* The page today: a key, the identity and its two authorities, then one dot for each version. */
+function today(d) {
+  const W = 760; let out = "";
+  const box = (x, y, w, h, a, b, strong) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${strong === 2 ? h / 2 : 7}" fill="${strong ? "var(--accent-soft)" : "none"}" stroke="${strong ? "var(--accent)" : "var(--muted)"}" stroke-width="${strong ? 1.6 : 1}"/><text x="${x + w / 2}" y="${y + (b ? h / 2 - 2 : h / 2 + 4)}" font-size="12.5" font-weight="600" text-anchor="middle" fill="currentColor">${esc(a)}</text>` + (b ? `<text x="${x + w / 2}" y="${y + h / 2 + 14}" font-size="11" text-anchor="middle" fill="var(--muted)">${esc(b)}</text>` : "");
+  out += box(20, 78, 150, 28, d.now.keys[0].slice(0, 6) + "…", "", 2) + `<line x1="170" y1="92" x2="300" y2="92" stroke="var(--accent)" stroke-width="2"/>` + box(300, 66, 150, 52, d.name + "@", `${d.now.keys.length} ${d.now.keys.length === 1 ? "key" : "keys"}`, 1);
+  const self = x => x === "self";
+  out += `<line x1="450" y1="92" x2="570" y2="40" stroke="var(--muted)"${self(d.now.revoke) ? ' stroke-dasharray="5 4"' : ""}/><line x1="450" y1="92" x2="570" y2="144" stroke="var(--muted)"${self(d.now.recover) ? ' stroke-dasharray="5 4"' : ""}/>`;
+  out += box(570, 18, 170, 44, self(d.now.revoke) ? d.name + "@" : d.now.revoke + "@", "can revoke", 0) + box(570, 122, 170, 44, self(d.now.recover) ? d.name + "@" : d.now.recover + "@", "can recover", 0);
+  const y = 214, n = d.versions.length;
+  out += `<line x1="20" y1="${y + 18}" x2="${W - 20}" y2="${y + 18}" stroke="var(--muted)"/>`;
+  d.versions.forEach((v, i) => { const x = n === 1 ? 30 : 30 + i / (n - 1) * (W - 60); out += `<circle cx="${x.toFixed(1)}" cy="${y}" r="5" fill="${v.revoked ? "var(--warn)" : v.control ? "var(--accent)" : "var(--muted)"}"/>`; });
+  out += `<text x="20" y="${y + 36}" font-size="11" fill="var(--muted)">version 1</text><text x="${W - 20}" y="${y + 36}" font-size="11" text-anchor="end" fill="var(--muted)">version ${n}</text>`;
+  return `<svg viewBox="0 0 ${W} 258" role="img" aria-label="The control drawing and the version marks of the page today">${out}</svg>`;
+}
+
+/* The proposal: one lane for each power, one step for each version, and a time line above with the true block of each version. */
+function lanes(d) {
+  const W = 760, left = 96, right = W - 12, n = d.versions.length, h0 = d.versions[0].h, h1 = DATA.tip;
+  const tx = h => left + (h - h0) / Math.max(h1 - h0, 1) * (right - left), sx = i => left + i / n * (right - left);
+  const names = [["keys", "Keys"], ["revoke", "Revoke"], ["recover", "Recover"], ["lock", "Lock"]], top = 44;
+  let out = `<defs><pattern id="wait" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="var(--accent)" stroke-width="2.5"/></pattern></defs>`;
+  out += `<text x="0" y="14" font-size="12.5" fill="var(--muted)">Time</text><line x1="${left}" y1="10" x2="${right}" y2="10" stroke="var(--muted)"/>`;
+  d.versions.forEach((v, i) => { out += `<line x1="${tx(v.h).toFixed(1)}" y1="5" x2="${tx(v.h).toFixed(1)}" y2="15" stroke="currentColor"/><line x1="${tx(v.h).toFixed(1)}" y1="15" x2="${sx(i).toFixed(1)}" y2="${top - 4}" stroke="var(--muted)" stroke-width="0.6" opacity="0.7"/>`; });
+  names.forEach(([key, label], row) => {
+    const y = top + row * 30;
+    out += `<text x="0" y="${y + 14}" font-size="12.5" fill="currentColor">${label}</text><rect x="${left}" y="${y}" width="${right - left}" height="20" fill="var(--line)" opacity="0.35"/>`;
+    const seen = []; let start = 0;
+    for (let i = 1; i <= n; i++) {
+      const a = d.versions[start][key], b = i < n ? d.versions[i][key] : null;
+      if (b !== a) {
+        const x0 = sx(start), x1 = sx(i);
+        if (key === "lock") {
+          if (a !== "none") out += `<rect x="${x0.toFixed(1)}" y="${y + 2}" width="${Math.max(x1 - x0 - 1, 1.5).toFixed(1)}" height="16" fill="${a.startsWith("until") ? "url(#wait)" : "var(--accent)"}" opacity="0.9"><title>${esc(a)}</title></rect>`;
+        } else {
+          if (!seen.includes(a)) seen.push(a);
+          out += `<rect x="${x0.toFixed(1)}" y="${y + 2}" width="${Math.max(x1 - x0 - 1, 1.5).toFixed(1)}" height="16" fill="${PAL[Math.min(seen.indexOf(a), PAL.length - 1)]}" opacity="0.85"><title>${esc(a)}</title></rect>`;
+          if (x1 - x0 > a.length * 6.4 + 12) out += `<text x="${(x0 + 6).toFixed(1)}" y="${y + 14}" font-size="11.5" fill="var(--surface)" font-weight="600">${esc(a)}</text>`;
+        }
+        start = i;
+      }
+    }
+  });
+  d.versions.forEach((v, i) => { if (v.revoked) out += `<rect x="${sx(i).toFixed(1)}" y="${top - 3}" width="${(sx(i + 1) - sx(i)).toFixed(1)}" height="${4 * 30 - 4}" fill="var(--warn)" opacity="0.3"/>`; });
+  for (let i = 1; i < n; i++) out += `<line x1="${sx(i).toFixed(1)}" y1="${top}" x2="${sx(i).toFixed(1)}" y2="${top + 110}" stroke="var(--surface)" stroke-width="1"/>`;
+  out += `<text x="${left}" y="${top + 132}" font-size="11" fill="var(--muted)">version 1 · block ${h0.toLocaleString("en-US")}</text><text x="${right}" y="${top + 132}" font-size="11" text-anchor="end" fill="var(--muted)">version ${n} · in effect now</text>`;
+  return `<svg viewBox="0 0 ${W} ${top + 140}" role="img" aria-label="The keys, the authorities and the lock of the identity at each version">${out}</svg>`;
+}
+function powers(d) {
+  return `<div class="tablewrap"><table class="powers"><thead><tr><th>Power</th><th>Held by</th><th>What it does</th></tr></thead><tbody>` + d.powers.map(p => `<tr><td>${esc(p[0])}</td><td>${esc(p[1])}</td><td>${esc(p[2])}</td></tr>`).join("") + `</tbody></table></div><p class="see" style="color:var(--fg)"><b>If the key is lost:</b> ${esc(d.lost)}<br><b>If the key is stolen:</b> ${esc(d.stolen)}</p>`;
+}
+
+const FORMS = [["today", "Drawing and dots today"], ["new", "Proposal"]];
+const state = { i: 0, form: "new" };
+function render() {
+  const d = DATA.ids[state.i];
+  $("picker").innerHTML = "Identity: " + DATA.ids.map((x, i) => `<button type="button" data-i="${i}" aria-pressed="${i === state.i}">${esc(x.title)}</button>`).join("");
+  $("forms").innerHTML = "Form: " + FORMS.map(f => `<button type="button" data-form="${f[0]}" aria-pressed="${f[0] === state.form}">${f[1]}</button>`).join("");
+  $("say").textContent = state.form === "new" ? d.say : d.sayToday;
+  $("table").innerHTML = state.form === "new" ? powers(d) : "";
+  $("stage").innerHTML = state.form === "new" ? lanes(d) : today(d);
+  $("see").textContent = state.form === "new" ? d.seeNew : d.seeToday;
+}
+function start() {
+  $("figs").innerHTML = DATA.figs.map(f => `<div><b>${f[0]}</b><span>${f[1]}</span></div>`).join("");
+  $("patterns").innerHTML = bars(DATA.patterns, "Identities by who can revoke and recover");
+  $("changes").innerHTML = bars(DATA.changes, "Updates by the part that changed");
+  $("picker").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.i = Number(b.dataset.i); render(); } });
+  $("forms").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.form = b.dataset.form; render(); } });
+  render();
+}
+start();
+</script>

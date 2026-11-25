@@ -1,183 +1,191 @@
 import CarbideCore
 import SwiftUI
 
-/// Who holds each of an identity's three powers: spending, revoking and recovering.
+/// Who holds each power of an identity, and what follows when its key is lost or stolen.
 ///
-/// The scenarios show what the powers are for, using this identity's real keys and
-/// authorities. An identity that is its own authority is called out, because that is the
+/// The control of an identity has four parts: the keys that spend and update, the identity
+/// that can revoke, the identity that can recover, and the lock on the funds. They are a
+/// table, because each identity has the same four. The two outcomes are in words and in
+/// view together. An identity that is its own authority is called out, because that is the
 /// difference between a recoverable identity and one that is only as safe as its keys.
 struct IdentityControlCard: View {
     let identity: IdentityState
 
     @Environment(AppModel.self) private var model
     @AppStorage(DisplayKey.showsNames) private var showsNames = true
-    @State private var scenario = Scenario.everyday
-
-    enum Scenario: String, CaseIterable, Identifiable {
-        case everyday = "Everyday use"
-        case stolen = "Stolen keys"
-        case recovery = "Recovery"
-        var id: String { rawValue }
-    }
 
     var body: some View {
+        let _ = showsNames
         Card("Control", trailing: "at the viewed version") {
-            Picker("Scenario", selection: $scenario) {
-                ForEach(Scenario.allCases) { Text($0.rawValue).tag($0) }
+            Text(sentence)
+                .font(.title3)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 7) {
+                GridRow {
+                    Text("Power")
+                    Text("Held by")
+                    Text("What it does")
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                Divider()
+                GridRow {
+                    Text("Spend and update").fontWeight(.semibold)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(keys.count <= 1 ? "1 key" : "\(required) of \(keys.count) keys")
+                        ForEach(keys, id: \.self) { key in
+                            RouteLink(text: key, route: .holder(key))
+                        }
+                    }
+                    Text("Moves funds and changes the identity.").foregroundStyle(.secondary)
+                }
+                Divider()
+                GridRow {
+                    Text("Revoke").fontWeight(.semibold)
+                    holder(identity.revocationAuthority, isSelf: selfRevoke)
+                    Text("Stops all use of the identity at once.").foregroundStyle(.secondary)
+                }
+                Divider()
+                GridRow {
+                    Text("Recover").fontWeight(.semibold)
+                    holder(identity.recoveryAuthority, isSelf: selfRecover)
+                    Text("Sets new keys for a revoked identity.").foregroundStyle(.secondary)
+                }
+                Divider()
+                GridRow {
+                    Text("Lock").fontWeight(.semibold)
+                    Text(lockHolder)
+                    Text(lockEffect).foregroundStyle(.secondary)
+                }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 420)
-
-            Canvas { context, size in
-                draw(context, size)
+            if identity.revoked {
+                Note(text: "This version is revoked. The keys cannot spend or sign until a recovery.", warning: true)
             }
-            .frame(height: 230)
-            .accessibilityLabel(sentence)
-
-            Note(text: sentence, warning: warning).font(.callout)
-            Text("Rounded ends are the primary addresses. The boxes on the right are the identities that can revoke and recover. A dashed line means that the identity holds that power itself.")
-                .font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                outcome("If the key is lost", lost, warning: selfRecover)
+                outcome("If the key is stolen", stolen, warning: selfRevoke)
+            }
         }
     }
 
     private var name: String { identity.name }
     private var keys: [String] { identity.primaryAddresses }
     private var required: Int { Int(identity.minimumSignatures ?? 1) }
-    private var selfRevoke: Bool {
-        identity.revocationAuthority == nil || identity.revocationIsSelf
-    }
-    private var selfRecover: Bool {
-        identity.recoveryAuthority == nil || identity.recoveryIsSelf
-    }
+    private var selfRevoke: Bool { identity.revocationAuthority == nil || identity.revocationIsSelf }
+    private var selfRecover: Bool { identity.recoveryAuthority == nil || identity.recoveryIsSelf }
 
     private func display(_ id: String?) -> String {
         guard let id else { return "itself" }
         return model.displayID(id)
     }
 
-    private var warning: Bool {
-        (scenario == .stolen && selfRevoke) || (scenario == .recovery && selfRecover)
+    @ViewBuilder
+    private func holder(_ id: String?, isSelf: Bool) -> some View {
+        if !isSelf, let id {
+            RouteLink(text: id, route: .identity(name: id))
+        } else {
+            Text("The identity itself")
+        }
+    }
+
+    private func outcome(_ title: String, _ text: String, warning: Bool) -> some View {
+        (Text(title + ": ").fontWeight(.semibold) + Text(text))
+            .foregroundStyle(warning ? Color.orange : Color.primary)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+    }
+
+    // MARK: Words
+
+    /// A number of blocks as a length of time, at one block for each minute.
+    static func span(blocks: UInt64) -> String {
+        switch blocks {
+        case ..<120: "\(blocks) minutes"
+        case ..<2880: "\(Int((Double(blocks) / 60).rounded())) hours"
+        case ..<86_400: "\(Int((Double(blocks) / 1440).rounded())) days"
+        default: "\((Double(blocks) / 525_600).formatted(.number.precision(.fractionLength(0...1)))) years"
+        }
+    }
+
+    private var lockHolder: String {
+        switch identity.timelock {
+        case .unlocked: "None"
+        case .delay(let blocks): "Delay of \(Format.integer(blocks)) blocks"
+        case .unlocksAt(let height): "Until block \(Format.integer(height))"
+        }
+    }
+
+    private var lockEffect: String {
+        switch identity.timelock {
+        case .unlocked: "Funds can move at once."
+        case .delay(let blocks):
+            "Funds cannot move until about \(Self.span(blocks: blocks)) after an unlock is requested."
+        case .unlocksAt: "Funds cannot move before that block."
+        }
     }
 
     private var sentence: String {
-        switch scenario {
-        case .everyday:
-            if keys.count <= 1 { return "One key controls \(name). The holder of the key can spend funds and update the identity." }
-            return "\(required) of the \(keys.count) keys must sign to spend funds or update \(name)."
-        case .stolen:
-            if selfRevoke {
-                return "\(name) is its own revocation authority. A person with the keys can also revoke. "
-                    + "No other identity can stop stolen keys."
-            }
-            return "\(display(identity.revocationAuthority)) can revoke \(name). After revocation, "
-                + "the stolen keys cannot spend or sign."
-        case .recovery:
-            if selfRecover {
-                return "\(name) is its own recovery authority. If the keys are lost, no other identity "
-                    + "can restore control."
-            }
-            return "\(display(identity.recoveryAuthority)) can assign new keys. \(name) keeps its "
-                + "name, its funds and its history."
+        var parts: [String] = [
+            keys.count <= 1
+                ? "One key controls \(name)."
+                : "\(required) of the \(keys.count) keys must sign to control \(name)."
+        ]
+        if selfRevoke, selfRecover {
+            parts.append("It is its own authority: no other identity can revoke or recover it.")
+        } else if !selfRevoke, !selfRecover, identity.revocationAuthority == identity.recoveryAuthority {
+            parts.append("\(display(identity.revocationAuthority)) can revoke and recover it.")
+        } else {
+            let revoke = selfRevoke ? "Only its own keys can revoke it" : "\(display(identity.revocationAuthority)) can revoke it"
+            let recover = selfRecover ? "no other identity can recover it" : "\(display(identity.recoveryAuthority)) can recover it"
+            parts.append("\(revoke) and \(recover).")
         }
+        switch identity.timelock {
+        case .unlocked: break
+        case .delay(let blocks):
+            parts.append(
+                "The funds are locked: an unlock takes \(Format.integer(blocks)) blocks, about \(Self.span(blocks: blocks)).")
+        case .unlocksAt(let height):
+            parts.append("The funds are locked until block \(Format.integer(height)).")
+        }
+        return parts.joined(separator: " ")
     }
 
-    private func draw(_ context: GraphicsContext, _ size: CGSize) {
-        let centre = CGRect(x: size.width / 2 - 85, y: size.height / 2 - 34, width: 170, height: 68)
-        let shownKeys = Array(keys.prefix(4))
-        let keyX: CGFloat = 0
-        let keyWidth = min(size.width * 0.24, 200)
-        let sideWidth = min(size.width * 0.26, 210)
-        let sideX = size.width - sideWidth
-
-        // Keys on the left.
-        for (index, key) in shownKeys.enumerated() {
-            let y = size.height * (CGFloat(index) + 0.5) / CGFloat(max(shownKeys.count, 1))
-            let box = CGRect(x: keyX, y: y - 17, width: keyWidth, height: 34)
-            let signing = scenario == .everyday && index < required
-            let color: Color =
-                switch scenario {
-                case .everyday: signing ? .accentColor : .secondary
-                case .stolen: .red
-                case .recovery: selfRecover ? .secondary : .green
-                }
-            line(context, from: CGPoint(x: box.maxX, y: y), to: CGPoint(x: centre.minX, y: centre.midY),
-                 color: color, strong: scenario != .everyday || signing, dashed: scenario == .stolen)
-            node(context, box, color: color, strong: scenario != .everyday || signing, capsule: true,
-                 title: scenario == .stolen ? "Stolen key" : scenario == .recovery && !selfRecover ? "New key" : Format.short(key, head: 6, tail: 5),
-                 subtitle: nil)
-        }
-        if keys.count > shownKeys.count {
-            context.draw(
-                Text("+ \(keys.count - shownKeys.count) more keys").font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: keyX + keyWidth / 2, y: size.height - 4), anchor: .bottom)
-        }
-
-        // Authorities on the right.
-        let revoke = CGRect(x: sideX, y: size.height * 0.25 - 26, width: sideWidth, height: 52)
-        let recover = CGRect(x: sideX, y: size.height * 0.75 - 26, width: sideWidth, height: 52)
-        let revokeActive = scenario == .stolen
-        let recoverActive = scenario == .recovery
-        line(context, from: CGPoint(x: centre.maxX, y: centre.midY), to: CGPoint(x: revoke.minX, y: revoke.midY),
-             color: revokeActive ? .red : .secondary, strong: revokeActive, dashed: selfRevoke)
-        line(context, from: CGPoint(x: centre.maxX, y: centre.midY), to: CGPoint(x: recover.minX, y: recover.midY),
-             color: recoverActive ? .green : .secondary, strong: recoverActive, dashed: selfRecover)
-        node(context, revoke, color: revokeActive ? .red : .secondary, strong: revokeActive, capsule: false,
-             title: selfRevoke ? "Itself" : display(identity.revocationAuthority), subtitle: "can revoke",
-             dashed: selfRevoke)
-        node(context, recover, color: recoverActive ? .green : .secondary, strong: recoverActive, capsule: false,
-             title: selfRecover ? "Itself" : display(identity.recoveryAuthority), subtitle: "can recover",
-             dashed: selfRecover)
-
-        // The identity.
-        let state: (String, Color) =
-            switch scenario {
-            case .everyday: (keys.count <= 1 ? "1 key" : "\(required) of \(keys.count) keys", .accentColor)
-            case .stolen: selfRevoke ? ("No external revoker", .orange) : ("Revoked · frozen", .red)
-            case .recovery: selfRecover ? ("No external recovery", .orange) : ("Active again", .green)
-            }
-        let shape = Path(roundedRect: centre, cornerRadius: 10)
-        context.fill(shape, with: .color(state.1.opacity(0.14)))
-        context.stroke(shape, with: .color(state.1), lineWidth: 2.4)
-        context.draw(
-            Text(Format.short(name, head: 14, tail: 6)).font(.headline),
-            at: CGPoint(x: centre.midX, y: centre.midY - 9), anchor: .center)
-        context.draw(
-            Text(state.0).font(.caption.weight(.semibold)).foregroundStyle(state.1),
-            at: CGPoint(x: centre.midX, y: centre.midY + 12), anchor: .center)
+    private var lost: String {
+        selfRecover
+            ? "No other identity can set new keys. The identity and its funds are lost."
+            : "\(display(identity.recoveryAuthority)) can set new keys after a revocation. \(name) keeps its name, its funds and its history."
     }
 
-    private func line(_ context: GraphicsContext, from: CGPoint, to: CGPoint, color: Color, strong: Bool, dashed: Bool) {
-        context.stroke(
-            Path { path in
-                path.move(to: from)
-                path.addLine(to: to)
-            }, with: .color(color.opacity(strong ? 1 : 0.5)),
-            style: StrokeStyle(lineWidth: strong ? 2.6 : 1.2, dash: dashed ? [5, 4] : []))
-    }
-
-    private func node(
-        _ context: GraphicsContext, _ box: CGRect, color: Color, strong: Bool, capsule: Bool,
-        title: String, subtitle: String?, dashed: Bool = false
-    ) {
-        let shape = Path(roundedRect: box, cornerRadius: capsule ? box.height / 2 : 8)
-        context.fill(shape, with: .color(Color(nsColor: .windowBackgroundColor)))
-        context.stroke(
-            shape, with: .color(color.opacity(strong ? 1 : 0.6)),
-            style: StrokeStyle(lineWidth: strong ? 2.2 : 1.4, dash: dashed ? [5, 4] : []))
-        context.draw(
-            Text(title).font(.callout.weight(.semibold)).foregroundStyle(strong ? color : .primary),
-            at: CGPoint(x: box.midX, y: box.midY - (subtitle == nil ? 0 : 8)), anchor: .center)
-        if let subtitle {
-            context.draw(
-                Text(subtitle).font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: box.midX, y: box.midY + 10), anchor: .center)
+    private var stolen: String {
+        var text: String
+        if selfRevoke, selfRecover {
+            text = "No other identity can stop the thief."
+        } else {
+            text = selfRevoke
+                ? "Only a holder of the keys can revoke \(name)"
+                : "\(display(identity.revocationAuthority)) can revoke \(name), and the stolen keys then cannot spend or sign"
+            text += selfRecover ? ". No other identity can recover it." : ". Then \(display(identity.recoveryAuthority)) can set new keys."
         }
+        switch identity.timelock {
+        case .unlocked: break
+        case .delay(let blocks):
+            text += " A thief must request an unlock and then wait about \(Self.span(blocks: blocks)) to move funds."
+        case .unlocksAt(let height):
+            text += " A thief cannot move funds before block \(Format.integer(height))."
+        }
+        return text
     }
 }
 
-/// The versions of an identity on a line of block heights. Each mark is one update.
-/// Select a mark to view the identity as it was after that update.
+/// The history of an identity as lanes: the keys, the revoke authority, the recover
+/// authority and the lock, with one step for each version.
+///
+/// The updates of an identity frequently come in groups of some days with years between
+/// them. Thus the lanes give each version the same width, and a time line above shows the
+/// true block of each one. A bar is the versions for which one value was in effect: an
+/// authority that did not change is one bar. A red band is a revoked version. Select a
+/// step to view the identity as it was after that update.
 struct VersionStrip: View {
     let versions: [IdentityState]
     let tip: UInt64?
@@ -185,38 +193,51 @@ struct VersionStrip: View {
 
     @Environment(AppModel.self) private var model
     @AppStorage(DisplayKey.showsDates) private var showsDates = false
+    @AppStorage(DisplayKey.showsNames) private var showsNames = true
+
+    private let labelWidth: CGFloat = 72
+    private let timeHeight: CGFloat = 34
+    private let laneHeight: CGFloat = 24
+    private static let lanes = ["Keys", "Revoke", "Recover", "Lock"]
+    private static let palette: [Color] = [.accentColor, .purple, .orange, .green, .gray]
 
     var body: some View {
+        let _ = showsNames
         VStack(alignment: .leading, spacing: 6) {
-            GeometryReader { geometry in
-                let width = geometry.size.width
-                let exact = versions.map { x($0.height, width) }
-                let marks = Self.spread(exact, width: width)
-                ZStack(alignment: .topLeading) {
-                    // The axis of block heights, a tick at each update's real height, and a
-                    // leader from the tick to its mark when marks were spread apart.
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.35))
-                        .frame(width: width, height: 2)
-                        .offset(y: 37)
-                    Path { path in
-                        for (real, shown) in zip(exact, marks) {
-                            path.move(to: CGPoint(x: real, y: 32))
-                            path.addLine(to: CGPoint(x: real, y: 42))
-                            if abs(real - shown) > 1 {
-                                path.move(to: CGPoint(x: real, y: 32))
-                                path.addLine(to: CGPoint(x: shown, y: 24))
-                            }
-                        }
-                    }
-                    .stroke(Color.secondary.opacity(0.6), lineWidth: 1)
-                    ForEach(Array(versions.enumerated()), id: \.offset) { index, version in
-                        mark(index, version)
-                            .position(x: marks[index], y: 12)
+            HStack(alignment: .top, spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Time").frame(height: timeHeight, alignment: .top)
+                    ForEach(Self.lanes, id: \.self) { lane in
+                        Text(lane).frame(height: laneHeight)
                     }
                 }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(width: labelWidth, alignment: .leading)
+                ZStack(alignment: .topLeading) {
+                    Canvas { context, size in
+                        draw(context, size)
+                    }
+                    .accessibilityHidden(true)
+                    // One button for each version: the selection, the help text and the
+                    // accessible name.
+                    HStack(spacing: 0) {
+                        ForEach(Array(versions.enumerated()), id: \.offset) { index, version in
+                            Button {
+                                selection = index
+                            } label: {
+                                Color.clear.contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .frame(maxWidth: .infinity)
+                            .help("Version \(index + 1): \(heightAndTime(version.height, version.time, model: model)). \(version.changes.joined(separator: ". "))")
+                            .accessibilityLabel("Version \(index + 1), \(spoken(version))")
+                        }
+                    }
+                    .padding(.top, timeHeight)
+                }
+                .frame(height: timeHeight + laneHeight * CGFloat(Self.lanes.count))
             }
-            .frame(height: 44)
             HStack {
                 Text(edge(versions.first)).font(.caption).foregroundStyle(.secondary)
                 Spacer()
@@ -224,69 +245,130 @@ struct VersionStrip: View {
                 Spacer()
                 Text(edge(versions.last)).font(.caption).foregroundStyle(.secondary)
             }
-            Text("Each mark is an update. Its tick on the line is its block height. Marks for updates close together are spread apart, with a line to their ticks. A red mark is a revoked version. A blue mark changed who controls the identity. A grey mark changed other data. Select a mark to view that version.")
+            Text(
+                "Each step is one version, and the line at the top shows its true block. A change of colour in a lane "
+                    + "is a change of holder. In the lock lane, a solid bar is a lock with a delay and a striped bar is a "
+                    + "lock to a set block. A red band is a revoked version. Select a step to view that version.")
                 .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 8)
     }
 
-    /// Moves marks apart so that each has room to be clicked, keeping their order and
-    /// keeping each as near its real position as the width allows.
-    static func spread(_ positions: [CGFloat], width: CGFloat, gap: CGFloat = 26, inset: CGFloat = 12) -> [CGFloat] {
-        guard !positions.isEmpty else { return [] }
-        let room = width - 2 * inset
-        if CGFloat(positions.count - 1) * gap > room {
-            // More marks than fit with the gap: equal spacing over the whole width.
-            let step = positions.count > 1 ? room / CGFloat(positions.count - 1) : 0
-            return positions.indices.map { inset + CGFloat($0) * step }
-        }
-        var result = positions
-        for index in result.indices.dropFirst() {
-            result[index] = max(result[index], result[index - 1] + gap)
-        }
-        if let last = result.indices.last, result[last] > width - inset {
-            result[last] = width - inset
-            for index in result.indices.reversed().dropFirst() {
-                result[index] = min(result[index], result[index + 1] - gap)
+    // MARK: The values of the lanes
+
+    private func keys(_ version: IdentityState) -> String {
+        let count = version.primaryAddresses.count
+        let first = version.primaryAddresses.first.map { Format.short($0, head: 6, tail: 4) } ?? "no key"
+        return count <= 1 ? first : "\(version.minimumSignatures ?? 1) of \(count): \(first)"
+    }
+
+    private func authority(_ id: String?, isSelf: Bool) -> String {
+        guard !isSelf, let id else { return "itself" }
+        return model.displayID(id)
+    }
+
+    private func values(_ lane: Int) -> [String] {
+        versions.map { version in
+            switch lane {
+            case 0: keys(version) + "|" + version.primaryAddresses.joined(separator: ",")
+            case 1: authority(version.revocationAuthority, isSelf: version.revocationAuthority == nil || version.revocationIsSelf)
+            case 2: authority(version.recoveryAuthority, isSelf: version.recoveryAuthority == nil || version.recoveryIsSelf)
+            default: version.timelockLabel
             }
         }
-        return result
     }
 
-    private func x(_ height: UInt64, _ width: CGFloat) -> CGFloat {
-        guard let first = versions.first?.height, let last = versions.last?.height, last > first
-        else { return width / 2 }
-        let inset: CGFloat = 12
-        return inset + (width - 2 * inset) * CGFloat(height - first) / CGFloat(last - first)
+    private func spoken(_ version: IdentityState) -> String {
+        version.revoked ? "revoked" : (version.changes.first ?? "updated")
     }
 
-    private func mark(_ index: Int, _ version: IdentityState) -> some View {
-        let selected = index == selection
-        let color = kind(version).color
-        return Button {
-            selection = index
-        } label: {
-            ZStack {
-                if selected {
-                    Circle().stroke(color, lineWidth: 2).frame(width: 22, height: 22)
+    // MARK: Drawing
+
+    private func draw(_ context: GraphicsContext, _ size: CGSize) {
+        let count = versions.count
+        guard count > 0 else { return }
+        let step = size.width / CGFloat(count)
+        // The time line: a tick at the true block of each version, and a line to its step.
+        let first = versions.first?.height ?? 0
+        let last = max(tip ?? versions.last?.height ?? first, versions.last?.height ?? first)
+        func time(_ height: UInt64) -> CGFloat {
+            last > first ? 4 + CGFloat(Double(height - first) / Double(last - first)) * (size.width - 8) : size.width / 2
+        }
+        context.fill(Path(CGRect(x: 4, y: 7.5, width: size.width - 8, height: 1)), with: .color(.secondary.opacity(0.6)))
+        var leaders = Path()
+        var ticks = Path()
+        for (index, version) in versions.enumerated() {
+            let x = time(version.height)
+            ticks.addRect(CGRect(x: x - 0.5, y: 3, width: 1, height: 10))
+            leaders.move(to: CGPoint(x: x, y: 13))
+            leaders.addLine(to: CGPoint(x: (CGFloat(index) + 0.5) * step, y: timeHeight - 3))
+        }
+        context.fill(ticks, with: .color(.primary))
+        context.stroke(leaders, with: .color(.secondary.opacity(0.45)), lineWidth: 0.6)
+
+        for lane in 0..<Self.lanes.count {
+            let y = timeHeight + CGFloat(lane) * laneHeight
+            let lock = lane == 3
+            context.fill(
+                Path(CGRect(x: 0, y: y + 3, width: size.width, height: laneHeight - 6)),
+                with: .color(.secondary.opacity(0.1)))
+            let values = values(lane)
+            var seen: [String] = []
+            var start = 0
+            for index in 1...count where index == count || values[index] != values[start] {
+                let value = values[start]
+                let bar = CGRect(
+                    x: CGFloat(start) * step, y: y + 3, width: max(CGFloat(index - start) * step - 1, 1.5),
+                    height: laneHeight - 6)
+                if lock {
+                    switch versions[start].timelock {
+                    case .unlocked: break
+                    case .delay: context.fill(Path(bar), with: .color(.accentColor.opacity(0.9)))
+                    case .unlocksAt:
+                        context.fill(Path(bar), with: .color(.accentColor.opacity(0.25)))
+                        var stripes = Path()
+                        var x = bar.minX - bar.height
+                        while x < bar.maxX {
+                            stripes.move(to: CGPoint(x: x, y: bar.maxY))
+                            stripes.addLine(to: CGPoint(x: x + bar.height, y: bar.minY))
+                            x += 6
+                        }
+                        var clipped = context
+                        clipped.clip(to: Path(bar))
+                        clipped.stroke(stripes, with: .color(.accentColor), lineWidth: 2)
+                    }
+                } else {
+                    if !seen.contains(value) { seen.append(value) }
+                    let color = Self.palette[min(seen.firstIndex(of: value) ?? 0, Self.palette.count - 1)]
+                    context.fill(Path(bar), with: .color(color.opacity(0.85)))
+                    let label = String(value.split(separator: "|").first ?? "")
+                    let text = context.resolve(Text(label).font(.caption.weight(.semibold)).foregroundStyle(.white))
+                    if text.measure(in: size).width + 10 < bar.width {
+                        context.draw(text, at: CGPoint(x: bar.minX + 5, y: bar.midY), anchor: .leading)
+                    }
                 }
-                Circle().fill(color).frame(width: selected ? 13 : 10, height: selected ? 13 : 10)
+                start = index
             }
-            .frame(width: 24, height: 24)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .help("Version \(index + 1): \(heightAndTime(version.height, version.time, model: model)). \(version.changes.joined(separator: ". "))")
-        .accessibilityLabel("Version \(index + 1), \(kind(version).word)")
-    }
-
-    private func kind(_ version: IdentityState) -> (color: Color, word: String) {
-        if version.revoked { return (.red, "revoked") }
-        let control = version.changes.contains {
-            $0.hasPrefix("Registered") || $0.hasPrefix("Signing keys") || $0.hasPrefix("Signatures")
-                || $0.hasPrefix("Revocation") || $0.hasPrefix("Recovery")
+        let lanesHeight = laneHeight * CGFloat(Self.lanes.count)
+        for (index, version) in versions.enumerated() where version.revoked {
+            context.fill(
+                Path(CGRect(x: CGFloat(index) * step, y: timeHeight, width: step, height: lanesHeight)),
+                with: .color(.red.opacity(0.3)))
         }
-        return control ? (.accentColor, "control changed") : (.secondary, "other data changed")
+        // Thin gaps between the steps, and the selected step.
+        if count <= 80 {
+            for index in 1..<max(count, 1) {
+                context.fill(
+                    Path(CGRect(x: CGFloat(index) * step - 0.5, y: timeHeight, width: 1, height: lanesHeight)),
+                    with: .color(Color(nsColor: .windowBackgroundColor).opacity(0.7)))
+            }
+        }
+        if versions.indices.contains(selection) {
+            let column = CGRect(x: CGFloat(selection) * step, y: timeHeight + 1, width: step, height: lanesHeight - 2)
+            context.stroke(Path(column.insetBy(dx: 0.5, dy: 0)), with: .color(.primary), lineWidth: 2)
+        }
     }
 
     private func edge(_ version: IdentityState?) -> String {
@@ -298,7 +380,7 @@ struct VersionStrip: View {
     private var selectedText: String {
         guard versions.indices.contains(selection) else { return "" }
         let version = versions[selection]
-        return "Version \(selection + 1): \(version.changes.first ?? "Updated") (\(kind(version).word))"
+        return "Version \(selection + 1) of \(versions.count): \(version.revoked ? "Revoked" : version.changes.first ?? "Updated")"
     }
 }
 

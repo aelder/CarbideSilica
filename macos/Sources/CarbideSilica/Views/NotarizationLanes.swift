@@ -1,14 +1,14 @@
 import CarbideCore
 import SwiftUI
 
-/// Carbide's notarization browser, with two systems drawn as parallel lanes.
+/// Carbide's notarization browser.
 ///
-/// Each notarization is a tie between the observer's lane and the notarized system's lane.
-/// The confirmed tie is solid; unconfirmed ties are dashed; a tie on a side branch is red.
-/// The observer's lane runs to its current tip, so the distance since the last confirmed
-/// tie is visible. Below the picture, each row gives the committed heights by system, the
-/// observer's block that includes it, and the check of each foreign proof root on the
-/// owning chain's own source.
+/// The first sentence gives the state of the link: the time since the last confirmed
+/// notarization against the usual interval. The rhythm strip shows the earlier intervals
+/// and the wait now on one scale. The graph shows the entries that the node has: the best
+/// chain is the straight line, and a side branch is a second line. Below the graph, each
+/// row gives the committed heights by system, the observer's block that includes it, and
+/// the check of each foreign proof root on the owning chain's own source.
 struct NotarizationLanesCard: View {
     let currency: CurrencyDetail
     /// The name or ID the currency page was opened with.
@@ -23,6 +23,9 @@ struct NotarizationLanesCard: View {
     @State private var failure: String?
     @State private var saved: String?
     @State private var showJSON = false
+    /// The earlier notarizations of the active view, newest first.
+    @State private var records: [Int: [RecordPoint]] = [:]
+    @State private var selected: UInt32?
     @AppStorage(DisplayKey.showsNames) private var showsNames = true
     @AppStorage(DisplayKey.showsDates) private var showsDates = false
 
@@ -81,7 +84,10 @@ struct NotarizationLanesCard: View {
                 .disabled(perspectives[safe: active] == nil)
                 .help("Saves a notarization bookmark with this perspective")
         }
-        .onChange(of: active) { Task { await load(active, force: false) } }
+        .onChange(of: active) {
+            selected = nil
+            Task { await load(active, force: false) }
+        }
         if let saved {
             Text(saved).font(.callout).foregroundStyle(.secondary)
         }
@@ -110,33 +116,55 @@ struct NotarizationLanesCard: View {
 
     @ViewBuilder
     private func ready(_ view: NotarizationBrowser) -> some View {
-        Note(text: summary(view), warning: stale(view))
+        let intervals = NotarizationMath.intervals(records[active] ?? [])
+        let wait = blocksSinceConfirmed(view)
+        let state = LinkState(wait: wait, intervals: intervals)
+        let marks = NotarizationPicture.marks(view)
+        Text(sentence(view, marks: marks, intervals: intervals, state: state))
+            .font(.title3)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+        if let state {
+            Text(state.rule).font(.callout).foregroundStyle(.secondary)
+        } else if view.perspective.local, view.rows.contains(where: \.confirmed) {
+            Text("The app has no record of earlier notarizations to compare the wait with.")
+                .font(.callout).foregroundStyle(.secondary)
+        }
         if let confirmed = view.rows.first(where: \.confirmed) {
             confirmedLine(confirmed, view)
+        }
+        if !intervals.isEmpty {
+            NotarizationRhythm(intervals: intervals, wait: wait, state: state)
+            Text("Each dot is the number of \(name(view.perspective.observerId, view.perspective.observerName)) blocks between two earlier notarizations in sequence, for the last \(intervals.count). Each step to the right is ten times more.")
+                .font(.caption).foregroundStyle(.secondary)
         }
         if view.rows.isEmpty {
             Text("No notarizations in current view").foregroundStyle(.secondary)
         } else {
-            Canvas { context, size in
-                draw(context, size, view)
-            }
-            .frame(height: 150)
-            .accessibilityLabel(summary(view))
-
-            HStack(spacing: 18) {
-                legend(color: .accentColor, dashed: false, text: "Confirmed")
-                legend(color: .secondary, dashed: true, text: "Unconfirmed")
-                if view.rows.contains(where: { !$0.onBestChain }) {
-                    legend(color: .red, dashed: false, text: "On a side branch")
-                }
-                Spacer()
-            }
+            NotarizationGraph(
+                marks: marks,
+                observer: name(view.perspective.observerId, view.perspective.observerName),
+                other: otherName(view),
+                note: { note($0, view) },
+                selected: $selected)
             Text(caption(view)).font(.caption).foregroundStyle(.secondary)
 
-            VStack(spacing: 0) {
-                ForEach(view.rows.reversed(), id: \.index) { row in
-                    Divider()
-                    NotarizationRowView(row: row, perspective: view.perspective, observerTip: observerTip(view))
+            VStack(alignment: .leading, spacing: 0) {
+                let groups = NotarizationPicture.ordered(marks)
+                ForEach(groups, id: \.lane) { group in
+                    if groups.count > 1 {
+                        Text(group.lane == 0 ? "Best chain" : groups.count > 2 ? "Side branch \(group.lane)" : "Side branch")
+                            .font(.callout.weight(.semibold))
+                            .padding(.top, 10).padding(.bottom, 4)
+                    }
+                    ForEach(group.rows, id: \.index) { row in
+                        Divider()
+                        NotarizationRowView(row: row, perspective: view.perspective, observerTip: observerTip(view))
+                            .padding(.horizontal, 6)
+                            .background(
+                                selectedRows(marks).contains(row.index) ? Color.accentColor.opacity(0.12) : .clear,
+                                in: RoundedRectangle(cornerRadius: 5))
+                    }
                 }
             }
             if view.checksLimited {
@@ -156,6 +184,10 @@ struct NotarizationLanesCard: View {
                 }
             }
         }
+    }
+
+    private func selectedRows(_ marks: [NotarizationMark]) -> Set<UInt32> {
+        Set(marks.first { $0.id == selected }?.rows.map(\.index) ?? [])
     }
 
     private func confirmedLine(_ row: BrowserNotarization, _ view: NotarizationBrowser) -> some View {
@@ -226,6 +258,10 @@ struct NotarizationLanesCard: View {
                 observerId: perspective.observerId, subjectId: perspective.subjectId,
                 subjectName: perspective.subjectName, check: true)
             views[index] = view
+            records[index] = []
+            if perspective.local, let txid = view.rows.first(where: \.confirmed)?.txid {
+                records[index] = await explorer.notarizationRecord(subjectId: perspective.subjectId, txid: txid)
+            }
             await model.resolveNames(view.rows.flatMap { $0.roots.map(\.systemId) })
         } catch is CancellationError {
         } catch {
@@ -256,14 +292,6 @@ struct NotarizationLanesCard: View {
         view.perspective.local ? model.status?.blocks : nil
     }
 
-    private func observerHeight(_ row: BrowserNotarization) -> UInt64? {
-        row.roots.first { !$0.foreign }?.height ?? row.includedHeight
-    }
-
-    private func otherHeight(_ row: BrowserNotarization) -> UInt64? {
-        row.roots.first { $0.foreign }?.height
-    }
-
     private func otherName(_ view: NotarizationBrowser) -> String {
         if let root = view.rows.lazy.flatMap(\.roots).first(where: \.foreign) {
             return name(root.systemId, root.systemName)
@@ -280,142 +308,82 @@ struct NotarizationLanesCard: View {
         return text
     }
 
+    /// The blocks from the block that includes the last confirmed notarization to the tip.
     private func blocksSinceConfirmed(_ view: NotarizationBrowser) -> UInt64? {
-        guard let row = view.rows.first(where: \.confirmed), let height = observerHeight(row),
+        guard let row = view.rows.first(where: \.confirmed),
+            let height = row.includedHeight ?? NotarizationPicture.observerHeight(row),
             let tip = observerTip(view), tip > height
         else { return nil }
         return tip - height
     }
 
-    /// More than a day without a confirmed notarization is worth pointing out.
-    private func stale(_ view: NotarizationBrowser) -> Bool {
-        (blocksSinceConfirmed(view) ?? 0) > 1440
+    private func sentence(
+        _ view: NotarizationBrowser, marks: [NotarizationMark], intervals: [UInt64], state: LinkState?
+    ) -> String {
+        let observer = name(view.perspective.observerId, view.perspective.observerName)
+        let other = otherName(view)
+        guard let confirmed = view.rows.first(where: \.confirmed),
+            let height = confirmed.includedHeight ?? NotarizationPicture.observerHeight(confirmed)
+        else {
+            return "The \(observer) node returned no confirmed notarization of \(other). \(waiting(marks))"
+        }
+        var text = state.map { "\($0.word). " } ?? ""
+        text += "\(observer) last confirmed a notarization of \(other) at block \(Format.integer(height))"
+        if let wait = blocksSinceConfirmed(view) {
+            text += ", \(NotarizationMath.span(blocks: wait)) ago"
+        }
+        text += "."
+        if let usual = NotarizationMath.median(intervals), let longest = intervals.max() {
+            let verb = state == .current ? "is" : "was"
+            text += " The usual interval \(verb) \(Format.integer(usual)) blocks, and the longest of the last \(intervals.count) \(verb) \(Format.integer(longest))."
+        }
+        return "\(text) \(waiting(marks))"
     }
 
-    private func summary(_ view: NotarizationBrowser) -> String {
-        let observer = name(view.perspective.observerId, view.perspective.observerName)
-        let unconfirmed = "\(view.unconfirmed) unconfirmed in the current view."
-        guard let confirmed = view.rows.first(where: \.confirmed), let height = observerHeight(confirmed) else {
-            return "The node returned no confirmed notarization. \(unconfirmed)"
+    /// "5 later entries wait on the best chain. 4 entries are on a side branch."
+    private func waiting(_ marks: [NotarizationMark]) -> String {
+        let best = marks.filter { $0.lane == 0 }.flatMap(\.rows).filter { !$0.confirmed && !$0.synthetic }.count
+        let side = marks.filter { $0.lane > 0 }.flatMap(\.rows).count
+        var parts: [String] = []
+        if best > 0 {
+            parts.append("\(best) later \(best == 1 ? "entry waits" : "entries wait") on the best chain.")
         }
-        // Dates are known for the connected chain's heights only.
-        let at = view.perspective.local ? heightText(height, model: model) : Format.integer(height)
-        var text = "The last confirmed notarization commits to \(observer) block \(at)"
-        if let behind = blocksSinceConfirmed(view) {
-            let days = Double(behind) / 1440
-            text += ", \(Format.integer(behind)) blocks ago"
-            text += days >= 1 ? " (approximately \(Int(days.rounded())) days)." : "."
-        } else {
-            text += "."
+        if side > 0 {
+            parts.append("\(side) \(side == 1 ? "entry is" : "entries are") on a side branch.")
         }
-        return "\(text) \(unconfirmed)"
+        return parts.isEmpty ? "No later entry waits." : parts.joined(separator: " ")
+    }
+
+    /// The text below a mark of the graph.
+    private func note(_ mark: NotarizationMark, _ view: NotarizationBrowser) -> String {
+        guard let row = mark.newest else { return "" }
+        if mark.lane > 0, let confirmed = view.rows.first(where: \.confirmed),
+            NotarizationPicture.otherHeight(confirmed) == NotarizationPicture.otherHeight(row)
+        {
+            return mark.rows.count == 1 ? "the confirmed root again" : "the confirmed root, \(mark.rows.count) times"
+        }
+        var parts: [String] = []
+        if mark.confirmed { parts.append("confirmed") }
+        if mark.rows.count > 1 { parts.append("\(mark.rows.count) entries") }
+        if let tip = observerTip(view), let height = NotarizationPicture.observerHeight(row), tip >= height {
+            parts.append("\(NotarizationMath.span(blocks: tip - height)) ago")
+        } else if let time = row.includedTime {
+            parts.append(Format.age(time))
+        }
+        return parts.joined(separator: ", ")
     }
 
     private func caption(_ view: NotarizationBrowser) -> String {
         let checked = view.rows.flatMap(\.roots).filter { $0.foreign && $0.check != nil }
         let other = otherName(view)
+        let lead = "Each mark is one notarization with the two heights that it commits to. A mark with a number is that number of entries for one \(other) block."
         if checked.isEmpty {
-            return "Each tie joins the heights that one notarization commits to. The app did not check \(other) blocks. The rows say why."
+            return "\(lead) The app did not check \(other) blocks. The rows say why."
         }
         let active = checked.filter { $0.check == .active }.count
-        return "Each tie joins the heights that one notarization commits to. \(active) of \(checked.count) \(other) proof roots are active on the \(other) source."
+        return "\(lead) \(active) of \(checked.count) \(other) proof roots are active on the \(other) source."
     }
 
-    private func legend(color: Color, dashed: Bool, text: String) -> some View {
-        HStack(spacing: 6) {
-            Canvas { context, size in
-                context.stroke(
-                    Path { path in
-                        path.move(to: CGPoint(x: 0, y: size.height / 2))
-                        path.addLine(to: CGPoint(x: size.width, y: size.height / 2))
-                    }, with: .color(color), style: StrokeStyle(lineWidth: 2.4, dash: dashed ? [4, 3] : []))
-            }
-            .frame(width: 22, height: 10)
-            Text(text).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: Drawing
-
-    private func draw(_ context: GraphicsContext, _ size: CGSize, _ view: NotarizationBrowser) {
-        let rows = view.rows.filter { observerHeight($0) != nil }
-        let locals = rows.compactMap(observerHeight)
-        guard let firstLocal = locals.min(), let lastLocal = locals.max() else { return }
-        let tip = max(observerTip(view) ?? 0, lastLocal)
-        let others = rows.compactMap(otherHeight)
-        let firstOther = others.min() ?? 0
-        let lastOther = max(others.max() ?? 1, firstOther + 1)
-
-        let left: CGFloat = 96
-        let right = size.width - 16
-        let top: CGFloat = 36
-        let bottom: CGFloat = 112
-        let pad = Double(max(tip - firstLocal, 1)) * 0.04
-        let xLocal = { (height: UInt64) -> CGFloat in
-            left + CGFloat((Double(height) - Double(firstLocal) + pad) / (Double(tip - firstLocal) + pad * 2))
-                * (right - left)
-        }
-        // The other lane spans the same horizontal stretch as the notarized part of this one.
-        let xOther = { (height: UInt64) -> CGFloat in
-            let fraction = Double(height - min(height, firstOther)) / Double(lastOther - firstOther)
-            return xLocal(firstLocal) + CGFloat(fraction) * (xLocal(lastLocal) - xLocal(firstLocal))
-        }
-        let observer = name(view.perspective.observerId, view.perspective.observerName)
-        let checked = view.rows.flatMap(\.roots).contains { $0.foreign && $0.check == .active }
-        for (y, laneName, faint) in [(top, observer, false), (bottom, otherName(view), !checked)] {
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: left - 8, y: y))
-                    path.addLine(to: CGPoint(x: right, y: y))
-                }, with: .color(.secondary.opacity(faint ? 0.16 : 0.3)),
-                style: StrokeStyle(lineWidth: 12, lineCap: .round))
-            context.draw(
-                Text(laneName).font(.callout.weight(.semibold)).foregroundStyle(faint ? .secondary : .primary),
-                at: CGPoint(x: 0, y: y), anchor: .leading)
-        }
-
-        for row in rows {
-            guard let local = observerHeight(row) else { continue }
-            let color: Color = !row.onBestChain ? .red : row.confirmed ? .accentColor : .secondary
-            let a = CGPoint(x: xLocal(local), y: top)
-            let b = CGPoint(x: otherHeight(row).map(xOther) ?? a.x, y: bottom)
-            context.stroke(
-                Path { path in
-                    path.move(to: a)
-                    path.addLine(to: b)
-                }, with: .color(color),
-                style: StrokeStyle(lineWidth: row.confirmed ? 2.6 : 1.6, dash: row.confirmed ? [] : [5, 4]))
-            for point in [a, b] {
-                context.fill(
-                    Path(ellipseIn: CGRect(x: point.x - 5, y: point.y - 5, width: 10, height: 10)),
-                    with: .color(color))
-            }
-        }
-
-        // The observer's tip, and the stretch since the last confirmed tie.
-        let tipX = xLocal(tip)
-        if let confirmed = view.rows.first(where: \.confirmed).flatMap(observerHeight), stale(view) {
-            let from = xLocal(confirmed)
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: from, y: top - 16))
-                    path.addLine(to: CGPoint(x: tipX, y: top - 16))
-                }, with: .color(.orange), style: StrokeStyle(lineWidth: 1.5, dash: [3, 4]))
-            context.draw(
-                Text("not confirmed since").font(.caption2.weight(.semibold)).foregroundStyle(.orange),
-                at: CGPoint(x: (from + tipX) / 2, y: top - 26), anchor: .center)
-        }
-        if observerTip(view) != nil {
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: tipX, y: top - 12))
-                    path.addLine(to: CGPoint(x: tipX, y: top + 12))
-                }, with: .color(.primary), lineWidth: 1.5)
-            context.draw(
-                Text("now").font(.caption2).foregroundStyle(.primary),
-                at: CGPoint(x: tipX, y: top + 22), anchor: .center)
-        }
-    }
 }
 
 /// One notarization: its status, output, committed heights by system, inclusion, and the
@@ -450,7 +418,7 @@ private struct NotarizationRowView: View {
                 Spacer()
                 if !row.onBestChain {
                     Label("On a side branch", systemImage: "arrow.triangle.branch")
-                        .font(.callout).foregroundStyle(.red)
+                        .font(.callout).foregroundStyle(.orange)
                 }
             }
             HStack(spacing: 12) {

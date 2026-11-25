@@ -24,6 +24,10 @@ const MAX_MARKET_OFFERS: usize = 5000;
 const MAX_FUNDING_LOOKUPS: usize = 64;
 const MAX_NOTARIZATION_LOOKUPS: usize = 160;
 const LOOKUP_CONCURRENCY: usize = 8;
+/// The record of earlier notarizations has at most this many entries.
+const MAX_RECORD_POINTS: usize = 60;
+const MAX_RECORD_LOOKUPS: usize = 120;
+const MAX_RECORD_INPUTS: usize = 6;
 const STARTUP_TIMEOUT_SECONDS: u64 = 70;
 const STARTUP_LIMIT_CAP: usize = 100;
 /// The vETH gateway. A standard Ethereum endpoint cannot answer the Verus header request.
@@ -432,6 +436,10 @@ pub struct NotarizationBrowser {
     /// Distinct unconfirmed notarizations in the returned view.
     pub unconfirmed: u32,
     pub fork_count: u32,
+    /// The daemon's forks: each is a list of row indexes from the oldest to the newest.
+    pub forks: Vec<Vec<u32>>,
+    /// The fork that the daemon gives as the best chain.
+    pub best_fork: Option<u32>,
     pub source: Option<String>,
     /// True when some checks were not made because of the request limit.
     pub checks_limited: bool,
@@ -439,6 +447,15 @@ pub struct NotarizationBrowser {
     /// Where the notarization data came from. `None` when no source answered and nothing
     /// is stored.
     pub provenance: Option<Provenance>,
+}
+
+/// One earlier notarization in the record that leads to the last confirmed one.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RecordPoint {
+    pub txid: String,
+    /// The block of this chain that includes the notarization.
+    pub height: u64,
+    pub time: Option<u64>,
 }
 
 // ----------------------------------------------------------------------- bookmarks
@@ -1017,7 +1034,8 @@ struct Graph {
     rows: Vec<GraphRow>,
     confirmed: Option<usize>,
     best: Option<Vec<u64>>,
-    fork_count: usize,
+    forks: Vec<Vec<u64>>,
+    best_fork: Option<usize>,
 }
 
 impl Graph {
@@ -1073,9 +1091,11 @@ fn decode_graph(value: &Value, observer: &str) -> Result<Graph> {
                 .collect()
         })
         .collect();
-    let best = value["bestchain"]
+    let best_fork = value["bestchain"]
         .as_u64()
-        .and_then(|best| forks.get(best as usize).cloned());
+        .map(|best| best as usize)
+        .filter(|best| *best < forks.len());
+    let best = best_fork.map(|best| forks[best].clone());
     let rows = entries
         .iter()
         .enumerate()
@@ -1128,8 +1148,46 @@ fn decode_graph(value: &Value, observer: &str) -> Result<Graph> {
         rows,
         confirmed,
         best,
-        fork_count: forks.len(),
+        forks,
+        best_fork,
     })
+}
+
+/// The notarization of `currency` in a transaction: its output number and its data.
+fn notarization_output<'a>(raw: &'a Value, currency: &str) -> Option<(u32, &'a Value)> {
+    raw["vout"].as_array()?.iter().find_map(|output| {
+        let script = &output["scriptPubKey"];
+        ["acceptednotarization", "earnednotarization"]
+            .iter()
+            .map(|key| &script[*key])
+            .find(|data| data["currencyid"].as_str() == Some(currency))
+            .and_then(|data| Some((output["n"].as_u64()?.try_into().ok()?, data)))
+    })
+}
+
+/// Where the notarization before this one can be. A notarization that this chain made
+/// names the one before it. A notarization that came from the other system names an
+/// output of that system, and then the one before it is an output that this transaction
+/// spends. The caller reads each candidate and keeps the first that is a notarization of
+/// the same currency.
+fn previous_notarization_candidates(raw: &Value, currency: &str) -> Vec<(String, u32)> {
+    let mut candidates = Vec::new();
+    if let Some((_, data)) = notarization_output(raw, currency)
+        && data["ismirror"].as_bool() != Some(true)
+        && let Some(txid) = block_hash(&data["prevnotarizationtxid"])
+        && let Some(output) = data["prevnotarizationout"].as_u64()
+    {
+        candidates.push((txid, output as u32));
+    }
+    for input in raw["vin"].as_array().into_iter().flatten().take(MAX_RECORD_INPUTS) {
+        if let Some(txid) = block_hash(&input["txid"])
+            && let Some(output) = input["vout"].as_u64()
+            && !candidates.iter().any(|(known, _)| *known == txid)
+        {
+            candidates.push((txid, output as u32));
+        }
+    }
+    candidates
 }
 
 #[derive(Debug, Clone)]
@@ -1985,6 +2043,8 @@ impl Explorer {
             last_confirmed: None,
             unconfirmed: 0,
             fork_count: 0,
+            forks: Vec::new(),
+            best_fork: None,
             source: None,
             checks_limited: false,
             json: String::new(),
@@ -2210,12 +2270,65 @@ impl Explorer {
             rows,
             last_confirmed: graph.confirmed.map(|index| index as u32),
             unconfirmed: graph.pending() as u32,
-            fork_count: graph.fork_count as u32,
+            fork_count: graph.forks.len() as u32,
+            forks: graph
+                .forks
+                .iter()
+                .map(|fork| fork.iter().map(|index| *index as u32).collect())
+                .collect(),
+            best_fork: graph.best_fork.map(|index| index as u32),
             source: Some(source),
             checks_limited: limited,
             json: pretty(&without(&raw, "notarizations")),
             provenance: Some(provenance),
         })
+    }
+
+    /// The notarizations of `subject` on this chain that lead to `txid`, from `txid`
+    /// back. Each entry is one transaction that the node has, with its block. The record
+    /// stops at the limit, or where the node does not have the transaction before.
+    pub async fn notarization_record(&self, subject_id: String, txid: String) -> Vec<RecordPoint> {
+        let mut record = Vec::new();
+        let mut lookups = 1;
+        let Ok(mut raw) = self
+            .settle(self.client.get_raw_transaction(&txid).await)
+            .map(|output| output.result)
+        else {
+            return record;
+        };
+        let mut current = txid;
+        loop {
+            let Some(height) = raw["height"].as_u64().filter(|_| raw["blockhash"].is_string()) else {
+                break;
+            };
+            record.push(RecordPoint {
+                txid: current.clone(),
+                height,
+                time: raw["blocktime"].as_u64().filter(|time| *time > 0),
+            });
+            if record.len() >= MAX_RECORD_POINTS {
+                break;
+            }
+            let mut next = None;
+            for (candidate, output) in previous_notarization_candidates(&raw, &subject_id) {
+                if lookups >= MAX_RECORD_LOOKUPS {
+                    break;
+                }
+                lookups += 1;
+                let Ok(found) = self.settle(self.client.get_raw_transaction(&candidate).await) else {
+                    continue;
+                };
+                if notarization_output(&found.result, &subject_id).is_some_and(|(n, _)| n == output) {
+                    next = Some((candidate, found.result));
+                    break;
+                }
+            }
+            let Some((candidate, found)) = next else { break };
+            current = candidate;
+            raw = found;
+        }
+        self.forgive();
+        record
     }
 
     // -------------------------------------------------------------------- bookmarks

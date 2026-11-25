@@ -52,7 +52,8 @@ struct ConfidenceMark: View {
 }
 
 /// Follows one transfer from its source output as far as the evidence reaches, using
-/// Carbide's DeFi trail (the terminal's F8), and draws it as a route with one verdict.
+/// Carbide's DeFi trail (the terminal's F8). It shows one verdict, then a receipt, the
+/// stages on an axis of blocks, and the place of the transfer in its export batch.
 ///
 /// While the search runs, the card shows the trail so far. For a cross-system import, the
 /// search can jump to a destination height, step through adjacent 1,000-block windows, or
@@ -129,13 +130,7 @@ struct TransferTraceCard: View {
             }
         }
         if !trace.legs.isEmpty {
-            Canvas { context, size in
-                draw(context, size, trace)
-            }
-            .frame(height: 96)
-            .accessibilityLabel(trace.verdict)
-            Text("Each circle is a stage of the transfer. A filled circle is a stage the evidence reached.")
-                .font(.caption).foregroundStyle(.secondary)
+            TraceRoute(trace: trace, live: live)
         }
 
         ForEach(Array(trace.legs.enumerated()), id: \.offset) { index, leg in
@@ -277,59 +272,6 @@ struct TransferTraceCard: View {
         } catch {
             failure = describe(error)
         }
-    }
-
-    /// Sent → Exported → Imported → Result, filled as far as the trace got.
-    private func draw(_ context: GraphicsContext, _ size: CGSize, _ trace: TransferTrace) {
-        let labels = ["Sent", "Exported", "Imported", resultLabel(trace)]
-        let reached = reachedCount(trace)
-        let y: CGFloat = 34
-        let xs = (0..<4).map { size.width * (0.1 + 0.8 * CGFloat($0) / 3) }
-        for index in 0..<3 {
-            let done = index + 1 < reached
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: xs[index] + 14, y: y))
-                    path.addLine(to: CGPoint(x: xs[index + 1] - 14, y: y))
-                }, with: .color(done ? .accentColor : .secondary.opacity(0.5)),
-                style: StrokeStyle(lineWidth: done ? 3 : 1.5, dash: done ? [] : [5, 5]))
-        }
-        for index in 0..<4 {
-            let done = index < reached
-            let final = index == 3 && done
-            let radius: CGFloat = index == reached - 1 ? 15 : 12
-            let circle = Path(
-                ellipseIn: CGRect(x: xs[index] - radius, y: y - radius, width: radius * 2, height: radius * 2))
-            let color: Color = final ? .green : .accentColor
-            if done {
-                context.fill(circle, with: .color(color))
-                context.stroke(
-                    Path { path in
-                        path.move(to: CGPoint(x: xs[index] - 5, y: y))
-                        path.addLine(to: CGPoint(x: xs[index] - 1, y: y + 4))
-                        path.addLine(to: CGPoint(x: xs[index] + 6, y: y - 4))
-                    }, with: .color(.white), style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
-            } else {
-                context.stroke(
-                    circle, with: .color(.secondary), style: StrokeStyle(lineWidth: 1.6, dash: [4, 3]))
-            }
-            context.draw(
-                Text(labels[index]).font(.callout.weight(done ? .semibold : .regular))
-                    .foregroundStyle(done ? .primary : .secondary),
-                at: CGPoint(x: xs[index], y: y + 34), anchor: .center)
-        }
-    }
-
-    private func resultLabel(_ trace: TransferTrace) -> String {
-        trace.legs.last?.result ?? (trace.legs.last?.burned != nil ? "Burned" : "Received")
-    }
-
-    private func reachedCount(_ trace: TransferTrace) -> Int {
-        if trace.confidence == .verified { return 4 }
-        let stage = trace.legs.last?.stage ?? ""
-        if stage.hasPrefix("Imported") { return 3 }
-        if stage.hasPrefix("Exported") || trace.steps.contains(where: { $0.label == "Export" }) { return 2 }
-        return 1
     }
 }
 

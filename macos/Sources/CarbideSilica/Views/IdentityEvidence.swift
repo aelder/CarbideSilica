@@ -78,11 +78,27 @@ private struct EvidenceBody: View {
                 Text("No additional associations to display").foregroundStyle(.secondary)
             }
             ForEach(groups, id: \.title) { group in
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(group.title).font(.headline).padding(.bottom, 4)
-                    ForEach(Array(group.links.enumerated()), id: \.offset) { index, link in
-                        if index > 0 { Divider() }
-                        EvidenceRow(link: link)
+                if group.title == Self.earlierAuthorities {
+                    // The lanes at the top of the page show who held each power at each
+                    // version. The rows stay as evidence, closed at the start.
+                    DisclosureGroup("\(group.title) (\(group.links.count) rows)") {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("The lanes at the top of the page show the same authorities for each version.")
+                                .font(.callout).foregroundStyle(.secondary).padding(.vertical, 4)
+                            ForEach(Array(group.links.enumerated()), id: \.offset) { index, link in
+                                if index > 0 { Divider() }
+                                EvidenceRow(link: link)
+                            }
+                        }
+                    }
+                    .font(.headline)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(group.title).font(.headline).padding(.bottom, 4)
+                        ForEach(Array(group.links.enumerated()), id: \.offset) { index, link in
+                            if index > 0 { Divider() }
+                            EvidenceRow(link: link)
+                        }
                     }
                 }
             }
@@ -101,6 +117,8 @@ private struct EvidenceBody: View {
         return chain
     }
 
+    private static let earlierAuthorities = "Authorities in earlier versions"
+
     private struct Group {
         let title: String
         let links: [EvidenceLinkRow]
@@ -115,7 +133,7 @@ private struct EvidenceBody: View {
             }),
             ("Funding candidates", { $0.hasSuffix("funding candidate") }),
             ("Referral chain", { $0 == "Referral" || $0 == "Referral ancestor" }),
-            ("Authorities in earlier versions", { $0.hasPrefix("Historical recovery") || $0.hasPrefix("Historical revocation") }),
+            (Self.earlierAuthorities, { $0.hasPrefix("Historical recovery") || $0.hasPrefix("Historical revocation") }),
             ("Shared now", { $0.hasPrefix("Shared ") }),
             ("Shared in a past window", { $0.hasPrefix("Historical shared") }),
         ]

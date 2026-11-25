@@ -74,17 +74,33 @@ figures and the raw JSON one step away.
   without value are named marks, and a reserve transfer shows what it asks for. A row
   marks its inputs and outputs in the lists. `design/txflow-research.html` has the study
   behind this form.
-- Transfer trace: Carbide's DeFi trail drawn as a route from sent to received, with live
-  progress, leg budgets, execution rates, a comparison with the previous pool
-  notarization, and searches of other destination windows.
+- Transfer trace: Carbide's DeFi trail with one verdict, then a receipt that reads from
+  the amount sent to the amount received with the fee and the rate of the batch, the
+  stages on an axis of blocks so that the wait for an export is a length, and the place
+  of the transfer in its export batch. Below are live progress, leg budgets, execution
+  rates, a comparison with the previous pool notarization, and searches of other
+  destination windows. `design/trace-research.html` has the study behind this form.
 - Witnesses and protocol references, forward and reverse, with Carbide's status for each.
-- Identities at each version: the control diagram, timelock, authorities and status
-  follow the viewed version. Registration evidence, funding candidates, the referral
+- Identities at each version: the history as lanes for the keys, the revoke authority,
+  the recover authority and the lock, with one step for each version and a time line of
+  the true blocks. The control of the viewed version is one sentence, a table of the four
+  powers, and the outcome of a lost key and of a stolen key in words.
+  `design/identity-research.html` has the study behind this form. Registration evidence, funding candidates, the referral
   chain, verified registration payments, tokenized control, and historical reverse
   requests.
+- Baskets in one unit: the Currency page of a basket has a control that selects one of
+  its reserves as the unit. The reserves table then shows the value of each reserve and
+  what one of it is worth in that unit. The lines over time show the basket and each
+  reserve in that unit on one scale that starts at 100, and the last conversion batch is
+  a statement with one bar for each reserve that moved. The values are the pool's own
+  rates. `design/currency-research.html` has the study behind this form.
 - Currencies: definition, reserves, supply and prices over time, the state at an exact
   block, imports and exports in 1,000-block windows, the conversion batch, and the
-  notarization browser with checks of each foreign proof root.
+  notarization browser with checks of each foreign proof root. The browser gives the
+  state of the link first: the wait since the last confirmed notarization against the
+  earlier intervals, on one scale. The entries that the node has are a graph: the best
+  chain is the straight line, and a side branch is a second line.
+  `design/notarization-research.html` has the study behind this form.
 - Addresses: balances, first and latest activity, the identities that use the address as
   a primary address, and transactions as input and output tiles.
 - Raw JSON for each object as a tree with links, names, dates, copy and save.

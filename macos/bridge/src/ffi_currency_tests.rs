@@ -298,7 +298,8 @@ fn notarization_graph_decodes_confirmed_pending_synthetic_and_mirror_rows() {
     let graph = decode_graph(&graph_sample(), OBSERVER).unwrap();
     assert_eq!(graph.confirmed, Some(0));
     assert_eq!(graph.rows.len(), 4);
-    assert_eq!(graph.fork_count, 2);
+    assert_eq!(graph.forks.len(), 2);
+    assert!(graph.best_fork.is_some());
     assert_eq!(graph.best.as_deref(), Some(&[0, 2][..]));
     assert_eq!(graph.pending(), 1, "rows 1 and 2 are the same output; row 3 is synthetic");
     assert!(graph.rows[3].synthetic);
@@ -516,6 +517,46 @@ async fn live_marketplace() {
         println!("{} listed {:?} addresses {:?} {:?}", item.txid, item.block_time, item.addresses, item.error);
     }
     assert_eq!(funding.len(), 5);
+}
+
+#[test]
+fn previous_notarization_is_named_or_is_a_spent_output() {
+    let hash = |c: char| c.to_string().repeat(64);
+    // This chain made the notarization: it names the one before it.
+    let earned = json!({"vin": [{"coinbase": "00"}], "vout": [
+        {"n": 0, "scriptPubKey": {}},
+        {"n": 1, "scriptPubKey": {"earnednotarization": {"currencyid": OTHER,
+            "prevnotarizationtxid": hash('a'), "prevnotarizationout": 1}}}]});
+    assert_eq!(notarization_output(&earned, OTHER).map(|(n, _)| n), Some(1));
+    assert_eq!(previous_notarization_candidates(&earned, OTHER), vec![(hash('a'), 1)]);
+    assert!(notarization_output(&earned, "iOtherCurrency").is_none());
+    // A mirror names an output of the other system: only the spent outputs are candidates.
+    let accepted = json!({"vin": [{"txid": hash('b'), "vout": 0}, {"txid": hash('b'), "vout": 5},
+        {"txid": hash('c'), "vout": 6}], "vout": [
+        {"n": 0, "scriptPubKey": {"acceptednotarization": {"currencyid": OTHER, "ismirror": true,
+            "prevnotarizationtxid": hash('d'), "prevnotarizationout": 1}}}]});
+    assert_eq!(
+        previous_notarization_candidates(&accepted, OTHER),
+        vec![(hash('b'), 0), (hash('c'), 6)]
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn live_notarization_record() {
+    let explorer = live();
+    let _ = explorer.chain_status().await;
+    let chain = explorer.chain_status().await.unwrap().chain_id.unwrap();
+    for (name, id) in [("vETH", "i9nwxtKuVYX4MSbeULLiK2ttVi6rUEhh4X"), ("vDEX", "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N")] {
+        let view = explorer.notarization_browser(chain.clone(), id.into(), None, false).await.unwrap();
+        println!("{name}: forks {:?} best {:?}", view.forks, view.best_fork);
+        let confirmed = view.rows.iter().find(|row| row.confirmed).and_then(|row| row.txid.clone()).unwrap();
+        let record = explorer.notarization_record(id.into(), confirmed).await;
+        let gaps: Vec<u64> = record.windows(2).map(|pair| pair[0].height - pair[1].height).collect();
+        println!("{name}: {} points, gaps {:?}", record.len(), gaps);
+        assert_eq!(record.len(), 60);
+        assert!(view.best_fork.is_some());
+    }
 }
 
 #[tokio::test]

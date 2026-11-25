@@ -958,6 +958,13 @@ async fn live_trace_with_progress_and_pool() {
         );
     }
     assert_eq!(trace.confidence, Confidence::Verified);
+    println!("moments {:?} batch {:?} candidates {}", trace.moments, trace.batch, trace.candidates);
+    let stages: Vec<TraceStage> = trace.moments.iter().map(|moment| moment.stage).collect();
+    assert_eq!(stages, [TraceStage::Sent, TraceStage::Exported, TraceStage::Imported, TraceStage::Result]);
+    assert!(trace.moments.iter().all(|moment| moment.height.is_some() && moment.time.is_some()));
+    assert!(trace.moments[0].height < trace.moments[1].height);
+    assert_eq!(trace.moments[1].height, trace.moments[3].height);
+    assert!(trace.batch.is_some());
     assert!(
         explorer.trace_progress(token).is_none(),
         "the slot is cleared"
@@ -1121,4 +1128,29 @@ async fn live_reverse_link_appears_after_opening_both_ends() {
             .any(|link| link.reverse && link.target_txid == NOTARIZATION),
         "the reverse link from the cache"
     );
+}
+
+
+// ------------------------------------------------------------ trace stages
+
+#[test]
+fn the_export_entry_gives_the_batch_and_the_place() {
+    let detail = "source input 2; batch inputs 1..12; destination system=i5w5 currency=i3d4 hashtransfers=ab";
+    assert_eq!(trace_batch(detail), Some(TraceBatch { size: 11, place: 1 }));
+    assert_eq!(trace_batch("source input 3; batch inputs 2..8; x"), Some(TraceBatch { size: 6, place: 1 }));
+    // An input outside its range, an empty range and other text give no batch.
+    assert_eq!(trace_batch("source input 9; batch inputs 2..8;"), None);
+    assert_eq!(trace_batch("source input 2; batch inputs 2..2;"), None);
+    assert_eq!(trace_batch("Batch/protocol context"), None);
+}
+
+#[test]
+fn trail_entries_map_to_stages() {
+    assert_eq!(trace_stage(0, "Conversion"), Some(TraceStage::Sent));
+    assert_eq!(trace_stage(1, "Export"), Some(TraceStage::Exported));
+    assert_eq!(trace_stage(2, "Import"), Some(TraceStage::Imported));
+    assert_eq!(trace_stage(4, "Replayed conversion result"), Some(TraceStage::Result));
+    assert_eq!(trace_stage(4, "Replayed next-leg transfer"), Some(TraceStage::Sent));
+    assert_eq!(trace_stage(3, "Import notarization"), None);
+    assert_eq!(trace_stage(5, "Destination-address candidate"), None);
 }

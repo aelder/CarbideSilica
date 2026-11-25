@@ -1,0 +1,315 @@
+<title>Transfer Trace Research</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column. What a transfer is, then what the trace shows, then the methods of each field, then real transfers drawn two ways, then the choice. */
+:root {
+  --bg: #f5f7f8; --surface: #ffffff; --line: #d9e0e4; --fg: #15212b; --muted: #5b6b78;
+  --accent: #0d6b82; --accent-soft: #dcedf2;
+  --mined: #b4690f; --staked: #7448b0; --warn: #b3372f; --ok: #2f7d4f;
+  --display: "Space Grotesk", "Avenir Next", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 34px; letter-spacing: -0.01em; } h2 { font-size: 24px; } h3 { font-size: 16px; }
+p { margin: 0; max-width: 70ch; }
+a { color: var(--accent); }
+.lede { font-size: 17px; color: var(--muted); }
+.note { color: var(--muted); font-size: 13.5px; }
+.figures { display: flex; flex-wrap: wrap; gap: 14px 34px; font-variant-numeric: tabular-nums; }
+.figures div { display: flex; flex-direction: column; min-width: 0; }
+.figures b { font-family: var(--display); font-size: 26px; font-weight: 600; line-height: 1.15; }
+.figures span { font-size: 13px; color: var(--muted); max-width: 26ch; }
+figure { margin: 0; }
+.plot { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.plot .scroll { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 560px; height: auto; color: var(--fg); font-family: var(--body); }
+.plot figcaption { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+.plot .tag { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 36px; }
+.fields div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fields p { font-size: 14px; }
+.fields .take { color: var(--muted); }
+ol.steps, ul.plain { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; max-width: 74ch; }
+.src { font-size: 13.5px; columns: 2 320px; column-gap: 36px; padding-left: 18px; margin: 0; }
+.src li { break-inside: avoid; margin-bottom: 6px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 14px; min-width: 640px; width: 100%; }
+th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
+
+/* The worked examples. */
+.bench { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.picker, .forms { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.picker button, .forms button { font: inherit; font-size: 13px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.picker button[aria-pressed="true"], .forms button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.picker button:focus-visible, .forms button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ident { font-size: 12.5px; color: var(--muted); font-family: var(--mono); overflow-wrap: anywhere; }
+.say { font-size: 17px; max-width: 78ch; }
+.stage { overflow-x: auto; }
+.stage svg { display: block; width: 100%; min-width: 620px; height: auto; color: var(--fg); font-family: var(--body); }
+.see { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+</style>
+
+<main>
+<section>
+  <h1>Transfer Trace Research</h1>
+  <p class="lede">How the leading fields show one transfer that is followed from its start to its result, and what that means for the transfer trace on the Transaction page. Each figure uses transfers on the Verus chain, traced by Carbide on the local node.</p>
+  <p>The short answer: the trace today is a row of four circles that fill from left to right. For 134 of the 140 transfers in this study, the picture is the same four filled circles. It does not show what went in, what came out, at what rate, or how long the wait was. The fields that show a followed transfer well put three things on the page: a receipt with the amounts and the rate, the stages at their real times, and the place of the transfer in its batch. The four circles are a correct form only for the question "how far did it get", which matters for the transfers that are not complete.</p>
+</section>
+
+<section>
+  <h2>What a transfer is</h2>
+  <div class="figures" id="figs"></div>
+  <figure class="plot"><span class="tag">Blocks from the transfer to its result, for 134 conversions</span><div class="scroll" id="waits"></div>
+    <figcaption>Each bar is the number of conversions that got their result that many blocks after the block of the transfer. The transfers are a sample of each fifth transfer with a reserve transfer in 300 blocks with much DeFi activity.</figcaption></figure>
+  <ul class="plain">
+    <li><b>Most traces end in the same way.</b> 134 of 140 were conversions on this chain, and Carbide verified the result of each one: it replayed the batch and the amount matched the output.</li>
+    <li><b>The wait is before the export.</b> A transfer waits 2 to 10 blocks until an export takes it. The median is 3 blocks, or 3 minutes 25 seconds. The longest was 18 minutes.</li>
+    <li><b>The export, the import and the result are in one block.</b> For each of the 134 conversions, the import was in the block of the export. Three of the four stages of the picture are one moment.</li>
+    <li><b>A transfer is one of a batch.</b> An export took between 1 and 25 transfers, most frequently 10. Verus gives all conversions of one batch the same price.</li>
+    <li><b>The result is frequently one of some equal candidates.</b> For 72 of the 134, the import paid one or more other outputs to the same address. Carbide finds the correct one by the replay.</li>
+    <li><b>Two currencies, one rate, two fees.</b> Each conversion has a conversion fee in the currency that was sent, and a transfer fee budget in VRSC that is apart from the amount.</li>
+    <li><b>The others stop at the border.</b> 6 of the 140 were transfers to a different chain. The node does not have that chain, thus the trace stops at the export and says so.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What the trace shows today</h2>
+  <ul class="plain">
+    <li><b>The picture is the same for each completed transfer.</b> Four filled circles with the words Sent, Exported, Imported and Received.</li>
+    <li><b>The spacing is equal, and the time is not.</b> The picture gives one third of its width to each step. All of the wait is in the first step, and the other two steps take no time.</li>
+    <li><b>The amounts are below, in lists.</b> The principal, the fees, the result and the rate are separate lines of text for each leg. The page has no line that says "this became that".</li>
+    <li><b>The batch is in the evidence.</b> The number of transfers in the export and the other outputs to the same address are in a list that is closed at the start.</li>
+    <li><b>The verdict is good.</b> One sentence and one mark of confidence say how far the evidence reaches. This part stays.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What the leading fields do</h2>
+  <div class="fields">
+    <div>
+      <h3>Cross-chain explorers</h3>
+      <p>LayerZero Scan, Wormholescan and Axelarscan each make one page from two transactions: the source transaction, the message between the chains, and the destination transaction. Each part has its state and its time. The state has a small number of exact values, such as waiting, delivered and failed.</p>
+      <p class="take">For Carbide Silica: the parts of the trace at their real heights and times, each with a link, and one state from a fixed list.</p>
+    </div>
+    <div>
+      <h3>Batch auctions</h3>
+      <p>CoW Protocol settles orders in batches, and each order of one batch gets the same price for the same pair of tokens. Its records therefore have two levels: the order, and the batch that the order was settled in. Verus conversions have the same structure.</p>
+      <p class="take">For Carbide Silica: show the transfer as one member of its batch, and say that the rate is the rate of the batch.</p>
+    </div>
+    <div>
+      <h3>Trade receipts</h3>
+      <p>Exchanges and wallets show a completed trade as a receipt: the amount paid, the amount received, the rate, and each fee on its own line. Aggregators add the route: the pools that the trade went through.</p>
+      <p class="take">For Carbide Silica: one line that reads from the amount sent to the amount received, with the fee and the rate between them and the pool by name.</p>
+    </div>
+    <div>
+      <h3>Distributed tracing</h3>
+      <p>Jaeger and the OpenTelemetry tools draw one request as bars on a time axis. The length of a bar is the time of a step, and an empty space between bars is a wait. The form exists to answer "where did the time go".</p>
+      <p class="take">For Carbide Silica: one axis of blocks from the transfer to the result. The wait is a length, and the steps of one block are one position.</p>
+    </div>
+    <div>
+      <h3>Order tracking</h3>
+      <p>Baymard's tests of order tracking pages found that people need three things: the stages of the delivery, the time of each stage, and who has the parcel now. Pages that showed "status not available" in the first hours caused the most doubt.</p>
+      <p class="take">For Carbide Silica: for a transfer that is not complete, say which stage it is in, how long that stage usually takes, and what the app looked at.</p>
+    </div>
+    <div>
+      <h3>Waterfall charts</h3>
+      <p>Finance uses the waterfall chart to show how a start value becomes an end value through additions and subtractions. Guides give one condition: each step must be in the same unit.</p>
+      <p class="take">For Carbide Silica: the fee is a subtraction in the currency that was sent. The conversion changes the unit, thus it is a step with its rate and not a bar on the same scale.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Real transfers, drawn two ways</h2>
+  <p>Select a transfer, then a form. The first form is the picture today. The second is the proposal.</p>
+  <div class="bench">
+    <div class="picker" id="picker" role="group" aria-label="Transfer"></div>
+    <div class="ident" id="ident"></div>
+    <div class="forms" id="forms" role="group" aria-label="Form"></div>
+    <p class="say" id="say"></p>
+    <div class="stage" id="stage"></div>
+    <p class="see" id="see"></p>
+  </div>
+</section>
+
+<section>
+  <h2>How the forms compare</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Question</th><th>Four circles today</th><th>Receipt, time axis and batch</th></tr></thead>
+    <tbody>
+      <tr><td>How far did the transfer get</td><td>The filled circles</td><td>The marks on the axis, and the sentence</td></tr>
+      <tr><td>What went in and what came out</td><td>In the lists below</td><td>The receipt line</td></tr>
+      <tr><td>At what rate, through which currency</td><td>In the lists below</td><td>Between the two amounts</td></tr>
+      <tr><td>What did it cost</td><td>In the lists below</td><td>The fee in the receipt, the fee budget apart</td></tr>
+      <tr><td>How long did it take</td><td>Not shown</td><td>The length on the axis, in blocks and in time</td></tr>
+      <tr><td>Which steps took the time</td><td>Each step has the same width</td><td>The wait is a length. Steps of one block are one mark</td></tr>
+      <tr><td>Was the transfer alone</td><td>In the evidence, closed</td><td>The strip of the batch</td></tr>
+      <tr><td>Why is this output the result</td><td>In the evidence, closed</td><td>One line: the number of other outputs to the same address</td></tr>
+      <tr><td>A transfer that is not complete</td><td>Circles that are not filled</td><td>The last mark, a dashed line, and what the app searched</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Recommendation</h2>
+  <p>Keep the verdict. Replace the four circles with a receipt, a time axis and a batch strip. Keep the details of each leg and the evidence below, as they are.</p>
+  <ol class="steps">
+    <li><b>The verdict and its mark stay first.</b> "Received. The replay matches the result output."</li>
+    <li><b>One receipt line.</b> The amount sent, the conversion fee, the amount that was converted, the rate, and the amount received, from left to right. The pool is named. The transfer fee budget is on its own line, because it is apart from the amount.</li>
+    <li><b>One axis of blocks.</b> From the block of the transfer to the block of the result. Each block is a tick. The wait is the length between the marks, with the number of blocks and the time. The export, the import and the result are one mark when they are in one block.</li>
+    <li><b>The batch as a strip.</b> One square for each transfer of the export, with this transfer marked. One sentence says that all conversions of the batch got the same rate.</li>
+    <li><b>Candidates in one line.</b> "4 other outputs of the import went to the same address. The replay finds this one."</li>
+    <li><b>A transfer that is not complete.</b> The axis shows the marks that the evidence reached, then a dashed line. The text says where the app searched and that a missing import in those blocks is not proof. The search controls stay below.</li>
+    <li><b>More than one leg.</b> Each leg has its receipt line. All legs are on one axis, in sequence.</li>
+    <li><b>The evidence stays.</b> Each mark and each amount opens the transaction that it comes from.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>What stays as Carbide gives it</h2>
+  <ul class="plain">
+    <li>The verdict, the confidence and the stage of each leg, in Carbide's words.</li>
+    <li>The amounts, the fee budgets and the rate from Carbide's replay. Budgets are not added across legs.</li>
+    <li>The prices of the import batch are fields of the batch, not market quotes, and the page says so.</li>
+    <li>The search of other windows of the destination chain, and the note that a missing import is not proof.</li>
+    <li>The comparison with the previous pool notarization.</li>
+    <li>The app does not estimate a result that Carbide did not find.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Limits of this study</h2>
+  <ul class="plain">
+    <li>The 140 traces are from one range of 300 blocks. No trace in the sample had more than one leg, and no result was a refund or a burn.</li>
+    <li>The six transfers to a different chain were not followed, because the node does not have that chain.</li>
+    <li>The rule for the start of an export is from the description of Verus and from the waits in this sample. The study did not read the consensus code.</li>
+    <li>The pages of the cross-chain explorers and of CoW Protocol were read as summaries of their own documents.</li>
+    <li>The page does not test the forms with people.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sources</h2>
+  <ol class="src">
+    <li><a href="https://docs.layerzero.network/v2/tools/layerzeroscan/overview">LayerZero</a>. LayerZero Scan overview and message states.</li>
+    <li><a href="https://docs.cow.fi/overview/batch-auctions">CoW Protocol</a>. Batch auctions and uniform clearing prices.</li>
+    <li><a href="https://medium.com/veruscoin/how-verus-solved-mev-maximal-extractable-value-in-defi-c9ca31f1c153">Verus</a>. How Verus Solved MEV in DeFi: conversions of one batch at one price.</li>
+    <li><a href="https://www.elastic.co/guide/en/observability/current/apm-spans.html">Elastic</a>. Trace sample timeline.</li>
+    <li><a href="https://docs.newrelic.com/docs/distributed-tracing/ui-data/trace-details">New Relic</a>. Trace details: timeline and waterfall.</li>
+    <li><a href="https://baymard.com/blog/integrate-tracking-info">Baymard Institute</a>. Order tracking: the details that users need.</li>
+    <li><a href="https://www.datawrapper.de/blog/waterfall-charts-guide">Datawrapper</a>. A guide to waterfall charts.</li>
+    <li><a href="https://design.morningstar.com/systems/data-visualization/common-charts/waterfall">Morningstar Design System</a>. Waterfall chart.</li>
+  </ol>
+</section>
+</main>
+
+<script>
+const DATA = {"traces":[{"txid":"db222dacdf8a1c2d07a9f6cbb2b30ed187b1955714dc2808cdd878a95328c18d","root":0,"label":"Conversion","h":3962003,"conf":"Verified","verdict":"Received. The replay matches the result output.","eh":3962008,"batch":11,"dest":"Floralis","ih":3962008,"cand":4,"principal":[{"c":"tBTC.vETH","a":7.834e-05}],"pool":"Floralis","cfee":{"c":"tBTC.vETH","a":2e-08},"tfee":{"c":"VRSC","a":0.0002001},"result":[{"c":"VRSC","a":6.76722065}],"net":{"c":"tBTC.vETH","a":7.832e-05},"rate":86404.75804392,"outs":13,"t":[1772310546,1772310696,1772310696],"title":"Conversion, 5 blocks","seeCircles":"Four filled circles. The picture does not say that tBTC became VRSC, at what rate, or that the transfer waited 5 blocks.","seeRoute":"The receipt reads from the amount sent to the amount received. The axis shows that the wait was before the export and that the three last stages were one block.","place":1},{"txid":"1a93458156ec795614cf156eded0c79762871cd6bb3346be2e1c1d0d5c6c9ec3","root":0,"label":"Conversion","h":3962006,"conf":"Verified","verdict":"Received. The replay matches the result output.","eh":3962008,"batch":8,"dest":"Bridge.vETH","ih":3962008,"cand":0,"principal":[{"c":"VRSC","a":20.0}],"pool":"Bridge.vETH","cfee":{"c":"VRSC","a":0.01},"tfee":{"c":"VRSC","a":0.0002001},"result":[{"c":"DAI.vETH","a":15.39445715}],"net":{"c":"VRSC","a":19.99},"rate":0.77010791,"outs":10,"t":[1772310658,1772310696,1772310696],"title":"Conversion, 2 blocks","seeCircles":"The same four filled circles as each other completed transfer.","seeRoute":"The shortest wait in the sample. No other output went to the same address, thus the result has no other candidate.","place":7},{"txid":"6678f30786ed5b31cf686394981cb87bdf9fecfcfab0b505178ee54865d7358a","root":1,"label":"Conversion","h":3962005,"conf":"Verified","verdict":"Received. The replay matches the result output.","eh":3962015,"batch":10,"dest":"SUPER🛒","ih":3962015,"cand":4,"principal":[{"c":"scrvUSD.vETH","a":17.10365977}],"pool":"SUPER🛒","cfee":{"c":"scrvUSD.vETH","a":0.00855182},"tfee":{"c":"VRSC","a":0.0002001},"result":[{"c":"tBTC.vETH","a":0.00028326}],"net":{"c":"scrvUSD.vETH","a":17.09510795},"rate":1.656e-05,"outs":12,"t":[1772310608,1772311462,1772311462],"title":"Conversion, 10 blocks","seeCircles":"The same four filled circles. This transfer waited more than 14 minutes, and the picture is the same as for the transfer that waited 38 seconds.","seeRoute":"The longest wait in the sample is a long line. The batch had 10 transfers.","place":3},{"txid":"1b412039c25e441f6b42b3e2de3858cdfc27af6e999d5119170bc1e80355b378","root":0,"label":"Cross-system transfer","h":3962187,"conf":"Observed","verdict":"Exported. The searched blocks do not contain the import.","eh":3962189,"batch":6,"dest":"Bridge.vDEX","ih":null,"cand":0,"principal":[{"c":"DAI.vETH","a":171.9786003}],"pool":null,"cfee":null,"tfee":{"c":"VRSC","a":0.00143789},"result":[],"t":[1772322755,1772322780],"title":"To a different chain","seeCircles":"Two filled circles and two dashed circles. This is the case that the picture was made for, and it is clear.","seeRoute":"The axis shows the two blocks to the export, then a dashed line. The receipt says where the import is and that the app did not find it.","place":0}],"waits":{"2":43,"3":33,"4":12,"5":11,"6":17,"7":9,"8":6,"9":1,"10":2},"figs":[["134 of 140","traces ended with a verified result"],["2 to 10","blocks from the transfer to the result"],["3 min 25 s","is the median wait"],["0","blocks between the export and the import"],["1 to 25","transfers in one export"]]};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = id => document.getElementById(id);
+const num = x => { const s = Math.abs(x).toFixed(8).replace(/\.?0+$/, ""); const [a, b] = s.split("."); return a.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (b ? "." + b : ""); };
+const money = a => `${num(a.a)} ${a.c}`;
+const span = s => s >= 120 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${Math.round(s)} s`;
+
+function waits() {
+  const W = 760, H = 150, keys = Object.keys(DATA.waits).map(Number), lo = Math.min(...keys), hi = Math.max(...keys), max = Math.max(...Object.values(DATA.waits));
+  const bw = W / (hi - lo + 1);
+  let out = "";
+  for (let b = lo; b <= hi; b++) {
+    const n = DATA.waits[b] || 0, h = n / max * (H - 44), x = (b - lo) * bw;
+    out += `<rect x="${(x + 6).toFixed(1)}" y="${(H - 24 - h).toFixed(1)}" width="${(bw - 12).toFixed(1)}" height="${Math.max(h, n ? 1.5 : 0).toFixed(1)}" fill="var(--accent)" opacity="0.85"/><text x="${(x + bw / 2).toFixed(1)}" y="${H - 8}" font-size="11.5" text-anchor="middle" fill="var(--muted)">${b} blocks</text>` + (n ? `<text x="${(x + bw / 2).toFixed(1)}" y="${(H - 29 - h).toFixed(1)}" font-size="11.5" text-anchor="middle" fill="currentColor">${n}</text>` : "");
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Number of conversions by blocks from transfer to result">${out}</svg>`;
+}
+
+/* The picture today: four stages with equal spacing, filled as far as the trace got. */
+function circles(t) {
+  const W = 760, y = 40, labels = ["Sent", "Exported", "Imported", "Received"], reached = t.ih ? 4 : 2;
+  const xs = [0, 1, 2, 3].map(i => W * (0.1 + 0.8 * i / 3));
+  let out = "";
+  for (let i = 0; i < 3; i++) { const done = i + 1 < reached; out += `<line x1="${xs[i] + 14}" y1="${y}" x2="${xs[i + 1] - 14}" y2="${y}" stroke="${done ? "var(--accent)" : "var(--muted)"}" stroke-width="${done ? 3 : 1.5}"${done ? "" : ' stroke-dasharray="5 5"'}/>`; }
+  for (let i = 0; i < 4; i++) {
+    const done = i < reached, r = i === reached - 1 ? 15 : 12;
+    out += done ? `<circle cx="${xs[i]}" cy="${y}" r="${r}" fill="${i === 3 ? "var(--ok)" : "var(--accent)"}"/><path d="M${xs[i] - 5} ${y} l4 4 l7 -8" fill="none" stroke="var(--surface)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`
+      : `<circle cx="${xs[i]}" cy="${y}" r="${r}" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="4 3"/>`;
+    out += `<text x="${xs[i]}" y="${y + 36}" font-size="13" text-anchor="middle" font-weight="${done ? 600 : 400}" fill="${done ? "currentColor" : "var(--muted)"}">${labels[i]}</text>`;
+  }
+  return `<svg viewBox="0 0 ${W} 96" role="img" aria-label="Four stages of the transfer, filled as far as the trace got">${out}</svg>`;
+}
+
+/* The proposal: a receipt line, an axis of blocks, and the batch. */
+function route(t) {
+  const W = 760; let out = "", y = 22;
+  // The receipt.
+  const box = (x, w, top, bottom, strong) => `<rect x="${x}" y="${y}" width="${w}" height="46" rx="6" fill="${strong ? "var(--accent-soft)" : "none"}" stroke="${strong ? "var(--accent)" : "var(--line)"}"/><text x="${x + 10}" y="${y + 18}" font-size="11" fill="var(--muted)" letter-spacing="0.04em">${top}</text><text x="${x + 10}" y="${y + 37}" font-size="13.5" font-weight="${strong ? 600 : 500}" fill="currentColor" style="font-variant-numeric: tabular-nums">${esc(bottom)}</text>`;
+  const arrow = (x0, x1, label) => `<line x1="${x0}" y1="${y + 23}" x2="${x1 - 6}" y2="${y + 23}" stroke="var(--muted)"/><path d="M${x1 - 6} ${y + 19} l6 4 l-6 4 z" fill="var(--muted)"/>` + (label ? `<text x="${(x0 + x1) / 2}" y="${y + 15}" font-size="11" text-anchor="middle" fill="var(--muted)">${esc(label)}</text>` : "");
+  out += box(0, 196, "SENT", money(t.principal[0]), false);
+  if (t.ih) {
+    const pct = t.cfee.a / t.principal[0].a * 100;
+    out += arrow(196, 262, `fee ${pct.toFixed(pct < 0.1 ? 3 : 2)}%`) + box(262, 196, "CONVERTED IN " + esc(t.pool).toUpperCase(), money(t.net), false);
+    out += arrow(458, 536, "") + box(536, 224, "RECEIVED", money(t.result[0]), true);
+    y += 66;
+    out += `<text x="0" y="${y}" font-size="13" fill="currentColor">Rate of the batch: ${num(t.rate)} ${esc(t.result[0].c)} for 1 ${esc(t.net.c)}.</text>`;
+    y += 20;
+    out += `<text x="0" y="${y}" font-size="13" fill="currentColor">Conversion fee: ${money(t.cfee)}. Transfer fee budget, apart from the amount: ${money(t.tfee)}.</text>`;
+  } else {
+    out += arrow(196, 262, "") + `<rect x="262" y="${y}" width="${W - 262}" height="46" rx="6" fill="none" stroke="var(--muted)" stroke-dasharray="5 4"/><text x="272" y="${y + 18}" font-size="11" fill="var(--muted)" letter-spacing="0.04em">ON ${esc(t.dest).toUpperCase()}</text><text x="272" y="${y + 37}" font-size="13.5" fill="var(--muted)">The app did not find the import in the blocks that it searched.</text>`;
+    y += 66;
+    out += `<text x="0" y="${y}" font-size="13" fill="currentColor">Transfer fee budget, apart from the amount: ${money(t.tfee)}.</text>`;
+  }
+  // The axis of blocks.
+  y += 44;
+  const end = t.ih || t.eh, blocks = end - t.h, shown = t.ih ? blocks : blocks + 4, left = 60, right = W - (t.ih ? 240 : 60), sx = b => left + b / shown * (right - left);
+  out += `<line x1="${left}" y1="${y}" x2="${sx(blocks)}" y2="${y}" stroke="var(--accent)" stroke-width="3"/>`;
+  if (!t.ih) out += `<line x1="${sx(blocks)}" y1="${y}" x2="${right}" y2="${y}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 5"/>`;
+  for (let b = 0; b <= blocks; b++) out += `<line x1="${sx(b)}" y1="${y - 5}" x2="${sx(b)}" y2="${y + 5}" stroke="var(--muted)"/>`;
+  out += `<circle cx="${sx(0)}" cy="${y}" r="7" fill="var(--accent)"/><text x="${sx(0)}" y="${y - 14}" font-size="12.5" font-weight="600" text-anchor="middle" fill="currentColor">Sent</text><text x="${sx(0)}" y="${y + 24}" font-size="11.5" text-anchor="middle" fill="var(--muted)">block ${t.h.toLocaleString("en-US")}</text>`;
+  out += `<circle cx="${sx(blocks)}" cy="${y}" r="9" fill="${t.ih ? "var(--ok)" : "var(--accent)"}"/><text x="${sx(blocks) + (t.ih ? 16 : 0)}" y="${y - 14}" font-size="12.5" font-weight="600" text-anchor="${t.ih ? "start" : "middle"}" fill="currentColor">${t.ih ? "Exported, imported and received" : "Exported"}</text><text x="${sx(blocks) + (t.ih ? 16 : 0)}" y="${y + 24}" font-size="11.5" text-anchor="${t.ih ? "start" : "middle"}" fill="var(--muted)">block ${end.toLocaleString("en-US")}${t.ih ? ", one block" : ""}</text>`;
+  out += `<text x="${(sx(0) + sx(blocks)) / 2}" y="${y - 14}" font-size="12" text-anchor="middle" fill="currentColor">${blocks} blocks · ${span(t.t[1] - t.t[0])}</text>`;
+  if (!t.ih) out += `<text x="${right}" y="${y - 14}" font-size="12.5" text-anchor="end" fill="var(--muted)">import on ${esc(t.dest)}: not found</text>`;
+  // The batch.
+  y += 58;
+  out += `<text x="0" y="${y + 4}" font-size="11.5" font-weight="600" fill="var(--muted)" letter-spacing="0.04em">EXPORT BATCH</text>`;
+  for (let i = 0; i < t.batch; i++) out += `<rect x="${118 + i * 17}" y="${y - 7}" width="13" height="13" rx="2" fill="${i === t.place ? "var(--accent)" : "var(--muted)"}" opacity="${i === t.place ? 1 : 0.45}"/>`;
+  out += `<text x="${118 + t.batch * 17 + 8}" y="${y + 4}" font-size="13" fill="currentColor">${t.batch === 1 ? "This transfer was alone in its export." : `1 of ${t.batch} transfers in the export.` }</text>`;
+  if (t.ih) { y += 24; out += `<text x="0" y="${y + 4}" font-size="13" fill="currentColor">All conversions of the batch got the same rate. ${t.cand ? `${t.cand} other ${t.cand === 1 ? "output" : "outputs"} of the import went to the same address. The replay finds this one.` : "No other output of the import went to the same address."}</text>`; }
+  return `<svg viewBox="0 0 ${W} ${y + 16}" role="img" aria-label="The transfer as a receipt, an axis of blocks and its batch">${out}</svg>`;
+}
+
+const FORMS = [["circles", "Four circles today"], ["route", "Proposal"]];
+const state = { t: 0, form: "route" };
+function render() {
+  const t = DATA.traces[state.t];
+  $("picker").innerHTML = "Transfer: " + DATA.traces.map((x, i) => `<button type="button" data-t="${i}" aria-pressed="${i === state.t}">${esc(x.title)}</button>`).join("");
+  $("forms").innerHTML = "Form: " + FORMS.map(f => `<button type="button" data-form="${f[0]}" aria-pressed="${f[0] === state.form}">${f[1]}</button>`).join("");
+  $("ident").textContent = `${t.txid} · output ${t.root} · block ${t.h.toLocaleString("en-US")}`;
+  $("say").textContent = t.verdict;
+  $("stage").innerHTML = state.form === "circles" ? circles(t) : route(t);
+  $("see").textContent = state.form === "circles" ? t.seeCircles : t.seeRoute;
+}
+function start() {
+  $("figs").innerHTML = DATA.figs.map(f => `<div><b>${f[0]}</b><span>${f[1]}</span></div>`).join("");
+  $("waits").innerHTML = waits();
+  $("picker").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.t = Number(b.dataset.t); render(); } });
+  $("forms").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.form = b.dataset.form; render(); } });
+  render();
+}
+start();
+</script>
