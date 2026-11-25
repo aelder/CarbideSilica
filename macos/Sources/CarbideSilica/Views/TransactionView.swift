@@ -20,6 +20,8 @@ struct TransactionView: View {
     @State private var scrollTarget: String?
     /// Carbide's verified registration payment annotations, by output.
     @State private var paymentAnnotations: [UInt32: String] = [:]
+    /// The row of the statement whose inputs and outputs are marked in the lists.
+    @State private var marked: StatementSelection?
 
     private var names: Bool { showNames ?? showsNamesSetting }
     private var dates: Bool { showDates ?? showsDatesSetting }
@@ -38,6 +40,7 @@ struct TransactionView: View {
             }
             .focusedSceneValue(\.investigations, investigations(transaction))
             .task(id: transaction.txid) {
+                marked = nil
                 consumePendingTrace(transaction)
                 await model.resolveNames(Self.ids(in: transaction))
             }
@@ -72,9 +75,11 @@ struct TransactionView: View {
 
             TransactionHeader(transaction: transaction, showDates: dates)
 
-            Card("Flow") {
-                TransactionFlowView(
-                    flow: TransactionFlowModel(transaction: transaction, coin: transaction.coin))
+            Card("Statement") {
+                TransactionStatementView(
+                    transaction: transaction, selection: $marked,
+                    scroll: { scrollTarget = $0 },
+                    follow: { start("trace-\($0)") })
             }
 
             ForEach(transaction.traceRoots, id: \.output) { root in
@@ -102,6 +107,8 @@ struct TransactionView: View {
                         position, input in
                         if position > 0 { Divider() }
                         InputRow(input: input, spentInBlock: transaction.blockHash != nil, showDates: dates)
+                            .background(mark(marked?.inputs.contains(input.index) == true))
+                            .id("input-\(input.index)")
                     }
                 }
             }
@@ -114,6 +121,8 @@ struct TransactionView: View {
                         OutputRow(
                             output: output, txid: transaction.txid,
                             paymentAnnotation: paymentAnnotations[output.index])
+                            .background(mark(marked?.outputs.contains(output.index) == true))
+                            .id("output-\(output.index)")
                     }
                 }
             }
@@ -125,6 +134,11 @@ struct TransactionView: View {
 
             JSONSection(json: transaction.json, showNames: names, showDates: dates)
         }
+    }
+
+    /// The fill of a row that the statement marks.
+    private func mark(_ on: Bool) -> Color {
+        on ? Color.accentColor.opacity(0.1) : .clear
     }
 
     /// The menu's investigation commands: each scrolls to its card and starts it.
@@ -187,6 +201,12 @@ struct TransactionView: View {
                 default: break
                 }
             }
+        }
+        ids += transaction.statement.columns.compactMap { $0 }
+        ids += transaction.statement.parties.compactMap(\.currencyId)
+        ids += transaction.statement.marks.compactMap(\.currencyId)
+        for route in transaction.statement.routes {
+            ids += [route.via, route.toCurrency, route.destination].compactMap { $0 }
         }
         ids += transaction.accounting.inputs.reserves.map(\.currency)
         ids += transaction.accounting.outputs.reserves.map(\.currency)

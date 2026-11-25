@@ -656,3 +656,55 @@ async fn live_shell_records_what_the_dashboard_can_show_later() {
     println!("mempool from {}", snapshot.provenance.source);
     assert!(!snapshot.provenance.source.is_empty());
 }
+
+#[test]
+fn waits_run_between_bursts_and_ignore_blocks_inside_one() {
+    // Three bursts: (100, 101, 102), (400, 405), (1000). A timestamp before the block
+    // before (399 after 405) stays in its burst.
+    let times = [100, 101, 102, 400, 405, 399, 1000];
+    assert_eq!(waits_between_bursts(&times, BURST_SECONDS), vec![298, 601]);
+    // A gap equal to the limit is still one burst.
+    assert_eq!(waits_between_bursts(&[0, 10, 21], 10), vec![11]);
+    assert!(waits_between_bursts(&[5], 10).is_empty());
+}
+
+#[test]
+fn window_counts_use_only_complete_windows() {
+    // One block each 60 seconds for 20 minutes, then nothing for 10 minutes, then one.
+    let mut times: Vec<u64> = (0..20).map(|minute| minute * 60).collect();
+    times.push(1_800);
+    let counts = window_counts(&times, 600);
+    // Windows start each 120 seconds: 0, 120, ... 1200. The last complete one ends at 1800.
+    assert_eq!(counts.len(), 11);
+    assert_eq!(counts.first(), Some(&0));
+    assert_eq!(counts.last(), Some(&10));
+    assert!(window_counts(&[], 600).is_empty());
+    assert!(window_counts(&[1, 2, 3], 600).is_empty());
+}
+
+#[tokio::test]
+#[ignore]
+async fn live_shell_pulse_history_reads_without_recording() {
+    let explorer = super::super::tests::live_explorer();
+    let tip = explorer.chain_status().await.unwrap().blocks;
+    let before = explorer.cache_info().bytes;
+    let history = explorer.pulse_history(tip, 300, 1_500).await.unwrap();
+    println!(
+        "{} blocks over {} s, {} waits, median {:?} s, longest {:?} s, windows {:?}..{:?}",
+        history.blocks,
+        history.covered_seconds,
+        history.waits.len(),
+        history.waits.get(history.waits.len() / 2),
+        history.waits.last(),
+        history.window_counts.first(),
+        history.window_counts.last()
+    );
+    assert_eq!(history.blocks, 300);
+    assert_eq!(history.last_height, tip);
+    assert!(!history.waits.is_empty());
+    assert!(history.waits.windows(2).all(|pair| pair[0] <= pair[1]));
+    assert!(history.waits.iter().all(|wait| u64::from(*wait) > BURST_SECONDS));
+    assert!(!history.window_counts.is_empty());
+    // A bulk read adds nothing to the cache.
+    assert_eq!(explorer.cache_info().bytes, before);
+}

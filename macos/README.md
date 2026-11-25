@@ -15,20 +15,28 @@ figures and the raw JSON one step away.
 **Places**
 
 - Dashboard: a status line (height against the longest chain, age of the last block, node
-  and API state, peers), the chain pulse, recent blocks, and recent confirmed
+  and API state, peers), the chain pulse (bursts of blocks on a time axis, with the current
+  wait set among a day of recorded waits), recent blocks, and recent confirmed
   transactions with their tags. Stream blocks keeps the newest block in view.
 - Mempool: unconfirmed transactions as tiles sized by bytes and shaded by age, or as a
   list with arrival, fee, size, entry height, unconfirmed parents and tags.
-- Charts: block intervals, mining and staking difficulty with MA100 lines, the PoW ratio
-  over 100 and 1,000 blocks, and the fee pool. Spans are 2 hours, 6 hours, 1 day or 7 days
-  of header time. You can page to older and newer ranges, go to a block or a date, and
-  select a block to see its exact figures.
+- Charts: block rate, mining and staking difficulty with MA100 lines, the staked share
+  over 100 and 1,000 blocks, and the fee pool, as five panels on one time axis with one
+  cursor through all of them. The block rate has process limits and the staked share has
+  the limits of chance, so a signal is distinct from noise. Spans are 2 hours, 6 hours,
+  1 day or 7 days of header time. You can page to older and newer ranges, go to a block or
+  a date, and select a block to see its exact figures. `design/charts-research.html` has
+  the reasons for the form.
 - Future block estimates from Carbide's calibrated rate, with the calibration shown.
 - Currencies: Carbide's filters. Each option flag is Any, Show or Hide, and there are
   launch-status filters. The default view is liquidity pools without failed launches.
-- Marketplace: open offers plotted by time left and price, and the same offers as a list
-  in Carbide's four sort orders, with links to each offer's identity, currencies, funding
-  transaction and addresses.
+- Marketplace: the open offers as a catalogue. An answer line (offers, sellers, the share
+  of the largest seller, lowest and median price), the prices that many offers share as
+  bars, one curve of the offers available at or below each price, and a list with a name
+  search and filters that show their counts: kind of name, length, price, seller and
+  listing period. Carbide's four sort orders and the links to each offer's identity,
+  currencies, funding transaction and addresses stay. `design/market-research.html` has
+  the reasons for the form.
 - Bookmarks, in Carbide's own bookmark file, including notarization views with their
   perspective, manual entry, and Carbide's optional start-up population.
 - Node and peers: synchronization progress, validation speed, peers and bans in one
@@ -45,8 +53,14 @@ figures and the raw JSON one step away.
 - Blocks: header, chain status, the tags of all transactions, stored child branches, and
   a link to the active block when the block is on a side branch.
 - Transactions: Carbide's overview (status, totals, each fee variant, shielded and
-  registration lines), a flow picture, inputs and outputs with Carbide's annotations and
-  maturity badges, and a byte view for unrecognised output data.
+  registration lines), a statement, inputs and outputs with Carbide's annotations and
+  maturity badges, and a byte view for unrecognised output data. The statement is one
+  sentence, then one row for each party with its net change in each currency: a hollow
+  bar for an amount given, a solid bar for an amount received. The reserve deposits of a
+  currency are one party. An amount that only passes through is a figure, outputs
+  without value are named marks, and a reserve transfer shows what it asks for. A row
+  marks its inputs and outputs in the lists. `design/txflow-research.html` has the study
+  behind this form.
 - Transfer trace: Carbide's DeFi trail drawn as a route from sent to received, with live
   progress, leg budgets, execution rates, a comparison with the previous pool
   notarization, and searches of other destination windows.

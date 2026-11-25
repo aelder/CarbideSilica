@@ -1,184 +1,502 @@
 import CarbideCore
 import SwiftUI
 
-/// Open offers involving the chain's own coin, as Carbide requests them.
+/// Open offers involving the chain's own coin, as Carbide requests them, shown as a
+/// catalogue: an answer line, the prices as steps and as one curve, and a list with
+/// filters that show their counts. `macos/design/market-research.html` has the reasons.
 ///
-/// The board places each offer by how long it has left and what it costs. Both things
-/// that matter are on the axes at once: an offer about to lapse sits in the shaded band on
-/// the left, and one priced far from the rest stands apart. Both axes are logarithmic,
-/// because expiry runs from minutes to years and prices span many magnitudes. The list
-/// below is the text form of every offer, in Carbide's four sort orders.
+/// The offers on the chain are mostly identity names for sale at a few exact prices, so a
+/// plot of points puts hundreds of offers on one spot. A person looks for a name, a kind
+/// of name, a price or a seller. Each of those is a filter here, and each filter option
+/// shows how many offers it leaves.
 struct MarketplaceView: View {
     @Environment(AppModel.self) private var model
     @State private var market: Marketplace?
     @State private var failure: String?
     @State private var loading = true
-    @State private var filter = Filter.all
-    @State private var hovered: String?
-    @State private var sort = OfferSort.expiry
+    @State private var items: [MarketItem] = []
+    @State private var store = MarketStore.shared
+    @State private var selected: [Facet: String] = [:]
+    @State private var search = ""
+    @State private var sort = OfferSort.askAmount
     @State private var descending = false
-    @State private var sorted: [Offer] = []
-    @State private var shown = 100
-    /// From each offer's funding transaction: when it was listed and its addresses.
-    @State private var funding: [String: OfferFunding] = [:]
-    @State private var fundingTask: Task<Void, Never>?
+    @State private var ordered: [MarketItem] = []
+    @State private var shown = 60
+    @State private var hoveredPrice: Double?
+    /// Worked out once for each change of the data, not at each redraw: the option of each
+    /// filter that each offer belongs to, the sellers, and how many offers have details.
+    @State private var values: [String: [Facet: String]] = [:]
+    @State private var sellers: [(address: String, count: Int)] = []
+    @State private var detailed = 0
     @AppStorage(DisplayKey.showsNames) private var showsNames = true
-
-    enum Filter: String, CaseIterable, Identifiable {
-        case all = "All"
-        case sale = "For sale"
-        case wanted = "Wanted"
-        case swap = "Swaps"
-        var id: String { rawValue }
-    }
-
-    private struct Point {
-        let offer: Offer
-        let hours: Double
-        let price: Double
-    }
 
     var body: some View {
         let _ = showsNames
         ScrollViewReader { proxy in
             Page {
-                Card("Open offers", trailing: market.map { "\($0.offers.count) involving \($0.subject)" }) {
+                Card("Open offers", trailing: market.map { "\(Format.integer(UInt64($0.offers.count))) involving \($0.subject)" }) {
                     if loading && market == nil {
-                        ProgressView("Loading offers…").frame(maxWidth: .infinity, minHeight: 240)
+                        ProgressView("Loading offers…").frame(maxWidth: .infinity, minHeight: 160)
                     } else if let failure, market == nil {
                         Note(text: failure, warning: true)
-                    } else {
-                        board
+                    } else if let market {
+                        summary(market)
+                    }
+                }
+                if market != nil, !priced.isEmpty {
+                    Card("Prices", trailing: "ask in \(priceTicker)") {
+                        prices
                     }
                 }
                 if let market {
-                    Card("Offers", trailing: "\(sorted.count) shown") {
-                        listControls
-                            .id("offers-top")
+                    Card("Catalogue") {
                         if market.truncated {
                             Note(text: "The node returned more offers than the app keeps. The app shows the first 5,000.", warning: true)
                         }
-                        if sorted.isEmpty {
-                            Text("No open offers were returned for this currency.").foregroundStyle(.secondary)
-                        }
-                        LazyVStack(spacing: 0) {
-                            ForEach(sorted.prefix(shown), id: \.txid) { offer in
-                                Divider()
-                                OfferRow(
-                                    offer: offer, funding: funding[offer.txid], ticker: name,
-                                    loadAddresses: { Task { await loadFunding([offer.txid]) } })
-                            }
-                        }
-                        if sorted.count > shown {
-                            Button("Show \(min(100, sorted.count - shown)) More") { shown += 100 }
+                        HStack(alignment: .top, spacing: 22) {
+                            facets.frame(width: 232)
+                            results.id("catalogue-top")
                         }
                     }
+                    smallerSellers
                 }
             }
-            .onChange(of: SortKey(sort: sort, descending: descending, filter: filter)) {
+            .onChange(of: ListKey(sort: sort, descending: descending, selected: selected, search: search)) {
+                reorder()
+            }
+            .onChange(of: store.details.count) {
+                rebuild()
+            }
+            .onChange(of: ScrollKey(sort: sort, descending: descending, selected: selected)) {
                 // As in Carbide, a new sort order returns to the top.
-                shown = 100
-                resort()
-                proxy.scrollTo("offers-top", anchor: .top)
+                shown = 60
+                proxy.scrollTo("catalogue-top", anchor: .top)
             }
         }
         .navigationTitle("Marketplace")
-        .task(id: model.generation) { await load() }
-        .onDisappear {
-            fundingTask?.cancel()
-            fundingTask = nil
+        .task(id: model.generation) {
+            await load()
+            await loadDetails(force: false)
         }
+        .focusedSceneValue(\.placeActions, PlaceActions(refresh: { Task { await load() } }))
     }
 
-    private struct SortKey: Equatable {
+    private struct ListKey: Equatable {
         let sort: OfferSort
         let descending: Bool
-        let filter: Filter
+        let selected: [Facet: String]
+        let search: String
     }
 
-    // MARK: Board
+    private struct ScrollKey: Equatable {
+        let sort: OfferSort
+        let descending: Bool
+        let selected: [Facet: String]
+    }
 
+    // MARK: Summary
+
+    /// The answer first: how many offers, from how many sellers, at what prices.
     @ViewBuilder
-    private var board: some View {
+    private func summary(_ market: Marketplace) -> some View {
         HStack {
-            Picker("Show", selection: $filter) {
-                ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 360)
+            ProvenanceNote(provenance: market.provenance)
             Spacer()
             if loading { ProgressView().controlSize(.small) }
             Button("Refresh") { Task { await load() } }.disabled(loading)
         }
-        if let market {
-            ProvenanceNote(provenance: market.provenance)
-            Text("Request: getoffers for \(market.subject).")
-                .font(.caption).foregroundStyle(.secondary)
-        }
         if let failure {
             Note(text: failure, warning: true)
         }
-        if points.isEmpty {
-            Text("No offer priced in \(model.coin) with time left matches the filter.").foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 120)
-        } else {
-            GeometryReader { geometry in
-                Canvas { context, size in
-                    draw(context, size)
-                }
-                .contentShape(Rectangle())
-                .onContinuousHover { phase in
-                    if case .active(let point) = phase {
-                        hovered = nearest(to: point, in: geometry.size)?.offer.txid
-                    } else {
-                        hovered = nil
-                    }
-                }
-                .onTapGesture(coordinateSpace: .local) { point in
-                    if let found = nearest(to: point, in: geometry.size) {
-                        model.open(.transaction(txid: found.offer.txid))
-                    }
-                }
+        let prices = priced.map(\.price!).sorted()
+        HStack(spacing: 20) {
+            figure("Offers", Format.integer(UInt64(items.count)))
+            if let top = sellers.first {
+                figure("Sellers", "\(sellers.count)")
+                figure("Largest seller", "\(Int((Double(top.count) / Double(max(detailed, 1)) * 100).rounded()))%")
             }
-            .frame(height: 340)
-            Text(caption)
-                .font(.callout)
-                .foregroundStyle(hovered == nil ? .secondary : .primary)
-                .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
+            if let low = prices.first {
+                figure("Lowest", "\(Format.amount(low)) \(priceTicker)")
+                figure("Median", "\(Format.amount(prices[prices.count / 2])) \(priceTicker)")
+            }
+            if let newest = items.compactMap({ listed($0) }).max() {
+                figure("Newest offer", Self.age(since: newest) + " ago")
+            }
+            Spacer(minLength: 0)
         }
-        let excluded = filtered.count - points.count
-        if excluded > 0 {
-            Text("\(excluded) offer\(excluded == 1 ? " is" : "s are") not on the board. The ask is not one amount of \(model.coin), or the offer has no time left. The list below shows every offer.")
-                .font(.caption).foregroundStyle(.secondary)
+        .font(.callout)
+        .lineLimit(1)
+        detailProgress
+        Text("Request: getoffers for \(market.subject). The seller of an identity is its first primary address now.")
+            .font(.caption).foregroundStyle(.secondary)
+    }
+
+    private func figure(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 5) {
+            Text(label).foregroundStyle(.secondary)
+            Text(value).fontWeight(.semibold).monospacedDigit()
         }
     }
 
-    private var listControls: some View {
-        HStack {
-            Picker("Sort by", selection: $sort) {
-                Text("Expiry").tag(OfferSort.expiry)
-                Text("Name").tag(OfferSort.name)
-                Text("Ask amount").tag(OfferSort.askAmount)
-                Text("Listing age").tag(OfferSort.listingAge)
+    /// The sellers and the listing dates need two requests for each offer.
+    @ViewBuilder
+    private var detailProgress: some View {
+        if store.loading {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Reading sellers and listing dates: \(Format.integer(UInt64(detailed))) of \(Format.integer(UInt64(items.count)))")
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 420)
-            Toggle("Reverse", isOn: $descending).toggleStyle(.button)
-            Spacer()
-            Text(sortNote).font(.caption).foregroundStyle(.secondary)
+        } else if detailed < items.count {
+            HStack(spacing: 8) {
+                Text(
+                    store.problem
+                        ?? "The sellers and the listing dates are not read. They need two requests for each offer."
+                )
+                .font(.caption).foregroundStyle(.secondary)
+                Button("Read Sellers and Dates") { Task { await loadDetails(force: true) } }
+                    .controlSize(.small)
+            }
         }
+    }
+
+    // MARK: Prices
+
+    /// The exact prices that many offers share, as bars, and one curve of how many offers
+    /// are available at or below each price.
+    private var prices: some View {
+        let steps = priceSteps
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 26) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Prices that many offers share").font(.callout.weight(.semibold))
+                    let top = Double(steps.map(\.count).max() ?? 1)
+                    ForEach(steps, id: \.label) { step in
+                        HStack(spacing: 8) {
+                            Text(step.label).monospacedDigit().frame(width: 104, alignment: .trailing)
+                            GeometryReader { geometry in
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.accentColor.opacity(step.other ? 0.4 : 0.85))
+                                    .frame(width: max(geometry.size.width * CGFloat(Double(step.count) / top), 2))
+                            }
+                            .frame(height: 12)
+                            Text(Format.integer(UInt64(step.count))).monospacedDigit().frame(width: 44, alignment: .leading)
+                        }
+                        .font(.callout)
+                    }
+                }
+                .frame(maxWidth: 330)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Offers at or below each price").font(.callout.weight(.semibold))
+                    GeometryReader { geometry in
+                        Canvas { context, size in drawSupply(context, size) }
+                            .contentShape(Rectangle())
+                            .onContinuousHover { phase in
+                                if case .active(let point) = phase {
+                                    hoveredPrice = price(atX: point.x, width: geometry.size.width)
+                                } else {
+                                    hoveredPrice = nil
+                                }
+                            }
+                    }
+                    .frame(height: 190)
+                    .accessibilityLabel("The number of offers available at or below each price")
+                    Text(supplyReadout)
+                        .font(.callout)
+                        .foregroundStyle(hoveredPrice == nil ? .secondary : .primary)
+                        .monospacedDigit()
+                }
+            }
+            let unpriced = items.count - priced.count
+            Text(
+                "Each step up in the curve is a price that many offers share. The price scale is logarithmic. "
+                    + (unpriced > 0 ? "\(unpriced) offer\(unpriced == 1 ? " does" : "s do") not ask for one amount of \(priceTicker) and \(unpriced == 1 ? "is" : "are") not in these figures." : "")
+            )
+            .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private struct Step {
+        let label: String
+        let count: Int
+        let other: Bool
+    }
+
+    /// The exact prices with the most offers, cheapest first, and one row for the rest.
+    private var priceSteps: [Step] {
+        var counts: [Double: Int] = [:]
+        for item in priced { counts[item.price!, default: 0] += 1 }
+        let floor = max(priced.count / 60, 3)
+        let common = counts.filter { $0.value >= floor }.sorted { $0.value > $1.value }.prefix(9).sorted { $0.key < $1.key }
+        var steps = common.map { Step(label: "\(Format.amount($0.key)) \(priceTicker)", count: $0.value, other: false) }
+        let rest = priced.count - common.reduce(0) { $0 + $1.value }
+        if rest > 0 { steps.append(Step(label: "each other price", count: rest, other: true)) }
+        return steps
+    }
+
+    private var priceBounds: (low: Double, high: Double) {
+        let values = priced.map(\.price!)
+        let low = max(values.min() ?? 1, 1e-8), high = max(values.max() ?? 10, low * 10)
+        return (pow(10, floor(log10(low))), pow(10, ceil(log10(high))))
+    }
+
+    private func price(atX x: CGFloat, width: CGFloat) -> Double {
+        let bounds = priceBounds, left: CGFloat = 46, right = width - 10
+        let share = Double(min(max((x - left) / (right - left), 0), 1))
+        return pow(10, log10(bounds.low) + share * (log10(bounds.high) - log10(bounds.low)))
+    }
+
+    private var supplyReadout: String {
+        let sortedPrices = priced.map(\.price!).sorted()
+        guard let hoveredPrice else {
+            guard let middle = sortedPrices.isEmpty ? nil : sortedPrices[sortedPrices.count / 2] else { return "" }
+            return "Half of the offers ask \(Format.amount(middle)) \(priceTicker) or less. Move the pointer over the curve to read it."
+        }
+        let count = sortedPrices.filter { $0 <= hoveredPrice }.count
+        return "\(Format.integer(UInt64(count))) offer\(count == 1 ? "" : "s") at \(Format.amount(hoveredPrice.rounded(toSignificant: 3))) \(priceTicker) or less."
+    }
+
+    private func drawSupply(_ context: GraphicsContext, _ size: CGSize) {
+        let sortedPrices = priced.map(\.price!).sorted()
+        guard !sortedPrices.isEmpty else { return }
+        let bounds = priceBounds
+        let left: CGFloat = 46, right = size.width - 10, top: CGFloat = 8, base = size.height - 22
+        let x = { (price: Double) -> CGFloat in
+            left + CGFloat((log10(max(price, bounds.low)) - log10(bounds.low)) / (log10(bounds.high) - log10(bounds.low))) * (right - left)
+        }
+        let y = { (count: Int) -> CGFloat in base - CGFloat(Double(count) / Double(sortedPrices.count)) * (base - top) }
+        for share in [0.0, 0.5, 1.0] {
+            let count = Int(Double(sortedPrices.count) * share), gy = y(count)
+            context.stroke(
+                Path { path in
+                    path.move(to: CGPoint(x: left, y: gy))
+                    path.addLine(to: CGPoint(x: right, y: gy))
+                }, with: .color(.secondary.opacity(0.14)), lineWidth: 1)
+            context.draw(
+                Text(Format.integer(UInt64(count))).font(.caption2).foregroundStyle(.secondary),
+                at: CGPoint(x: left - 6, y: gy), anchor: .trailing)
+        }
+        var decade = bounds.low
+        while decade <= bounds.high * 1.0001 {
+            let last = decade * 10 > bounds.high * 1.0001
+            context.draw(
+                Text(Format.amount(decade)).font(.caption2).foregroundStyle(.secondary),
+                at: CGPoint(x: x(decade), y: base + 11), anchor: last ? .trailing : .center)
+            decade *= 10
+        }
+        var curve = Path()
+        curve.move(to: CGPoint(x: left, y: base))
+        for (index, price) in sortedPrices.enumerated() {
+            curve.addLine(to: CGPoint(x: x(price), y: y(index)))
+            curve.addLine(to: CGPoint(x: x(price), y: y(index + 1)))
+        }
+        curve.addLine(to: CGPoint(x: right, y: top))
+        var area = curve
+        area.addLine(to: CGPoint(x: right, y: base))
+        area.closeSubpath()
+        context.fill(area, with: .color(Color.accentColor.opacity(0.14)))
+        context.stroke(curve, with: .color(Color.accentColor), lineWidth: 1.6)
+        if let hoveredPrice {
+            let hx = x(hoveredPrice)
+            context.stroke(
+                Path { path in
+                    path.move(to: CGPoint(x: hx, y: top))
+                    path.addLine(to: CGPoint(x: hx, y: base))
+                }, with: .color(.primary.opacity(0.7)), lineWidth: 1)
+        }
+    }
+
+    // MARK: Filters
+
+    /// Each option shows its count with the other filters applied, and a bar for it.
+    private var facets: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(Facet.allCases, id: \.self) { facet in
+                let options = options(for: facet)
+                if !options.isEmpty {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(facet.title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        let counts = counts(for: facet)
+                        let top = max(counts.values.max() ?? 1, 1)
+                        ForEach(options, id: \.self) { option in
+                            FacetOption(
+                                label: option, count: counts[option] ?? 0, share: Double(counts[option] ?? 0) / Double(top),
+                                on: selected[facet] == option
+                            ) {
+                                selected[facet] = selected[facet] == option ? nil : option
+                            }
+                        }
+                    }
+                }
+            }
+            if detailed < items.count, !store.loading {
+                Text("The Seller and Offered filters appear when the sellers and dates are read.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// How many offers each option of a filter leaves, with the other filters applied.
+    private func counts(for facet: Facet) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for item in items where matches(item, skipping: facet) {
+            if let option = values[item.offer.txid]?[facet] { counts[option, default: 0] += 1 }
+        }
+        return counts
+    }
+
+    private func options(for facet: Facet) -> [String] {
+        switch facet {
+        case .offer:
+            let kinds = Set(items.map { $0.kindLabel })
+            return kinds.count > 1 ? ["For sale", "Wanted", "Swap"].filter(kinds.contains) : []
+        case .name: return NameKind.allCases.map(\.rawValue)
+        case .length: return ["1", "2", "3", "4", "5 to 7", "8 or more"]
+        case .price: return MarketItem.priceBands.map(\.label)
+        case .seller:
+            guard detailed > 0 else { return [] }
+            var options = namedSellers.map { Format.short($0, head: 6, tail: 4) }
+            if sellers.count > options.count { options.append("Other sellers") }
+            return options
+        case .listed:
+            return detailed > 0 ? ["In the last 90 days", "90 days to 1 year", "1 to 2 years", "More than 2 years"] : []
+        }
+    }
+
+    /// The sellers that the Seller filter names: the five largest with five offers or more.
+    private var namedSellers: [String] {
+        sellers.filter { $0.count >= 5 }.prefix(5).map(\.address)
+    }
+
+    /// The option of a filter that an offer belongs to. `rebuild` keeps the results.
+    private func value(_ facet: Facet, _ item: MarketItem, named: [String]) -> String? {
+        switch facet {
+        case .offer: return item.kindLabel
+        case .name: return item.traits?.kind.rawValue
+        case .length: return item.traits.map { MarketItem.lengthBand($0.length) }
+        case .price: return item.price.flatMap { MarketItem.priceBand($0) }
+        case .seller:
+            guard let holder = store.details[item.offer.txid]?.holder else { return nil }
+            return named.contains(holder) ? Format.short(holder, head: 6, tail: 4) : "Other sellers"
+        case .listed:
+            guard let time = listed(item) else { return nil }
+            let days = Date.now.timeIntervalSince1970 / 86_400 - Double(time) / 86_400
+            if days <= 90 { return "In the last 90 days" }
+            if days <= 365 { return "90 days to 1 year" }
+            if days <= 730 { return "1 to 2 years" }
+            return "More than 2 years"
+        }
+    }
+
+    private func matches(_ item: MarketItem, skipping: Facet?) -> Bool {
+        let query = search.trimmingCharacters(in: .whitespaces)
+        if !query.isEmpty, !item.title.localizedCaseInsensitiveContains(query) { return false }
+        let own = values[item.offer.txid]
+        for (facet, option) in selected where facet != skipping {
+            if own?[facet] != option { return false }
+        }
+        return true
+    }
+
+    // MARK: Results
+
+    private var results: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                TextField("Search the names", text: $search)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 240)
+                Text("\(Format.integer(UInt64(ordered.count))) of \(Format.integer(UInt64(items.count))) offers")
+                    .font(.headline).monospacedDigit()
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 8) {
+                Text(appliedText).font(.callout).foregroundStyle(.secondary).lineLimit(2)
+                if !selected.isEmpty || !search.isEmpty {
+                    Button("Clear Filters") {
+                        selected = [:]
+                        search = ""
+                    }
+                    .controlSize(.small)
+                }
+                Spacer(minLength: 0)
+            }
+            HStack {
+                Picker("Sort by", selection: $sort) {
+                    Text("Ask amount").tag(OfferSort.askAmount)
+                    Text("Name").tag(OfferSort.name)
+                    Text("Expiry").tag(OfferSort.expiry)
+                    Text("Listing age").tag(OfferSort.listingAge)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 400)
+                Toggle("Reverse", isOn: $descending).toggleStyle(.button)
+                Spacer(minLength: 0)
+            }
+            Text(sortNote).font(.caption).foregroundStyle(.secondary)
+            if ordered.isEmpty {
+                Text(items.isEmpty ? "No open offers were returned for this currency." : "No offer matches the filters.")
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 12)
+            }
+            LazyVStack(spacing: 0) {
+                ForEach(ordered.prefix(shown)) { item in
+                    Divider()
+                    OfferLine(
+                        item: item, detail: store.details[item.offer.txid], ticker: name, priceTicker: priceTicker,
+                        priceBounds: priceBounds)
+                }
+            }
+            if ordered.count > shown {
+                Button("Show \(min(100, ordered.count - shown)) More") { shown += 100 }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var appliedText: String {
+        var parts = Facet.allCases.compactMap { facet in selected[facet].map { "\(facet.title): \($0)" } }
+        let query = search.trimmingCharacters(in: .whitespaces)
+        if !query.isEmpty { parts.insert("Name contains \"\(query)\"", at: 0) }
+        return parts.isEmpty ? "No filter is applied." : parts.joined(separator: " · ")
     }
 
     private var sortNote: String {
         switch sort {
-        case .expiry: return descending ? "Latest expiry first" : "Soonest expiry first"
-        case .name: return descending ? "Names Z to A" : "Names A to Z"
+        case .expiry: return descending ? "Latest expiry first." : "Soonest expiry first."
+        case .name: return descending ? "Names Z to A." : "Names A to Z."
         case .askAmount: return "Grouped by ask currency, \(descending ? "largest" : "smallest") first. Offers with no single ask last."
         case .listingAge:
-            let known = sorted.filter { funding[$0.txid]?.blockTime != nil }.count
-            let order = descending ? "Oldest listing first" : "Newest listing first"
-            return known < sorted.count ? "\(order). Listing times: \(known) of \(sorted.count) loaded." : order
+            let order = descending ? "Oldest listing first." : "Newest listing first."
+            return detailed < items.count ? "\(order) Listing dates: \(detailed) of \(items.count) read." : order
+        }
+    }
+
+    // MARK: The smaller sellers
+
+    /// When one seller has most of the offers, the offers of the others are the only
+    /// independent prices. They get their own group so that they are not lost.
+    @ViewBuilder
+    private var smallerSellers: some View {
+        if sellers.count > 2, detailed > 0,
+            Double(sellers[0].count + sellers[1].count) / Double(detailed) >= 0.8
+        {
+            let large = Set(sellers.prefix(2).map(\.address))
+            let rest = items.filter { item in
+                store.details[item.offer.txid]?.holder.map { !large.contains($0) } ?? false
+            }.sorted { ($0.price ?? .infinity) < ($1.price ?? .infinity) }
+            Card("Offers of the smaller sellers", trailing: "\(rest.count) from \(sellers.count - 2) sellers") {
+                Text("Two sellers have \(Int((Double(sellers[0].count + sellers[1].count) / Double(detailed) * 100).rounded()))% of the offers. These are the offers of the others.")
+                    .font(.callout).foregroundStyle(.secondary)
+                LazyVStack(spacing: 0) {
+                    ForEach(rest.prefix(60)) { item in
+                        Divider()
+                        OfferLine(
+                            item: item, detail: store.details[item.offer.txid], ticker: name, priceTicker: priceTicker,
+                            priceBounds: priceBounds)
+                    }
+                }
+            }
         }
     }
 
@@ -192,49 +510,74 @@ struct MarketplaceView: View {
             let found = try await explorer.marketplace()
             market = found
             failure = nil
-            resort()
+            // The currency that most offers ask for is the price currency.
+            let asked = Dictionary(grouping: found.offers.compactMap(\.askCurrency), by: { $0 }).mapValues(\.count)
+            let main = asked.max { $0.value < $1.value }?.key
+            items = found.offers.map { MarketItem(offer: $0, priceCurrency: main, name: name) }
+            rebuild()
             let currencies = Set(found.offers.flatMap { $0.links.filter { $0.kind == .currency }.map(\.value) })
             await model.resolveNames(Array(currencies))
-            resort()
+            reorder()
         } catch is CancellationError {
         } catch {
             failure = describe(error)
         }
     }
 
-    private var filtered: [Offer] {
-        (market?.offers ?? []).filter { offer in
-            switch filter {
-            case .all: true
-            case .sale: offer.kind == .identityForSale
-            case .wanted: offer.kind == .identityWanted
-            case .swap: offer.kind == .currencySwap
+    /// Reads the seller and the listing block of each offer, in groups, and keeps them
+    /// for the session. A public API sees each request, so the person starts it there.
+    private func loadDetails(force: Bool) async {
+        guard let explorer = model.explorer, !store.loading else { return }
+        if store.generation != model.generation {
+            store.details = [:]
+            store.generation = model.generation
+        }
+        guard force || model.status?.source != .publicApi else { return }
+        let missing = items.filter { store.details[$0.offer.txid] == nil }
+        guard !missing.isEmpty else { return }
+        store.loading = true
+        store.problem = nil
+        defer { store.loading = false }
+        for start in stride(from: 0, to: missing.count, by: 128) {
+            if Task.isCancelled { return }
+            let group = missing[start..<min(start + 128, missing.count)]
+            let keys = group.map { OfferKey(txid: $0.offer.txid, identityId: $0.offer.offered.identityId) }
+            let found = await explorer.offerDetails(offers: keys)
+            for detail in found { store.details[detail.txid] = detail }
+            if let problem = found.first(where: { $0.error != nil && $0.holder == nil && $0.blockHeight == nil })?.error {
+                // A source that refuses these requests refuses all of them.
+                store.problem = "The source did not answer for the sellers and dates. \(problem)"
+                return
             }
         }
     }
 
-    private func resort() {
-        sorted = sortOffers(
-            offers: filtered, sort: sort, descending: descending, names: sortNames,
-            times: funding.compactMapValues(\.blockTime))
-        if sort == .listingAge { startFundingLoad() }
+    /// Works out the sellers and each offer's filter options again, then the list.
+    private func rebuild() {
+        let holders = items.compactMap { store.details[$0.offer.txid]?.holder }
+        sellers = Dictionary(grouping: holders, by: { $0 }).map { (address: $0.key, count: $0.value.count) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.address < $1.address }
+        detailed = items.filter { store.details[$0.offer.txid] != nil }.count
+        let named = namedSellers
+        var found: [String: [Facet: String]] = [:]
+        for item in items {
+            var own: [Facet: String] = [:]
+            for facet in Facet.allCases {
+                if let option = value(facet, item, named: named) { own[facet] = option }
+            }
+            found[item.offer.txid] = own
+        }
+        values = found
+        reorder()
     }
 
-    /// Listing age needs each funding transaction. Carbide requests them in the
-    /// background while that sort is active, and so does this view.
-    private func startFundingLoad() {
-        guard fundingTask == nil else { return }
-        fundingTask = Task {
-            let missing = sorted.map(\.txid).filter { funding[$0] == nil }
-            for start in stride(from: 0, to: missing.count, by: 64) {
-                if Task.isCancelled || sort != .listingAge { break }
-                await loadFunding(Array(missing[start..<min(start + 64, missing.count)]))
-                sorted = sortOffers(
-                    offers: filtered, sort: sort, descending: descending, names: sortNames,
-                    times: funding.compactMapValues(\.blockTime))
-            }
-            fundingTask = nil
-        }
+    private func reorder() {
+        let visible = items.filter { matches($0, skipping: nil) }
+        let times = store.details.compactMapValues(\.blockTime)
+        let sorted = sortOffers(
+            offers: visible.map(\.offer), sort: sort, descending: descending, names: sortNames, times: times)
+        let byTxid = Dictionary(visible.map { ($0.offer.txid, $0) }, uniquingKeysWith: { first, _ in first })
+        ordered = sorted.compactMap { byTxid[$0.txid] }
     }
 
     /// Resolved names for the name sort, without the trailing "@".
@@ -242,258 +585,366 @@ struct MarketplaceView: View {
         model.names.mapValues { $0.hasSuffix("@") ? String($0.dropLast()) : $0 }
     }
 
-    private func loadFunding(_ txids: [String]) async {
-        guard let explorer = model.explorer else { return }
-        for item in await explorer.offerFunding(txids: txids) {
-            funding[item.txid] = item
-        }
-    }
-
     private func name(_ id: String) -> String {
         knownName(id, model: model)
     }
 
-    // MARK: Board geometry
+    private var priced: [MarketItem] { items.filter { $0.price != nil } }
 
-    /// Offers whose ask is one amount of the chain's own coin and that have time left, so
-    /// they share one price axis.
-    private var points: [Point] {
-        guard let tip = model.status?.blocks, let chain = model.status?.chainId else { return [] }
-        return filtered.compactMap { offer in
-            guard offer.askCurrency == chain, let sats = offer.askSats, sats > 0, offer.expiryHeight > tip
-            else { return nil }
-            return Point(offer: offer, hours: Double(offer.expiryHeight - tip) / 60, price: Double(sats) / 1e8)
+    private var priceTicker: String {
+        items.first { $0.price != nil }?.offer.askCurrency.map(name) ?? model.coin
+    }
+
+    private func listed(_ item: MarketItem) -> UInt64? { store.details[item.offer.txid]?.blockTime }
+
+    static func age(since unix: UInt64) -> String {
+        timeLeft((Date.now.timeIntervalSince1970 - Double(unix)) / 3_600)
+    }
+
+    static func timeLeft(_ hours: Double) -> String {
+        if hours < 1 { return "\(max(Int(hours * 60), 1)) min" }
+        if hours < 48 { return "\(Int(hours)) h" }
+        if hours < 24 * 365 * 2 { return "\(Int(hours / 24)) days" }
+        return "\((hours / 24 / 365).formatted(.number.precision(.fractionLength(1)))) years"
+    }
+}
+
+// MARK: - Model
+
+/// The sellers and listing dates of the session, so that a return to the page does not
+/// read them again.
+@MainActor
+@Observable
+final class MarketStore {
+    static let shared = MarketStore()
+    var details: [String: OfferDetail] = [:]
+    var generation = -1
+    var loading = false
+    var problem: String?
+}
+
+enum Facet: CaseIterable, Hashable {
+    case offer, name, length, price, seller, listed
+
+    var title: String {
+        switch self {
+        case .offer: "Kind of offer"
+        case .name: "Kind of name"
+        case .length: "Length of name"
+        case .price: "Price"
+        case .seller: "Seller"
+        case .listed: "Offered"
+        }
+    }
+}
+
+enum NameKind: String, CaseIterable {
+    case latin = "Latin letters"
+    case emoji = "Emoji and symbols"
+    case other = "Other scripts"
+    case digits = "Digits"
+}
+
+/// What a name is made of. The length is in characters as a person sees them: one emoji
+/// built from several code points is one character.
+struct NameTraits {
+    let kind: NameKind
+    let length: Int
+    let scripts: [String]
+    let codePoints: String
+
+    init(_ name: String) {
+        length = name.count
+        codePoints = name.unicodeScalars.map { String(format: "U+%04X", $0.value) }.joined(separator: " ")
+        let letters = name.unicodeScalars.filter { $0.properties.isAlphabetic }
+        var found: [String] = []
+        for scalar in letters {
+            let script = Self.script(scalar.value)
+            if !found.contains(script) { found.append(script) }
+        }
+        scripts = found
+        if !name.isEmpty, name.unicodeScalars.allSatisfy({ (0x30...0x39).contains($0.value) }) {
+            kind = .digits
+        } else if letters.isEmpty {
+            kind = .emoji
+        } else if found == ["Latin"] {
+            kind = .latin
+        } else {
+            kind = .other
         }
     }
 
-    private func label(_ kind: OfferKind) -> String {
-        switch kind {
+    /// The script of a letter, for the scripts that names on the chain use.
+    private static func script(_ value: UInt32) -> String {
+        switch value {
+        case 0x0041...0x024F, 0x1E00...0x1EFF, 0xFF21...0xFF5A: "Latin"
+        case 0x0370...0x03FF, 0x1F00...0x1FFF: "Greek"
+        case 0x0400...0x052F: "Cyrillic"
+        case 0x0530...0x058F: "Armenian"
+        case 0x0590...0x05FF: "Hebrew"
+        case 0x0600...0x06FF, 0x0750...0x077F, 0x08A0...0x08FF: "Arabic"
+        case 0x0900...0x097F: "Devanagari"
+        case 0x0980...0x09FF: "Bengali"
+        case 0x0B80...0x0BFF: "Tamil"
+        case 0x0E00...0x0E7F: "Thai"
+        case 0x10A0...0x10FF: "Georgian"
+        case 0x1100...0x11FF, 0x3130...0x318F, 0xAC00...0xD7AF: "Hangul"
+        case 0x3040...0x309F: "Hiragana"
+        case 0x30A0...0x30FF, 0x31F0...0x31FF: "Katakana"
+        case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0x20000...0x2A6DF: "Han"
+        case 0x13000...0x1342F: "Egyptian hieroglyphs"
+        default: "another script"
+        }
+    }
+}
+
+/// One offer with the figures that the catalogue filters by.
+struct MarketItem: Identifiable {
+    let offer: Offer
+    /// The identity's name for an identity offer, otherwise the subject's name.
+    let title: String
+    /// The ask, when it is one amount of the price currency.
+    let price: Double?
+    /// For an offer of a named identity.
+    let traits: NameTraits?
+
+    var id: String { offer.txid }
+
+    init(offer: Offer, priceCurrency: String?, name: (String) -> String) {
+        self.offer = offer
+        var identity: String?
+        for side in [offer.offered, offer.accepted] where side.identityId == offer.subjectId {
+            if let found = side.identityName { identity = found }
+        }
+        title = identity ?? offer.subjectId.map(name) ?? offer.category
+        traits = identity.map { NameTraits($0) }
+        if let currency = offer.askCurrency, currency == priceCurrency, let sats = offer.askSats {
+            price = Double(sats) / 100_000_000
+        } else {
+            price = nil
+        }
+    }
+
+    var isIdentity: Bool { traits != nil }
+
+    var kindLabel: String {
+        switch offer.kind {
         case .identityForSale: "For sale"
         case .identityWanted: "Wanted"
         case .currencySwap: "Swap"
         }
     }
 
-    private var caption: String {
-        guard let point = points.first(where: { $0.offer.txid == hovered }) else {
-            return "Offers on the left expire sooner. Offers at the top cost more. A circle is a sale. "
-                + "A square is a request to buy. A diamond is a swap. Click an offer to open its funding transaction."
-        }
-        return "\(OfferRow.subject(point.offer, name: name)) · \(label(point.offer.kind).lowercased()) at "
-            + "\(Format.amount(point.price)) \(model.coin) · \(OfferRow.timeLeft(point.hours))"
+    static let priceBands: [(label: String, low: Double, high: Double)] = [
+        ("21 or less", 0, 21), ("22 to 100", 21, 100), ("101 to 225", 100, 225), ("226 to 500", 225, 500),
+        ("501 to 2,500", 500, 2_500), ("More than 2,500", 2_500, .infinity),
+    ]
+
+    static func priceBand(_ price: Double) -> String? {
+        priceBands.first { price > $0.low && price <= $0.high }?.label
     }
 
-    // Both axes take their range from the offers shown, rounded out to whole powers of ten,
-    // so the points use the space instead of crowding one corner.
-    private var hourRange: (Double, Double) {
-        let hours = points.map(\.hours)
-        let low = pow(10, floor(log10(max(hours.min() ?? 1, 0.1))))
-        let high = pow(10, ceil(log10(max(hours.max() ?? 10, low * 10))))
-        return (low, high)
-    }
-    private var minHours: Double { hourRange.0 }
-    private var maxHours: Double { hourRange.1 }
-    private let left: CGFloat = 70
-    private let bottomInset: CGFloat = 38
-
-    private var priceRange: (Double, Double) {
-        let prices = points.map(\.price)
-        let low = pow(10, floor(log10(max(prices.min() ?? 1, 1e-8))))
-        let high = pow(10, ceil(log10(max(prices.max() ?? 10, low * 10))))
-        return (low, high)
-    }
-
-    private func position(hours: Double, price: Double, in size: CGSize) -> CGPoint {
-        let (low, high) = priceRange
-        let fx = (log10(min(max(hours, minHours), maxHours)) - log10(minHours))
-            / (log10(maxHours) - log10(minHours))
-        let fy = (log10(price) - log10(low)) / (log10(high) - log10(low))
-        return CGPoint(
-            x: left + CGFloat(fx) * (size.width - left - 12),
-            y: (size.height - bottomInset) - CGFloat(fy) * (size.height - bottomInset - 14))
-    }
-
-    private func nearest(to location: CGPoint, in size: CGSize) -> Point? {
-        var best: Point?
-        var distance: CGFloat = 12
-        for point in points {
-            let at = position(hours: point.hours, price: point.price, in: size)
-            let gap = hypot(at.x - location.x, at.y - location.y)
-            if gap < distance {
-                distance = gap
-                best = point
-            }
-        }
-        return best
-    }
-
-    private func draw(_ context: GraphicsContext, _ size: CGSize) {
-        let (low, high) = priceRange
-        let plotBottom = size.height - bottomInset
-        let xFor = { (hours: Double) -> CGFloat in
-            position(hours: hours, price: low, in: size).x
-        }
-        // Expiring within a day, when the range reaches that far left.
-        if minHours < 24 {
-            context.fill(
-                Path(CGRect(x: left, y: 14, width: xFor(24) - left, height: plotBottom - 14)),
-                with: .color(.red.opacity(0.1)))
-            context.draw(
-                Text("expires within a day").font(.caption2).foregroundStyle(.red),
-                at: CGPoint(x: left + 4, y: 22), anchor: .leading)
-        }
-
-        var price = low
-        while price <= high * 1.0001 {
-            let fy = (log10(price) - log10(low)) / (log10(high) - log10(low))
-            let y = plotBottom - CGFloat(fy) * (plotBottom - 14)
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: left, y: y))
-                    path.addLine(to: CGPoint(x: size.width - 12, y: y))
-                }, with: .color(.secondary.opacity(0.18)), lineWidth: 1)
-            context.draw(
-                Text(price.formatted(.number.precision(.fractionLength(0...8)))).font(.caption2)
-                    .foregroundStyle(.secondary),
-                at: CGPoint(x: left - 8, y: y), anchor: .trailing)
-            price *= 10
-        }
-        let ticks: [(Double, String)] = [
-            (1, "1 h"), (24, "1 day"), (168, "1 week"), (720, "1 month"), (8760, "1 year"),
-            (87600, "10 years"),
-        ]
-        for (hours, label) in ticks where hours >= minHours && hours <= maxHours {
-            context.draw(
-                Text(label).font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: xFor(hours), y: plotBottom + 12), anchor: .center)
-        }
-        context.draw(
-            Text("time before the offer expires (log scale)").font(.caption2).foregroundStyle(.secondary),
-            at: CGPoint(x: size.width - 12, y: plotBottom + 28), anchor: .trailing)
-        context.draw(
-            Text("Ask in \(model.coin) (log scale)").font(.caption2).foregroundStyle(.secondary),
-            at: CGPoint(x: 0, y: 4), anchor: .leading)
-
-        for point in points {
-            let at = position(hours: point.hours, price: point.price, in: size)
-            let selected = hovered == point.offer.txid
-            let radius: CGFloat = selected ? 7 : 4.5
-            let box = CGRect(x: at.x - radius, y: at.y - radius, width: radius * 2, height: radius * 2)
-            switch point.offer.kind {
-            case .identityForSale:
-                context.fill(Path(ellipseIn: box), with: .color(.accentColor.opacity(selected ? 1 : 0.6)))
-            case .identityWanted:
-                context.stroke(Path(box), with: .color(.purple), lineWidth: 2)
-            case .currencySwap:
-                let diamond = Path { path in
-                    path.move(to: CGPoint(x: at.x, y: box.minY))
-                    path.addLine(to: CGPoint(x: box.maxX, y: at.y))
-                    path.addLine(to: CGPoint(x: at.x, y: box.maxY))
-                    path.addLine(to: CGPoint(x: box.minX, y: at.y))
-                    path.closeSubpath()
-                }
-                context.fill(diamond, with: .color(.orange.opacity(selected ? 1 : 0.75)))
-            }
-            if selected {
-                context.stroke(Path(ellipseIn: box.insetBy(dx: -2, dy: -2)), with: .color(.primary), lineWidth: 1.5)
-            }
-        }
+    static func lengthBand(_ length: Int) -> String {
+        length >= 8 ? "8 or more" : length >= 5 ? "5 to 7" : "\(length)"
     }
 }
 
-/// One offer as Carbide's tile shows it: the funding transaction and expiry, what is
-/// offered for what, the subject and the ask, and every association as a link.
-private struct OfferRow: View {
-    let offer: Offer
-    let funding: OfferFunding?
+extension Double {
+    func rounded(toSignificant digits: Int) -> Double {
+        guard self != 0, isFinite else { return self }
+        let scale = pow(10, Double(digits) - ceil(log10(abs(self))))
+        return (self * scale).rounded() / scale
+    }
+}
+
+// MARK: - Rows
+
+/// One filter option: its name, its count for the current selection, and a bar for the
+/// count. An option with no offers stays in place and cannot be selected.
+private struct FacetOption: View {
+    let label: String
+    let count: Int
+    let share: Double
+    let on: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(on ? Color.accentColor : .secondary)
+                    .imageScale(.small)
+                Text(label).fontWeight(on ? .semibold : .regular).lineLimit(1)
+                Spacer(minLength: 4)
+                Text(Format.integer(UInt64(count))).foregroundStyle(.secondary).monospacedDigit()
+            }
+            .font(.callout)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(alignment: .leading) {
+                GeometryReader { geometry in
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color.accentColor.opacity(on ? 0.28 : 0.14))
+                        .frame(width: geometry.size.width * CGFloat(share))
+                }
+            }
+            .overlay {
+                if on { RoundedRectangle(cornerRadius: 5).stroke(Color.accentColor, lineWidth: 1) }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(count == 0 && !on)
+        .opacity(count == 0 && !on ? 0.5 : 1)
+        .accessibilityLabel("\(label), \(count) offers")
+        .accessibilityValue(on ? "selected" : "not selected")
+    }
+}
+
+/// One offer on one line: the name, the price with a bar, when it was offered and when it
+/// expires, the seller, and the links to each object that the offer refers to.
+private struct OfferLine: View {
+    let item: MarketItem
+    let detail: OfferDetail?
     let ticker: (String) -> String
-    let loadAddresses: () -> Void
+    let priceTicker: String
+    let priceBounds: (low: Double, high: Double)
+
     @Environment(AppModel.self) private var model
+    @State private var addresses: [String]?
+    @State private var showsPoints = false
     @AppStorage(DisplayKey.showsNames) private var showsNames = true
     @AppStorage(DisplayKey.showsDates) private var showsDates = false
 
+    private var offer: Offer { item.offer }
+
     var body: some View {
         let _ = (showsNames, showsDates)
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
-                Text(kindWord).font(.callout.weight(.semibold)).foregroundStyle(kindColor)
-                    .frame(width: 70, alignment: .leading)
-                Text(Self.subject(offer, name: ticker)).fontWeight(.medium).lineLimit(1)
-                Spacer()
-                Text(ask).monospacedDigit()
-                Text(expiry).foregroundStyle(.secondary).frame(minWidth: 150, alignment: .trailing)
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Button {
+                        open()
+                    } label: {
+                        // The isolate marks keep the "@" after a name in a right-to-left script.
+                        Text(item.isIdentity ? "\u{2068}\(item.title)\u{2069}@" : item.title)
+                            .font(.title3.weight(.medium))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .buttonStyle(.plain)
+                    .help(offer.subjectId ?? offer.txid)
+                    if offer.kind != .identityForSale {
+                        Text(item.kindLabel)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(offer.kind == .identityWanted ? Color.purple : .orange)
+                    }
+                }
+                if let traits = item.traits, traits.kind == .other || traits.kind == .emoji {
+                    Button {
+                        showsPoints.toggle()
+                    } label: {
+                        Text(traits.scripts.isEmpty ? "no letters" : traits.scripts.joined(separator: ", "))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show the code points of this name")
+                    .popover(isPresented: $showsPoints) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("\(traits.length) character\(traits.length == 1 ? "" : "s"), code points:")
+                            Text(traits.codePoints).font(.callout.monospaced()).textSelection(.enabled)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: 420)
+                    }
+                }
+                if offer.kind != .identityForSale {
+                    Text("\(asset(offer.offered)) for \(asset(offer.accepted))")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
-            HStack(spacing: 6) {
-                Text(asset(offer.offered)).foregroundStyle(.green)
-                Image(systemName: "arrow.right").foregroundStyle(.secondary).accessibilityLabel("for")
-                Text(asset(offer.accepted)).foregroundStyle(.orange)
-                if let time = funding?.blockTime {
-                    Spacer()
-                    Text("listed \(Format.date(time))").font(.caption).foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(ask).fontWeight(.semibold).monospacedDigit().lineLimit(1)
+                if let price = item.price {
+                    GeometryReader { geometry in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.accentColor)
+                            .frame(width: max(geometry.size.width * barShare(price), 3))
+                    }
+                    .frame(height: 4)
+                }
+            }
+            .frame(width: 132, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 1) {
+                if let time = detail?.blockTime {
+                    Text("offered \(MarketplaceView.age(since: time)) ago").help(Format.date(time))
+                }
+                Text(expiry)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(width: 166, alignment: .leading)
+
+            Group {
+                if let holder = detail?.holder {
+                    Button(Format.short(holder, head: 6, tail: 4)) { model.open(Route.holder(holder)) }
+                        .buttonStyle(.link)
+                        .help("The seller: \(holder)")
+                } else {
+                    Text(" ")
                 }
             }
             .font(.callout)
-            .lineLimit(1)
-            // The associations as a row of labelled fields, separated by dots.
-            HStack(spacing: 8) {
-                Text("Links").foregroundStyle(.secondary).frame(width: 70, alignment: .leading)
-                ForEach(Array(links.enumerated()), id: \.element) { index, link in
-                    if index > 0 {
-                        Text("·").foregroundStyle(.tertiary).accessibilityHidden(true)
-                    }
-                    HStack(spacing: 4) {
-                        Text(fieldName(link.kind)).foregroundStyle(.secondary)
-                        linkView(link)
-                    }
-                    .fixedSize()
+            .frame(width: 104, alignment: .leading)
+
+            Menu {
+                Button("Funding Transaction") { model.open(.transaction(txid: offer.txid)) }
+                ForEach(offer.links.filter { $0.kind == .identity }, id: \.self) { link in
+                    Button("Identity \(identityName(link.value))") { model.open(.identity(name: link.value)) }
                 }
-                if funding == nil {
-                    Text("·").foregroundStyle(.tertiary).accessibilityHidden(true)
-                    Button("Show Addresses", action: loadAddresses)
-                        .buttonStyle(.borderless)
-                        .controlSize(.small)
-                } else if let error = funding?.error {
-                    Text(error).font(.caption).foregroundStyle(.orange).lineLimit(1)
+                ForEach(offer.links.filter { $0.kind == .currency }, id: \.self) { link in
+                    Button("Currency \(ticker(link.value))") { model.open(.currency(name: link.value)) }
                 }
-                Spacer(minLength: 0)
+                if let addresses {
+                    ForEach(addresses, id: \.self) { address in
+                        Button("Address \(Format.short(address, head: 6, tail: 4))") { model.open(Route.holder(address)) }
+                    }
+                } else {
+                    Button("Read Funding Addresses") { Task { await loadAddresses() } }
+                }
+            } label: {
+                Image(systemName: "link").accessibilityLabel("Links")
             }
-            .font(.callout)
-            .lineLimit(1)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("The objects that this offer refers to")
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 7)
     }
 
-    private func fieldName(_ kind: OfferLinkKind) -> String {
-        switch kind {
-        case .funding: "Funding"
-        case .identity: "Identity"
-        case .currency: "Currency"
-        case .address: "Address"
+    private func open() {
+        if let id = offer.subjectId, item.isIdentity {
+            model.open(.identity(name: id))
+        } else {
+            model.open(.transaction(txid: offer.txid))
         }
     }
 
-    private var links: [OfferLink] {
-        offerLinksWith(offer: offer, addresses: funding?.addresses ?? [])
+    private func loadAddresses() async {
+        guard let explorer = model.explorer else { return }
+        addresses = await explorer.offerFunding(txids: [offer.txid]).first?.addresses ?? []
     }
 
-    @ViewBuilder
-    private func linkView(_ link: OfferLink) -> some View {
-        switch link.kind {
-        case .funding:
-            Button(Format.short(link.value, head: 6, tail: 4)) { model.open(.transaction(txid: link.value)) }
-                .buttonStyle(.link).help(link.value)
-        case .identity:
-            Button(identityName(link.value)) { model.open(.identity(name: link.value)) }
-                .buttonStyle(.link).help(link.value)
-        case .currency:
-            Button(ticker(link.value)) { model.open(.currency(name: link.value)) }
-                .buttonStyle(.link).help(link.value)
-        case .address:
-            Button(Format.short(link.value, head: 6, tail: 4)) {
-                model.open(Route.holder(link.value))
-            }
-            .buttonStyle(.link).help(link.value)
-        }
+    /// The bar's length on the same logarithmic scale as the price curve.
+    private func barShare(_ price: Double) -> CGFloat {
+        let low = log10(priceBounds.low), high = log10(priceBounds.high)
+        guard high > low else { return 1 }
+        return CGFloat(min(max((log10(max(price, priceBounds.low)) - low) / (high - low), 0.02), 1))
     }
 
     private func identityName(_ id: String) -> String {
@@ -504,31 +955,15 @@ private struct OfferRow: View {
         return model.names[id] ?? Format.short(id, head: 6, tail: 4)
     }
 
-    private var kindWord: String {
-        switch offer.kind {
-        case .identityForSale: "For sale"
-        case .identityWanted: "Wanted"
-        case .currencySwap: "Swap"
-        }
-    }
-
-    private var kindColor: Color {
-        switch offer.kind {
-        case .identityForSale: .accentColor
-        case .identityWanted: .purple
-        case .currencySwap: .orange
-        }
-    }
-
     /// As Carbide: the exact asking amount, or what kind of ask it is.
     private var ask: String {
         if let currency = offer.askCurrency, let sats = offer.askSats {
-            return "Ask \(Format.coins(sats)) \(ticker(currency))"
+            return "\(Format.coins(sats)) \(ticker(currency))"
         }
         if offer.accepted.identityId != nil || offer.accepted.identityName != nil {
-            return "Ask identity exchange"
+            return "Identity exchange"
         }
-        return "Ask asset bundle"
+        return "Asset bundle"
     }
 
     private func asset(_ side: OfferAsset) -> String {
@@ -540,24 +975,11 @@ private struct OfferRow: View {
 
     private var expiry: String {
         guard offer.expiryHeight > 0 else { return "no expiry" }
-        let at = heightText(offer.expiryHeight, model: model)
-        guard let tip = model.status?.blocks else { return "expires at \(at)" }
-        if offer.expiryHeight <= tip { return "expired at \(at)" }
-        return "expires in \(Self.timeLeft(Double(offer.expiryHeight - tip) / 60)), at \(at)"
-    }
-
-    /// The identity's name for an identity offer, otherwise the subject's name.
-    static func subject(_ offer: Offer, name: (String) -> String) -> String {
-        for side in [offer.offered, offer.accepted] where side.identityId == offer.subjectId {
-            if let identity = side.identityName { return "\(identity)@" }
-        }
-        return offer.subjectId.map(name) ?? offer.category
-    }
-
-    static func timeLeft(_ hours: Double) -> String {
-        if hours < 1 { return "\(max(Int(hours * 60), 1)) min" }
-        if hours < 48 { return "\(Int(hours)) h" }
-        if hours < 24 * 365 { return "\(Int(hours / 24)) days" }
-        return "\((hours / 24 / 365).formatted(.number.precision(.fractionLength(1)))) years"
+        guard let tip = model.status?.blocks else { return "expires at \(heightText(offer.expiryHeight, model: model))" }
+        if offer.expiryHeight <= tip { return "expired at \(heightText(offer.expiryHeight, model: model))" }
+        let left = MarketplaceView.timeLeft(Double(offer.expiryHeight - tip) / 60)
+        return showsDates
+            ? "expires in \(left), \(heightText(offer.expiryHeight, model: model))"
+            : "expires in \(left), at \(Format.integer(offer.expiryHeight))"
     }
 }

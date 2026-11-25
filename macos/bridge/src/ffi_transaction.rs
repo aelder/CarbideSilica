@@ -244,6 +244,8 @@ pub struct TransactionDetail {
     /// True when a public API supplied the transaction.
     pub from_public_api: bool,
     pub accounting: ValueAccounting,
+    /// Who ended with more and who ended with less, in each currency.
+    pub statement: statement::TransactionStatement,
     /// Carbide's shielded lines, such as `Sapling 1.00000000 VRSC shielded -> transparent`.
     pub shielded: Vec<String>,
     /// Identity registration lines.
@@ -625,6 +627,8 @@ impl Explorer {
         let height = raw["height"].as_u64();
         let flows = transaction_flows(&raw, &context, native.as_deref());
         let accounting = value_accounting(&raw, &flows, &context, &coin);
+        let statement =
+            statement::statement(&raw, &flows, &context, native.as_deref(), &accounting);
         let observing = self.config.chain.system_id.get().cloned();
         let mut detail = TransactionDetail {
             block_hash: block_hash.clone(),
@@ -669,6 +673,7 @@ impl Explorer {
             in_mempool,
             from_public_api,
             accounting,
+            statement,
             shielded: shielded_lines(&ShieldedAccounting::from_raw(&raw), &coin),
             registration: registration_lines(&raw),
             notarization_context,
@@ -3559,6 +3564,9 @@ fn date_targets(root: &Value) -> Vec<(String, DateTarget)> {
     walk(root, String::new(), root, &mut found);
     found
 }
+
+#[path = "ffi_statement.rs"]
+mod statement;
 
 #[cfg(test)]
 #[path = "ffi_transaction_tests.rs"]

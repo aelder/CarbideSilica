@@ -676,3 +676,63 @@ async fn live_exact_state_is_recorded_for_offline_use() {
     assert!(offline.currency_list().await.unwrap().provenance.retained);
     assert!(offline.marketplace().await.unwrap().provenance.retained);
 }
+
+#[test]
+fn an_identity_for_sale_has_no_currency_named_after_its_own_fields() {
+    // The node gives the identity side a numeric field `original`. It is not a currency.
+    let answer = json!({
+        "ids_for_currency_iNative": [{
+            "identityid": "iGlam",
+            "price": 375.0,
+            "offer": {
+                "offer": { "name": "Glam", "identityid": "iGlam", "systemid": "iNative", "original": 1 },
+                "accept": { "iNative": 375.0 },
+                "blockexpiry": 6383452,
+                "txid": "aa"
+            }
+        }]
+    });
+    let offers = parse_offers(&answer);
+    assert_eq!(offers.len(), 1);
+    let currencies: Vec<&str> = offers[0]
+        .links
+        .iter()
+        .filter(|link| link.kind == OfferLinkKind::Currency)
+        .map(|link| link.value.as_str())
+        .collect();
+    assert_eq!(currencies, vec!["iNative"]);
+    assert!(offers[0].links.iter().any(|link| link.kind == OfferLinkKind::Identity && link.value == "iGlam"));
+}
+
+#[test]
+fn reads_the_holder_of_an_identity() {
+    let answer = json!({ "identity": { "primaryaddresses": ["RFirst", "RSecond"], "name": "Glam" } });
+    assert_eq!(identity_holder(&answer).as_deref(), Some("RFirst"));
+    assert_eq!(identity_holder(&json!({ "identity": { "primaryaddresses": [] } })), None);
+}
+
+#[tokio::test]
+#[ignore]
+async fn live_offer_details_read_sellers_without_recording() {
+    let explorer = live();
+    let market = explorer.marketplace().await.unwrap();
+    let before = explorer.cache_info().bytes;
+    let keys: Vec<OfferKey> = market
+        .offers
+        .iter()
+        .filter(|offer| offer.kind == OfferKind::IdentityForSale)
+        .take(40)
+        .map(|offer| OfferKey { txid: offer.txid.clone(), identity_id: offer.offered.identity_id.clone() })
+        .collect();
+    let details = explorer.offer_details(keys.clone()).await;
+    assert_eq!(details.len(), keys.len());
+    for (key, detail) in keys.iter().zip(&details) {
+        assert_eq!(key.txid, detail.txid);
+    }
+    let with_holder = details.iter().filter(|detail| detail.holder.is_some()).count();
+    let with_height = details.iter().filter(|detail| detail.block_height.is_some()).count();
+    println!("{} offers: {with_holder} holders, {with_height} listing blocks", details.len());
+    assert_eq!(with_holder, details.len());
+    assert_eq!(with_height, details.len());
+    assert_eq!(explorer.cache_info().bytes, before);
+}

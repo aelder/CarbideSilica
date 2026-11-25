@@ -1,0 +1,494 @@
+<title>Chain Pulse Research</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column. The finding from the data first, then the methods of each field, then the same hour of blocks drawn seven ways, then the choice. */
+:root {
+  --bg: #f5f7f8; --surface: #ffffff; --line: #d9e0e4; --fg: #15212b; --muted: #5b6b78;
+  --accent: #0d6b82; --accent-soft: #dcedf2;
+  --mined: #b4690f; --staked: #7448b0; --warn: #b3372f; --ok: #2f7d4f;
+  --display: "Space Grotesk", "Avenir Next", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 34px; letter-spacing: -0.01em; } h2 { font-size: 24px; } h3 { font-size: 16px; }
+p { margin: 0; max-width: 70ch; }
+a { color: var(--accent); }
+.lede { font-size: 17px; color: var(--muted); }
+.note { color: var(--muted); font-size: 13.5px; }
+.figures { display: flex; flex-wrap: wrap; gap: 10px 34px; font-variant-numeric: tabular-nums; }
+.figures div { display: flex; flex-direction: column; min-width: 0; }
+.figures b { font-family: var(--display); font-size: 26px; font-weight: 600; line-height: 1.15; }
+.figures span { font-size: 13px; color: var(--muted); max-width: 24ch; }
+.plot { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.plot .scroll { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 640px; height: auto; color: var(--fg); font-family: var(--body); }
+.plot figcaption, .cap { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+figure { margin: 0; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 36px; }
+.fields div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fields p { font-size: 14px; }
+.fields .take { color: var(--muted); }
+.form { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.form .head { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+.form .from { font-size: 13px; color: var(--muted); }
+.verdict { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 30px; font-size: 14px; }
+.verdict div { min-width: 0; }
+.verdict b { font-weight: 600; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 14px; min-width: 640px; width: 100%; }
+th, td { text-align: left; padding: 7px 12px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+td.y { color: var(--ok); font-weight: 600; } td.p { color: var(--mined); font-weight: 600; } td.n { color: var(--warn); font-weight: 600; }
+ol.steps, ul.plain { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; max-width: 74ch; }
+.src { font-size: 13.5px; columns: 2 320px; column-gap: 36px; padding-left: 18px; margin: 0; }
+.src li { break-inside: avoid; margin-bottom: 6px; }
+</style>
+
+<main>
+<section>
+  <h1>Chain Pulse Research</h1>
+  <p class="lede">How the leading fields draw events in time, and what that means for the mined and staked block timeline. Each method below is drawn with the same hour of real Verus blocks, read from the local node.</p>
+  <p>The short answer: the research changes the design in one large way and two small ones. The large one comes from the data, not from the literature. Verus blocks do not arrive like a steady pulse or like Bitcoin's random arrivals. They arrive in bursts. The best designs make the burst the unit that the eye reads, keep each block visible inside it, and compare the chain with its own recent history in place of a fixed rule.</p>
+</section>
+
+<section>
+  <h2>What the data is like</h2>
+  <p>The usual model for block arrivals is the exponential distribution: blocks arrive at random, at a constant average rate. The chain pulse in the app today assumes that model. Its 5-minute and 10-minute thresholds come from it. The last 90 blocks do not fit it.</p>
+  <div class="figures" id="figs"></div>
+  <figure class="plot">
+    <div class="scroll" id="gapplot"></div>
+    <figcaption>Each dot is the time between one block and the next, from the block timestamps. The outline shows where the dots would be if arrivals were random at one block each minute. The scale is logarithmic. The tall pile at the left is the bursts: blocks one or two seconds apart.</figcaption>
+  </figure>
+  <p>Two things follow. First, a picture with one mark at each timestamp puts several blocks on almost the same point. That is why the first design hid blocks behind each other, and why the rebuilt one must stack them. Second, a long gap is not rare here. In this sample, gaps of more than 5 minutes are several times more frequent than the random model predicts. A threshold from that model marks ordinary gaps as unusual.</p>
+  <p class="note">The positions are block-header timestamps, not arrival times. The app cannot know when a past block arrived at the node. It can record the arrival time of each block that it sees while it runs, and the cache already stores an observation time.</p>
+</section>
+
+<section>
+  <h2>What the leading fields do</h2>
+  <div class="fields">
+    <div>
+      <h3>Perception research</h3>
+      <p>Cleveland and McGill measured which visual encodings people read most accurately. Mackinlay and Munzner turned the results into a ranking. Position on a common scale is first. Length is next. Area is poor. For categories, a separate region of space is the strongest channel, then colour hue, then shape.</p>
+      <p class="take">For the pulse: put staked and mined in separate lanes and separate hues. Do not make size carry important data.</p>
+    </div>
+    <div>
+      <h3>Neuroscience</h3>
+      <p>Nerve impulses are the oldest well-studied case of events in time. The standard figure has two parts on one time axis: a raster with one tick for each event, and below it a histogram of the count in each time bin. The raster keeps each event. The histogram gives the rate. The choice of bin width is treated as part of the method.</p>
+      <p class="take">For the pulse: show the events and the rate together. One of them alone is half the answer.</p>
+    </div>
+    <div>
+      <h3>Monitoring and status pages</h3>
+      <p>Grafana's status history and the uptime bars on public status pages divide time into equal cells and colour each cell by its state. They do not merge neighbours. A person reads health in one look, and a hover gives the detail. Brendan Gregg's latency heat maps apply the same idea to timing data, because an average hides the shape and a scatter plot overplots.</p>
+      <p class="take">For the pulse: equal cells cannot overplot. They trade the exact time for a picture that is never wrong about the count.</p>
+    </div>
+    <div>
+      <h3>Block explorers</h3>
+      <p>mempool.space draws blocks as equal tiles in sequence, not at their true spacing, with the time written on each tile. beaconcha.in draws Ethereum's fixed slots as a grid and gives each cell two encodings: the border for the network state and the fill for your own validator. When a Bitcoin explorer showed a timer against the 10-minute target, Pieter Wuille objected that the time between blocks is memoryless, so the timer implies a schedule that does not exist. The builder's answer was that the display means "on time or late", not a prediction.</p>
+      <p class="take">For the pulse: a sequence scale keeps each block legible. A target drawn as a rhythm claims too much.</p>
+    </div>
+    <div>
+      <h3>Timeline research</h3>
+      <p>Brehmer and colleagues surveyed 263 timelines and described the choices of scale: chronological, relative, logarithmic, sequential and collapsed. A chronological scale is not the only correct one. When events cluster, it gives most of the space to empty time and too little to the events.</p>
+      <p class="take">For the pulse: a scale that compresses long gaps and labels them is a known, accepted form.</p>
+    </div>
+    <div>
+      <h3>Statistical process control</h3>
+      <p>Quality engineers chart the time between events on a t-chart. The limits come from the distribution that the process has when it is healthy. A point is marked only when it is outside those limits. Reliability engineers plot the cumulative count of events against time, where a steady process is a straight line.</p>
+      <p class="take">For the pulse: take "unusual" from the chain's own history. Show the count against the target as a line that can be ahead or behind.</p>
+    </div>
+    <div>
+      <h3>Uncertainty research</h3>
+      <p>Kay, Hullman and colleagues tested how to show when a bus will come. People decided better with a quantile dot plot, where each dot is an equal share of the probability and a person counts dots. The same form shows where one value sits among many.</p>
+      <p class="take">For the pulse: show the current wait among recent waits. "Longer than 9 in 10" is clearer than a red line.</p>
+    </div>
+    <div>
+      <h3>Dashboard design</h3>
+      <p>Stephen Few's bullet graph replaces a gauge with one bar for the measure, one mark for the target and shaded bands for the normal range. It answers "how are we against the target" in a small space.</p>
+      <p class="take">For the pulse: the summary line can be one bullet: blocks in the window against the target, with the normal band.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>The same hour, seven ways</h2>
+  <p>Each figure uses the same data: the 60 minutes before block <span id="tipno"></span>. Purple is staked. Amber is mined. The right edge is the newest block.</p>
+
+  <div class="form">
+    <div class="head"><h3>A. Each block at its timestamp</h3><span class="from">the app today, after the rebuild</span></div>
+    <figure class="plot"><div class="scroll" id="fA"></div></figure>
+    <div class="verdict"><div><b>Good:</b> each block is visible, and the two kinds are apart.</div><div><b>Weak:</b> stacks lean because each block keeps its own second. The 60-second ticks imply a rhythm. The gap labels use the random model.</div></div>
+  </div>
+
+  <div class="form">
+    <div class="head"><h3>B. Raster and rate</h3><span class="from">neuroscience</span></div>
+    <figure class="plot"><div class="scroll" id="fB"></div></figure>
+    <div class="verdict"><div><b>Good:</b> the rate is read from the bars against the target line. The raster shows the texture.</div><div><b>Weak:</b> ticks in a burst merge into one thick tick, so a block cannot be counted or clicked. The two parts need more height.</div></div>
+  </div>
+
+  <div class="form">
+    <div class="head"><h3>C. Minute cells</h3><span class="from">Grafana status history, status pages</span></div>
+    <figure class="plot"><div class="scroll" id="fC"></div></figure>
+    <div class="verdict"><div><b>Good:</b> nothing can overlap. An empty stretch is as visible as a full one. It is very compact.</div><div><b>Weak:</b> a cell is a count, not a block, so a block cannot be opened from it. The exact time inside the minute is lost.</div></div>
+  </div>
+
+  <div class="form">
+    <div class="head"><h3>D. Blocks in sequence</h3><span class="from">mempool.space, timeline research</span></div>
+    <figure class="plot"><div class="scroll" id="fD"></div></figure>
+    <div class="verdict"><div><b>Good:</b> each block is the same size and can carry its height. The order inside a burst is clear. Long gaps are compressed and written.</div><div><b>Weak:</b> distance is no longer time. Two strips cannot be compared by eye, and "how long ago" must be read from labels.</div></div>
+  </div>
+
+  <div class="form">
+    <div class="head"><h3>E. Bursts on a time axis</h3><span class="from">the unit that the data has</span></div>
+    <figure class="plot"><div class="scroll" id="fE"></div></figure>
+    <div class="verdict"><div><b>Good:</b> each burst is one tidy column at one time. Staked blocks go up and mined blocks go down, one cell for each block. The height of a column is the size of the burst.</div><div><b>Weak:</b> blocks a few seconds apart share one position, so the hover line must give the exact second.</div></div>
+  </div>
+
+  <div class="form">
+    <div class="head"><h3>F. Count against the target</h3><span class="from">reliability engineering</span></div>
+    <figure class="plot"><div class="scroll" id="fF"></div></figure>
+    <div class="verdict"><div><b>Good:</b> it answers "ahead or behind" directly, and the band shows what is normal. Flat steps are gaps. Tall steps are bursts.</div><div><b>Weak:</b> it does not show staked and mined, and it does not invite a click on a block. It is a companion, not the timeline.</div></div>
+  </div>
+
+  <div class="form">
+    <div class="head"><h3>G. The wait among recent waits</h3><span class="from">uncertainty research</span></div>
+    <figure class="plot"><div class="scroll" id="fG"></div></figure>
+    <div class="verdict"><div><b>Good:</b> it replaces a fixed threshold with the chain's own record. A person counts dots to see how unusual a wait is.</div><div><b>Weak:</b> it needs more history than one hour to be stable. A day or a week of gaps is better.</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>How they compare</h2>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Form</th><th>Each block visible</th><th>Staked and mined</th><th>Bursts are clear</th><th>Normal or not, at a glance</th><th>Height</th></tr></thead>
+    <tbody>
+      <tr><td>A. Each block at its timestamp</td><td class="y">Yes</td><td class="y">Yes</td><td class="p">Partly</td><td class="p">Partly</td><td>Medium</td></tr>
+      <tr><td>B. Raster and rate</td><td class="n">No</td><td class="y">Yes</td><td class="n">No</td><td class="y">Yes</td><td>Tall</td></tr>
+      <tr><td>C. Minute cells</td><td class="n">No</td><td class="y">Yes</td><td class="p">Partly</td><td class="y">Yes</td><td>Short</td></tr>
+      <tr><td>D. Blocks in sequence</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td><td class="n">No</td><td>Short</td></tr>
+      <tr><td>E. Bursts on a time axis</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td><td class="p">Partly</td><td>Medium</td></tr>
+      <tr><td>F. Count against the target</td><td class="n">No</td><td class="n">No</td><td class="p">Partly</td><td class="y">Yes</td><td>Medium</td></tr>
+      <tr><td>G. The wait among recent waits</td><td class="n">No</td><td class="n">No</td><td class="n">No</td><td class="y">Yes</td><td>Short</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>No single form answers all the questions. The fields that do this best use a pair: one figure for the events and one for the judgement. The neuroscience raster with its histogram is that pair. So is a status page's bar with its percentage.</p>
+</section>
+
+<section>
+  <h2>What to build</h2>
+  <p>The recommendation is form E for the timeline, with form G beside it for the judgement, under a one-line summary.</p>
+  <ol class="steps">
+    <li><b>Make the burst the unit.</b> Blocks within a few seconds of each other become one column at one time. Staked cells go up from the line and mined cells go down. Each cell is one block and opens that block.</li>
+    <li><b>Remove the 60-second ticks.</b> They show a rhythm that this chain does not have. Keep the 5-minute grid for reading time.</li>
+    <li><b>Take "unusual" from the chain.</b> Compare a gap with the gaps of the last day or week. Write "longer than 9 in 10 recent gaps" in place of a fixed 5-minute rule. Use red only beyond the longest gap of the period.</li>
+    <li><b>Show the current wait among recent waits.</b> A small dot plot at the right of the timeline, with a marker that moves as the wait grows.</li>
+    <li><b>Make the summary one bullet.</b> Blocks in the window, the target, and the normal band, in one bar.</li>
+    <li><b>Record arrival times.</b> For blocks that the app sees while it runs, keep the time of arrival and place those blocks by it. Mark blocks placed by header time as such.</li>
+  </ol>
+  <p>Form F, the count against the target, fits the Charts page better than the dashboard. It is the clearest answer to "is the chain on schedule" over a day.</p>
+  <h3>What the rebuilt pulse has wrong</h3>
+  <ul class="plain">
+    <li>Its thresholds of 5 and 10 minutes assume random arrivals. The data shows that assumption is false for Verus, so the labels appear too frequently.</li>
+    <li>Its 60-second ticks suggest that a block is due at each tick.</li>
+    <li>Its stacks follow each block's own second, so a burst is a leaning pile and not one clear column.</li>
+  </ul>
+  <p class="note">The sample here is 90 blocks. It is enough to see the bursts. It is not enough to set the limits. The app must compute them from a longer period, which the Charts page already loads.</p>
+</section>
+
+<section>
+  <h2>Sources</h2>
+  <ul class="src">
+    <li><a href="https://www.cs.ubc.ca/~tmm/courses/547-20/slides/marks.pdf">Munzner, Marks and Channels (course slides for Visualization Analysis and Design)</a></li>
+    <li><a href="https://en.wikipedia.org/wiki/Peristimulus_time_histogram">Peristimulus time histogram</a>, and Shimazaki and Shinomoto (2007) on bin width</li>
+    <li><a href="https://grafana.com/docs/grafana/latest/visualizations/panels-visualizations/visualizations/status-history/">Grafana, Status history</a> and <a href="https://grafana.com/docs/grafana/next/visualizations/state-timeline">State timeline</a></li>
+    <li><a href="https://support.atlassian.com/statuspage/docs/display-historical-uptime-of-components">Atlassian Statuspage, historical uptime</a></li>
+    <li><a href="https://brendangregg.com/HeatMaps/latency.html">Brendan Gregg, Latency Heat Maps</a></li>
+    <li><a href="https://docs.honeycomb.io/investigate/debug/application-data-in-honeycomb">Honeycomb, heatmaps and raw events</a></li>
+    <li><a href="https://mempool.space">mempool.space</a></li>
+    <li><a href="https://docs.beaconcha.in/validator-dashboard/slot-visualization">beaconcha.in, Slot visualization</a></li>
+    <li><a href="https://mirror.b10c.me/delvingbitcoin-org/2026-06-25-roast-our-real-time-bitcoin-explorer-built-for-everyday-bitcoin-users-id2654.html">Delving Bitcoin, the block timer discussion with Pieter Wuille (June 2026)</a></li>
+    <li><a href="https://timelinesrevisited.github.io">Brehmer et al., Timelines Revisited (2017)</a></li>
+    <li><a href="https://www.jmp.com/support/help/en/18.1/jmp/rare-event-control-charts.shtml">JMP, Rare event control charts (G and T charts)</a></li>
+    <li><a href="https://rdrr.io/github/stc04003/reReg/f/vignettes/reReg-plot.Rmd">reReg, event plots and the mean cumulative function</a></li>
+    <li><a href="https://idl.uw.edu/papers/when-ish-is-my-bus">Kay, Kola, Hullman and Munson, When(ish) is My Bus? (2016)</a></li>
+    <li><a href="https://en.wikipedia.org/wiki/Bullet_graph">Stephen Few's bullet graph</a></li>
+    <li><a href="https://observablehq.com/plot/transforms/dodge">Observable Plot, the dodge transform</a></li>
+    <li><a href="https://github.com/Financial-Times/chart-doctor/blob/main/visual-vocabulary/README.md">Financial Times, Visual Vocabulary</a></li>
+  </ul>
+</section>
+</main>
+
+<script>
+// Height, timestamp, staked (1) or mined (0), transaction count. Read from the local node.
+const RAW = [[4337199,1795570267,1,2],[4337200,1795570268,0,1],[4337201,1795570309,1,2],[4337202,1795570310,0,2],[4337203,1795570391,1,2],[4337204,1795570485,0,1],[4337205,1795570505,0,1],[4337206,1795570563,0,1],[4337207,1795570748,0,1],[4337208,1795570803,0,1],[4337209,1795570945,0,1],[4337210,1795570950,1,2],[4337211,1795570951,0,1],[4337212,1795571096,0,1],[4337213,1795571542,0,1],[4337214,1795571561,0,1],[4337215,1795571628,0,3],[4337216,1795571680,1,2],[4337217,1795571681,1,2],[4337218,1795571681,0,1],[4337219,1795571918,1,2],[4337220,1795571918,1,2],[4337221,1795571918,1,2],[4337222,1795571919,0,1],[4337223,1795572138,0,1],[4337224,1795572141,1,2],[4337225,1795572139,1,2],[4337226,1795572143,0,1],[4337227,1795572174,1,2],[4337228,1795572175,0,1],[4337229,1795572206,0,1],[4337230,1795572507,0,1],[4337231,1795572528,1,2],[4337232,1795572530,1,2],[4337233,1795572532,1,2],[4337234,1795572533,1,2],[4337235,1795572533,0,2],[4337236,1795572591,0,1],[4337237,1795572701,0,1],[4337238,1795572737,1,2],[4337239,1795572738,0,2],[4337240,1795572921,0,1],[4337241,1795573195,0,1],[4337242,1795573350,1,2],[4337243,1795573352,1,2],[4337244,1795573356,1,2],[4337245,1795573356,0,1],[4337246,1795573387,0,1],[4337247,1795573389,0,1],[4337248,1795573554,1,2],[4337249,1795573556,0,1],[4337250,1795573752,0,1],[4337251,1795573787,1,2],[4337252,1795573835,0,1],[4337253,1795573889,0,1],[4337254,1795573893,1,2],[4337255,1795573895,1,2],[4337256,1795573896,0,1],[4337257,1795573959,1,2],[4337258,1795573960,1,2],[4337259,1795573960,1,2],[4337260,1795573961,1,2],[4337261,1795573961,0,1],[4337262,1795574426,0,2],[4337263,1795574447,0,1],[4337264,1795574463,1,2],[4337265,1795574465,0,1],[4337266,1795574507,1,2],[4337267,1795574523,1,2],[4337268,1795574525,1,2],[4337269,1795574529,1,2],[4337270,1795574530,1,2],[4337271,1795574530,0,1],[4337272,1795574653,0,2],[4337273,1795574666,1,2],[4337274,1795574668,1,2],[4337275,1795574669,0,1],[4337276,1795574756,1,2],[4337277,1795574757,1,2],[4337278,1795574758,0,1],[4337279,1795574993,1,2],[4337280,1795574994,1,2],[4337281,1795574995,0,2],[4337282,1795575675,0,3],[4337283,1795575733,0,1],[4337284,1795575810,1,2],[4337285,1795575811,1,2],[4337286,1795575812,0,1],[4337287,1795575881,0,1],[4337288,1795575900,0,1]];
+const B = RAW.map(r => ({ h: r[0], t: r[1], s: r[2] === 1, n: r[3] }));
+const TIP = B[B.length - 1], T1 = TIP.t, SPAN = 3600, T0 = T1 - SPAN;
+const WIN = B.filter(b => b.t >= T0);
+const TARGET = 60;
+
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const fmt = n => n.toLocaleString("en-US");
+const dur = s => s < 60 ? Math.round(s) + "s" : Math.floor(s / 60) + "m " + String(Math.round(s % 60)).padStart(2, "0") + "s";
+function el(tag, attrs, inner) {
+  const a = Object.entries(attrs || {}).map(([k, v]) => `${k}="${v}"`).join(" ");
+  return inner === undefined ? `<${tag} ${a}/>` : `<${tag} ${a}>${inner}</${tag}>`;
+}
+const text = (x, y, s, o = {}) => el("text", Object.assign({ x, y, "font-size": 11, fill: "var(--muted)" }, o), esc(s));
+function mount(id, w, h, body, label, natural) {
+  // A figure that is wider than the page keeps its natural size and scrolls sideways.
+  const size = natural ? `width:${w}px;min-width:${w}px` : `min-width:${Math.min(w, 640)}px`;
+  document.getElementById(id).innerHTML =
+    `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}" style="${size}">${body}</svg>`;
+}
+const W = 1000, L = 58, R = 16;
+const X = t => L + (t - T0) / SPAN * (W - L - R);
+function timeAxis(y0, y1, yLabel) {
+  let out = "";
+  for (let m = 0; m <= 60; m += 10) {
+    const x = X(T1 - m * 60);
+    out += el("line", { x1: x, x2: x, y1: y0, y2: y1, stroke: "var(--line)", "stroke-width": 1 });
+    out += text(x, yLabel, m === 0 ? "newest" : m + " min", { "text-anchor": m === 0 ? "end" : "middle" });
+  }
+  return out;
+}
+const fill = b => b.s ? "var(--staked)" : "var(--mined)";
+
+// ---------- The gaps ----------
+const gaps = B.slice(1).map((b, i) => b.t - B[i].t);
+const n = gaps.length;
+const short = gaps.filter(g => g <= 5).length, long = gaps.filter(g => g > 300).length;
+const sorted = [...gaps].sort((a, b) => a - b), median = sorted[Math.floor(n / 2)];
+const mean = gaps.reduce((a, b) => a + b, 0) / n;
+const expShort = n * (1 - Math.exp(-5 / TARGET)), expLong = n * Math.exp(-300 / TARGET);
+document.getElementById("figs").innerHTML = [
+  [Math.round(mean) + " s", "average time between blocks. The target is 60 s."],
+  [Math.max(median, 0) + " s", "median time between blocks. Half of all blocks follow within this time."],
+  [short + " of " + n, "gaps of 5 seconds or less. Random arrivals give approximately " + Math.round(expShort) + "."],
+  [long + " of " + n, "gaps of more than 5 minutes. Random arrivals give approximately " + expLong.toFixed(1) + "."]
+].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join("");
+document.getElementById("tipno").textContent = fmt(TIP.h);
+
+(function gapPlot() {
+  const H = 210, base = 160, lo = 0, hi = Math.log10(1201);
+  const gx = g => L + (Math.log10(Math.max(g, 0) + 1) - lo) / (hi - lo) * (W - L - R);
+  const bins = 44, bw = (hi - lo) / bins, count = new Array(bins).fill(0);
+  let out = "";
+  const r = 3.4;
+  gaps.forEach(g => {
+    const i = Math.min(bins - 1, Math.floor((Math.log10(Math.max(g, 0) + 1) - lo) / bw));
+    const cx = L + (i + 0.5) / bins * (W - L - R), cy = base - r - count[i] * (r * 2 + 0.6);
+    count[i]++;
+    out += el("circle", { cx, cy, r, fill: "var(--accent)" });
+  });
+  // Where random arrivals at the target rate would put the same number of gaps.
+  let path = "";
+  for (let i = 0; i < bins; i++) {
+    const a = Math.pow(10, lo + i * bw) - 1, b = Math.pow(10, lo + (i + 1) * bw) - 1;
+    const e = n * (Math.exp(-a / TARGET) - Math.exp(-b / TARGET));
+    const x0 = L + i / bins * (W - L - R), x1 = L + (i + 1) / bins * (W - L - R), y = base - e * (r * 2 + 0.6);
+    path += (i ? "L" : "M") + x0.toFixed(1) + " " + y.toFixed(1) + "L" + x1.toFixed(1) + " " + y.toFixed(1);
+  }
+  out += el("path", { d: path, fill: "none", stroke: "var(--muted)", "stroke-width": 1.5, "stroke-dasharray": "4 3" });
+  out += el("line", { x1: L, x2: W - R, y1: base, y2: base, stroke: "var(--line)" });
+  [[0, "0 s"], [1, "1 s"], [5, "5 s"], [15, "15 s"], [60, "1 min"], [300, "5 min"], [1200, "20 min"]].forEach(([g, s]) => {
+    out += el("line", { x1: gx(g), x2: gx(g), y1: base, y2: base + 5, stroke: "var(--muted)" });
+    out += text(gx(g), base + 19, s, { "text-anchor": "middle" });
+  });
+  out += text(L, 14, "observed gaps, one dot each", { fill: "var(--accent)", "font-weight": 600 });
+  out += text(W - R, 14, "dashed: random arrivals at one block each minute", { "text-anchor": "end" });
+  out += text(L, base + 40, "time between one block and the next");
+  mount("gapplot", W, H, out, "Dot plot of the time between blocks, with the random model for comparison");
+})();
+
+// ---------- A. Each block at its timestamp ----------
+(function formA() {
+  const H = 170, axis = 78;
+  let out = timeAxis(14, 142, 158);
+  out += el("line", { x1: L, x2: W - R, y1: axis, y2: axis, stroke: "var(--muted)", "stroke-opacity": .6 });
+  for (let s = 60; s < SPAN; s += 60) out += el("line", { x1: X(T1 - s), x2: X(T1 - s), y1: axis - 3, y2: axis + 3, stroke: "var(--muted)", "stroke-opacity": .6 });
+  out += text(0, axis - 12, "Staked") + text(0, axis + 20, "Mined");
+  B.slice(1).forEach((b, i) => {
+    const g = b.t - B[i].t;
+    if (g < 300 || b.t < T0) return;
+    const x0 = Math.max(X(B[i].t), L), x1 = X(b.t), c = g >= 600 ? "var(--warn)" : "var(--fg)";
+    out += el("line", { x1: x0, x2: x1, y1: axis, y2: axis, stroke: c, "stroke-width": 2 });
+    if (x1 - x0 > 50) out += text((x0 + x1) / 2, axis - 7, dur(g), { "text-anchor": "middle", fill: c, "font-weight": 600 });
+  });
+  [true, false].forEach(st => {
+    const levels = [];
+    WIN.filter(b => b.s === st).forEach(b => {
+      const x = X(b.t); let lv = 0;
+      while (lv < levels.length && x - levels[lv] < 11) lv++;
+      lv = Math.min(lv, 4); levels[lv] = x;
+      const y = axis + (st ? -1 : 1) * (10 + lv * 11), rr = 4 + Math.min(Math.sqrt(Math.max(b.n - (st ? 2 : 1), 0)) * 1.4, 2.5);
+      out += st ? el("circle", { cx: x, cy: y, r: rr, fill: fill(b) })
+                : el("rect", { x: x - rr, y: y - rr, width: rr * 2, height: rr * 2, rx: 1.2, fill: fill(b) });
+    });
+  });
+  mount("fA", W, H, out, "Each block at its timestamp, staked above the line and mined below");
+})();
+
+// ---------- B. Raster and rate ----------
+(function formB() {
+  const H = 210;
+  let out = timeAxis(14, 182, 198);
+  out += text(0, 34, "Staked") + text(0, 64, "Mined") + text(0, 104, "Blocks in") + text(0, 117, "5 min");
+  WIN.forEach(b => {
+    const x = X(b.t), y = b.s ? 20 : 50;
+    out += el("line", { x1: x, x2: x, y1: y, y2: y + 20, stroke: fill(b), "stroke-width": 1.6, "stroke-opacity": .85 });
+  });
+  const base = 180, unit = 7;
+  for (let i = 0; i < 12; i++) {
+    const a = T0 + i * 300, bks = WIN.filter(b => b.t >= a && b.t < a + 300 + (i === 11 ? 1 : 0));
+    const st = bks.filter(b => b.s).length, mi = bks.length - st, x = X(a) + 2, w = X(a + 300) - X(a) - 4;
+    out += el("rect", { x, y: base - mi * unit, width: w, height: mi * unit, fill: "var(--mined)" });
+    out += el("rect", { x, y: base - (mi + st) * unit, width: w, height: st * unit, fill: "var(--staked)" });
+    out += text(x + w / 2, base - (mi + st) * unit - 4, bks.length, { "text-anchor": "middle", fill: "var(--fg)" });
+  }
+  out += el("line", { x1: L, x2: W - R, y1: base - 5 * unit, y2: base - 5 * unit, stroke: "var(--fg)", "stroke-dasharray": "5 4" });
+  out += text(0, base - 5 * unit + 4, "target 5", { fill: "var(--fg)" });
+  out += el("line", { x1: L, x2: W - R, y1: base, y2: base, stroke: "var(--line)" });
+  mount("fB", W, H, out, "One tick for each block above a bar chart of blocks in each five minutes");
+})();
+
+// ---------- C. Minute cells ----------
+(function formC() {
+  const H = 112, cw = (W - L - R) / 60;
+  let out = text(0, 36, "Staked") + text(0, 66, "Mined");
+  for (let i = 0; i < 60; i++) {
+    const a = T0 + i * 60, bks = WIN.filter(b => b.t >= a && b.t < a + 60 + (i === 59 ? 1 : 0));
+    [true, false].forEach(st => {
+      const c = bks.filter(b => b.s === st).length, x = L + i * cw + 1, y = st ? 20 : 50;
+      out += el("rect", { x, y, width: cw - 2, height: 24, rx: 2, fill: c ? (st ? "var(--staked)" : "var(--mined)") : "none",
+        "fill-opacity": c ? Math.min(0.35 + c * 0.22, 1) : 1, stroke: c ? "none" : "var(--line)" });
+      if (c > 1) out += text(x + (cw - 2) / 2, y + 16, c, { "text-anchor": "middle", fill: "var(--bg)", "font-weight": 600 });
+    });
+  }
+  for (let m = 0; m <= 60; m += 10)
+    out += text(L + (60 - m) * cw, 96, m === 0 ? "newest" : m + " min", { "text-anchor": m === 0 ? "end" : "middle" });
+  mount("fC", W, H, out, "One cell for each minute, with the count of staked and mined blocks");
+})();
+
+// ---------- Bursts: blocks no more than 10 seconds after the block before ----------
+const bursts = [];
+WIN.forEach((b, i) => {
+  const prev = i ? WIN[i - 1] : null;
+  if (prev && Math.abs(b.t - prev.t) <= 10) bursts[bursts.length - 1].push(b); else bursts.push([b]);
+});
+const burstGaps = bursts.slice(1).map((bs, i) => bs[0].t - bursts[i][bursts[i].length - 1].t);
+
+// ---------- D. Blocks in sequence ----------
+(function formD() {
+  const tile = 15, H = 96, y = 34;
+  let x = 10, out = "";
+  bursts.forEach((bs, i) => {
+    if (i) {
+      const g = burstGaps[i - 1], w = 10 + 16 * Math.log10(Math.max(g, 10) / 10);
+      out += el("line", { x1: x + 3, x2: x + w - 3, y1: y + tile / 2, y2: y + tile / 2, stroke: "var(--muted)", "stroke-dasharray": "2 3" });
+      if (g >= 90) out += text(x + w / 2, y - 6, dur(g), { "text-anchor": "middle", fill: g >= 300 ? "var(--fg)" : "var(--muted)", "font-weight": g >= 300 ? 600 : 400 });
+      x += w;
+    }
+    out += text(x, y + tile + 16, String(bs[0].h).slice(-3), { "font-family": "var(--mono)", "font-size": 9.5 });
+    bs.forEach(b => {
+      out += b.s ? el("rect", { x, y, width: tile - 2, height: tile, rx: tile / 2, fill: fill(b) })
+                 : el("rect", { x, y, width: tile - 2, height: tile, rx: 1.5, fill: fill(b) });
+      x += tile;
+    });
+  });
+  out += text(x - 2, y + tile + 32, "newest", { "text-anchor": "end" });
+  out += text(10, y + tile + 32, "the number is the last three digits of the first height in each burst");
+  mount("fD", Math.max(x + 14, 640), H, out, "Blocks as equal tiles in order, with the long gaps compressed and labelled", true);
+})();
+
+// ---------- E. Bursts on a time axis ----------
+(function formE() {
+  const H = 190, axis = 86, cell = 9, step = 11;
+  let out = timeAxis(12, 160, 176);
+  out += el("line", { x1: L, x2: W - R, y1: axis, y2: axis, stroke: "var(--muted)", "stroke-opacity": .6 });
+  out += text(0, axis - 14, "Staked") + text(0, axis + 22, "Mined");
+  const ranked = [...burstGaps].sort((a, b) => a - b), p90 = ranked[Math.floor(ranked.length * 0.9)], top = ranked[ranked.length - 1];
+  bursts.forEach((bs, i) => {
+    const x = X(bs[0].t);
+    let up = 0, down = 0;
+    bs.forEach(b => {
+      const k = b.s ? up++ : down++, y = b.s ? axis - 6 - cell - k * step : axis + 6 + k * step;
+      out += el("rect", { x: x - cell / 2, y, width: cell, height: cell, rx: b.s ? cell / 2 : 1.5, fill: fill(b) });
+    });
+    if (i) {
+      const g = burstGaps[i - 1];
+      if (g >= p90) {
+        const x0 = X(bursts[i - 1][bursts[i - 1].length - 1].t), strong = g === top;
+        out += el("line", { x1: x0 + 6, x2: x - 6, y1: axis, y2: axis, stroke: "var(--fg)", "stroke-width": strong ? 2.5 : 1.5 });
+        if (x - x0 > 46) out += text((x0 + x) / 2, axis - 7, dur(g), { "text-anchor": "middle", fill: "var(--fg)", "font-weight": strong ? 700 : 500 });
+      }
+    }
+  });
+  out += text(L, 198, "A written gap is in the longest tenth of this hour's gaps. The bold one is the longest.", { "font-size": 10.5 });
+  mount("fE", W, H + 16, out, "Each burst of blocks as one column, staked cells above the line and mined cells below");
+})();
+
+// ---------- F. Count against the target ----------
+(function formF() {
+  const H = 220, top = 16, base = 186, max = Math.max(WIN.length, 60) + 8;
+  const Y = c => base - c / max * (base - top);
+  let out = timeAxis(top, base, 204);
+  let band = "";
+  const pts = [];
+  for (let s = 0; s <= SPAN; s += 120) pts.push([X(T0 + s), s / TARGET]);
+  band = "M" + pts.map(([x, e]) => x.toFixed(1) + " " + Y(e + 2 * Math.sqrt(e)).toFixed(1)).join("L")
+       + "L" + pts.reverse().map(([x, e]) => x.toFixed(1) + " " + Y(Math.max(e - 2 * Math.sqrt(e), 0)).toFixed(1)).join("L") + "Z";
+  out += el("path", { d: band, fill: "var(--accent-soft)" });
+  out += el("line", { x1: X(T0), y1: Y(0), x2: X(T1), y2: Y(60), stroke: "var(--muted)", "stroke-dasharray": "5 4", "stroke-width": 1.5 });
+  let d = `M${X(T0).toFixed(1)} ${Y(0).toFixed(1)}`, c = 0;
+  WIN.forEach(b => { d += `H${X(b.t).toFixed(1)}`; c++; d += `V${Y(c).toFixed(1)}`; });
+  out += el("path", { d, fill: "none", stroke: "var(--accent)", "stroke-width": 2 });
+  [0, 20, 40, 60].forEach(v => out += text(L - 8, Y(v) + 4, v, { "text-anchor": "end" }));
+  out += text(0, top + 4, "Blocks");
+  const diff = WIN.length - 60;
+  out += text(X(T1) - 6, Y(c) - 8, `${c} blocks, ${diff === 0 ? "on target" : Math.abs(diff) + (diff > 0 ? " ahead" : " behind")}`, { "text-anchor": "end", fill: "var(--fg)", "font-weight": 600 });
+  out += text(X(T0) + 8, top + 18, "dashed: the target, one block each minute", {});
+  out += text(X(T0) + 8, top + 32, "shaded: the range that random arrivals would give", {});
+  mount("fF", W, H, out, "Cumulative count of blocks over the hour against the target line");
+})();
+
+// ---------- G. The wait among recent waits ----------
+(function formG() {
+  const H = 150, base = 96, lo = Math.log10(10), hi = Math.log10(1500);
+  const gx = g => L + (Math.log10(Math.max(g, 10)) - lo) / (hi - lo) * (W - L - R);
+  const bins = 40, count = new Array(bins).fill(0), r = 5;
+  let out = el("line", { x1: L, x2: W - R, y1: base, y2: base, stroke: "var(--line)" });
+  const ranked = [...burstGaps].sort((a, b) => a - b);
+  ranked.forEach(g => {
+    const i = Math.min(bins - 1, Math.floor((Math.log10(Math.max(g, 10)) - lo) / (hi - lo) * bins));
+    out += el("circle", { cx: L + (i + 0.5) / bins * (W - L - R), cy: base - r - 1 - count[i] * (r * 2 + 1), r, fill: "var(--accent)", "fill-opacity": .85 });
+    count[i]++;
+  });
+  [[10, "10 s"], [30, "30 s"], [60, "1 min"], [120, "2 min"], [300, "5 min"], [600, "10 min"], [1200, "20 min"]].forEach(([g, s]) => {
+    out += el("line", { x1: gx(g), x2: gx(g), y1: base, y2: base + 5, stroke: "var(--muted)" });
+    out += text(gx(g), base + 19, s, { "text-anchor": "middle" });
+  });
+  const med = ranked[Math.floor(ranked.length / 2)], p90 = ranked[Math.floor(ranked.length * 0.9)];
+  [[med, "half are shorter than " + dur(med)], [p90, "9 in 10 are shorter than " + dur(p90)]].forEach(([g, s], i) => {
+    out += el("line", { x1: gx(g), x2: gx(g), y1: 22 + i * 14, y2: base, stroke: "var(--fg)", "stroke-dasharray": "3 3" });
+    out += text(gx(g) + 5, 26 + i * 14, s, { fill: "var(--fg)" });
+  });
+  out += text(L, base + 40, `the ${ranked.length} waits between bursts in this hour, one dot each. A marker for the current wait moves along this axis.`);
+  mount("fG", W, H, out, "Dot plot of the waits between bursts, with the median and the ninth decile marked");
+})();
+</script>

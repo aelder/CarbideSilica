@@ -72,6 +72,9 @@ final class AppModel {
     private(set) var status: ChainStatus?
     private(set) var statusError: String?
     private(set) var blocks: [BlockRow] = []
+    /// When this app first saw each block that arrived while it was running, by block hash.
+    /// A block that was loaded at the start has no entry: the app did not see it arrive.
+    private(set) var arrivals: [String: Date] = [:]
     private(set) var lastRefresh: Date?
 
     var searchText = ""
@@ -84,7 +87,7 @@ final class AppModel {
     private(set) var permissionRequests: [PermissionRequest] = []
     private var permissionListener: Task<Void, Never>?
 
-    private let recentBlockCount: UInt32 = 30
+    private let recentBlockCount: UInt32 = 40
     private let keptBlockCount = 60
 
     init() {
@@ -169,6 +172,8 @@ final class AppModel {
             // Reconciliation of the current chain, and of monitored nodes, as the terminal does.
             Task { await explorer.startBackground() }
             populateBookmarksOnce(explorer)
+            // The toolbar and each page need the chain status, on any page that is open.
+            Task { await refresh() }
         case .failure(let error):
             connection = nil
             statusError = describe(error)
@@ -294,7 +299,13 @@ final class AppModel {
             // A gap larger than one page means the old rows are no longer contiguous.
             let older = (missing ?? 0) > UInt64(recentBlockCount)
                 ? [] : blocks.filter { !known.contains($0.hash) }
+            // Only a small step forward is an arrival. A first load or a long catch-up is not.
+            if let missing, missing <= 5 {
+                for block in fetched where arrivals[block.hash] == nil { arrivals[block.hash] = .now }
+            }
             blocks = Array((fetched + older).prefix(keptBlockCount))
+            let kept = Set(blocks.map(\.hash))
+            arrivals = arrivals.filter { kept.contains($0.key) }
             lastRefresh = .now
         } catch {
             guard generation == self.generation else { return }

@@ -23,7 +23,7 @@ struct ChartsView: View {
 
     var body: some View {
         Page {
-            Card(state.metric.title, trailing: state.rangeLabel) {
+            Card("Charts", trailing: state.rangeLabel) {
                 controls
                 if state.viaAPI {
                     Note(text: "A public API supplies blocks one at a time and slowly. The charts open with a 2-hour span. A longer span can take many minutes. A local node loads 7 days in seconds.")
@@ -34,15 +34,11 @@ struct ChartsView: View {
                     ProvenanceNote(provenance: provenance)
                 }
                 plotArea
-                legend
                 notes
             }
             SeekCard(state: state)
-            if state.metric == .feePool {
-                FeePoolSection(state: state)
-            } else {
-                SelectedBlockCard(state: state)
-            }
+            SelectedBlockCard(state: state)
+            FeePoolSection(state: state)
             SampleTable(state: state)
             BlockEstimator()
         }
@@ -66,7 +62,7 @@ struct ChartsView: View {
             await state.run(explorer)
         }
         .task(id: "\(state.feePoolKey)|\(model.generation)") {
-            guard state.metric == .feePool, let explorer = try? model.requireExplorer() else { return }
+            guard let explorer = try? model.requireExplorer() else { return }
             await state.loadFeePool(explorer)
         }
     }
@@ -76,18 +72,14 @@ struct ChartsView: View {
     private var controls: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Picker("Chart", selection: Binding(get: { state.metric }, set: { state.setMetric($0) })) {
-                    ForEach(ChartState.Metric.allCases) { Text($0.shortTitle).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                Spacer(minLength: 16)
+                Text("Span").foregroundStyle(.secondary)
                 Picker("Span", selection: Binding(get: { state.span }, set: { state.setSpan($0) })) {
                     ForEach(ChartState.Span.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(maxWidth: 280)
+                Spacer(minLength: 16)
             }
             HStack(spacing: 8) {
                 Button {
@@ -113,7 +105,7 @@ struct ChartsView: View {
                     Text(state.loadingText)
                         .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     Button("Stop") { state.stop() }
-                } else if state.metric == .feePool && state.fee.loading {
+                } else if state.fee.loading {
                     ProgressView().controlSize(.small)
                     Text("Reading fee pool checkpoints")
                         .font(.caption).foregroundStyle(.secondary)
@@ -145,8 +137,9 @@ struct ChartsView: View {
                             .monospacedDigit()
                     }
                 }
-                Text(state.coverageSentence)
+                Text(state.coverageShort)
                     .font(.caption).foregroundStyle(.secondary)
+                    .help(state.coverageSentence)
             }
         }
     }
@@ -174,20 +167,14 @@ struct ChartsView: View {
             Note(text: stopped, warning: true)
         }
         if let page = state.page, !page.samples.isEmpty {
-            Group {
-                if state.metric == .feePool {
-                    FeePoolPlot(state: state)
-                } else {
-                    BlockPlot(
-                        samples: page.samples,
-                        first: page.first,
-                        last: page.last,
-                        metric: state.metric,
-                        selected: state.selectedSample?.hash,
-                        select: { state.select(hash: $0) })
-                }
-            }
-            .frame(height: 300)
+            ChartStack(
+                samples: page.samples,
+                spanSeconds: state.span.seconds,
+                fee: state.fee,
+                coin: state.fee.current?.currencies.nativeLabel ?? model.coin,
+                selected: state.selectedSample?.hash,
+                select: { state.select(hash: $0) },
+                open: { model.open(.block(id: $0)) })
             .focusable()
             .focusEffectDisabled()
             .focused($plotFocused)
@@ -195,8 +182,8 @@ struct ChartsView: View {
             .simultaneousGesture(TapGesture().onEnded { plotFocused = true })
             Text(
                 plotFocused
-                    ? "Keys: j k ↑ ↓ select, Home End ends, [ ] ranges, − + span, 1–5 charts, g seek, Return open"
-                    : "Click the plot to use the keys."
+                    ? "Keys: ← → or j k select a block, Home End ends, [ ] ranges, − + span, g go to, Return open"
+                    : "Click the panels to use the keys."
             )
             .font(.caption2).foregroundStyle(.secondary)
         } else if state.loading {
@@ -208,52 +195,31 @@ struct ChartsView: View {
         }
     }
 
-    @ViewBuilder
-    private var legend: some View {
-        switch state.metric {
-        case .intervals:
-            ChartLegend(items: [
-                .init(shape: .bar, color: ChartColors.block, text: "Seconds from the parent block's timestamp"),
-                .init(shape: .dash, color: .secondary, text: "60-second target"),
-            ])
-        case .mining, .staking:
-            ChartLegend(items: [
-                .init(shape: .dot, color: ChartColors.block, text: state.metric == .mining ? "Mined block" : "Staked block"),
-                .init(shape: .line, color: ChartColors.average, text: "MA100: mean over the trailing 100 chain heights"),
-            ])
-        case .ratio:
-            ChartLegend(items: [
-                .init(shape: .dot, color: ChartColors.block, text: "Block: mined row at one third, staked row at two thirds"),
-                .init(shape: .line, color: ChartColors.average, text: "Staked share, 100 blocks"),
-                .init(shape: .line, color: ChartColors.long, text: "Staked share, 1,000 blocks"),
-                .init(shape: .dash, color: .secondary, text: "50/50"),
-            ])
-        case .feePool:
-            EmptyView()
-        }
-    }
-
+    /// What the marks mean, and Carbide's statements about each measure.
     @ViewBuilder
     private var notes: some View {
         if let page = state.page {
+            DisclosureGroup("What the marks mean") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("All panels share one time axis. One line shows the selected block in each panel. A grey band is one of the longest gaps of the range: the longest hundredth, and 12 at most.")
+                    Text("Block rate: each point is one period. The band is the mean with limits of 2.66 times the mean change between periods. The dashed line is the target. A red point is outside the limits.")
+                    Text("Difficulty: each dot is one block of that kind, or a bar from the lowest to the highest value where the dots would merge. The line is MA100, the mean over the trailing 100 chain heights, so it turns after the dots turn. A gap means that the trailing 100 heights are incomplete or hold a block of the kind without a value. The axes are fitted to the values and do not start at zero.")
+                    Text("Staking difficulty = fixed initial Verus LWMA posLimit / observed block PoS target. The target comes from the nonce and must equal postarget.")
+                    Text("Staked share: the main line is the share over 100 blocks and the orange line is the share over 1,000 blocks. The band is three standard deviations of chance for 100 blocks. A share line needs a complete window of known blocks.")
+                    Text("Fee pool: a tick at the top is a block where the pool rose. This is a balance chart. It does not separate inflow from payout.")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+            }
             VStack(alignment: .leading, spacing: 4) {
-                switch state.metric {
-                case .intervals:
-                    if page.negativeIntervals > 0 {
-                        Text("\(page.negativeIntervals) negative timestamp intervals in this range are not drawn. Select a block to see its signed interval.")
-                    }
-                    Text("An interval is the signed difference between a block's timestamp and its linked parent's timestamp. The plot starts at zero.")
-                case .mining:
-                    Text("Mining difficulty is the node's value at mined blocks. The average leaves out staked blocks. A gap means that the trailing 100 heights are incomplete or hold a mined block without a value.")
-                case .staking:
-                    if page.unavailableStake > 0 {
-                        Text("\(page.unavailableStake) staked blocks have no staking difficulty. Select one to see why.")
-                    }
-                    Text("Difficulty = fixed initial Verus LWMA posLimit / observed block PoS target. The target comes from the nonce and must equal postarget. The average leaves out mined blocks.")
-                case .ratio:
-                    Text("Time is horizontal. A share line needs a complete window of known blocks. Lines break at gaps and where a timestamp does not increase.")
-                case .feePool:
-                    EmptyView()
+                if page.negativeIntervals > 0 {
+                    Text(
+                        page.negativeIntervals == 1
+                            ? "1 block in this range has a timestamp before its parent's. Select it to see its signed interval."
+                            : "\(page.negativeIntervals) blocks in this range have a timestamp before their parent's. Select a block to see its signed interval.")
+                }
+                if page.unavailableStake > 0 {
+                    Text("\(page.unavailableStake) staked blocks have no staking difficulty. Select one to see why.")
                 }
                 if let note = state.seekNote {
                     Text(note)
@@ -348,6 +314,8 @@ final class ChartState {
         prepared = true
         self.viaAPI = viaAPI
         if viaAPI { span = .twoHours }
+        // A local node can read each block's checkpoint. A public API gets the 100 samples.
+        fee.detail = !viaAPI
         begin(end: anchor, anchor: hash)
     }
 
@@ -359,7 +327,8 @@ final class ChartState {
             endHeight: end,
             anchorHash: anchor,
             newer: newer,
-            context: context ?? metric.context,
+            // The 1,000-block share needs 1,000 earlier blocks. A public API gets the short context.
+            context: context ?? (viaAPI ? 100 : 1_000),
             focusHeight: focus?.height,
             focusHash: focus?.hash,
             chunk: viaAPI ? 25 : 500)
@@ -468,20 +437,8 @@ final class ChartState {
 
     // MARK: Selection
 
-    func value(_ sample: ChartSample) -> Double? {
-        switch metric {
-        case .intervals: sample.interval.map(Double.init)
-        case .mining: sample.mining
-        case .staking: sample.staking
-        case .ratio:
-            switch sample.production {
-            case .mined: 0
-            case .staked: 1
-            case .unknown: nil
-            }
-        case .feePool: fee.checkpoints[sample.hash].flatMap { $0.known ? 1 : nil }
-        }
-    }
+    /// Each block can be selected: the panels show all measures at once.
+    func value(_ sample: ChartSample) -> Double? { 1 }
 
     private var candidates: [ChartSample] {
         (page?.samples ?? []).filter { value($0) != nil }
@@ -520,8 +477,8 @@ final class ChartState {
 
     func handle(_ press: KeyPress, open: (String) -> Void) -> KeyPress.Result {
         switch press.key {
-        case .downArrow: move(-1); return .handled
-        case .upArrow: move(1); return .handled
+        case .downArrow, .leftArrow: move(-1); return .handled
+        case .upArrow, .rightArrow: move(1); return .handled
         case .home: moveToEnd(newest: false); return .handled
         case .end: moveToEnd(newest: true); return .handled
         case .pageUp: older(); return .handled
@@ -538,12 +495,10 @@ final class ChartState {
         case "]": newer()
         case "-": step(span: -1)
         case "+", "=": step(span: 1)
-        case "1", "2", "3", "4", "5":
-            if let number = Int(press.characters), let metric = Metric(rawValue: number) { setMetric(metric) }
         case "g": focusSeek += 1
-        case "v" where metric == .feePool: fee.cycleCurrency()
-        case "z" where metric == .feePool: fee.cycleScale()
-        case "t" where metric == .feePool: fee.detail.toggle()
+        case "v": fee.cycleCurrency()
+        case "z": fee.cycleScale()
+        case "t": fee.detail.toggle()
         default: return .ignored
         }
         return .handled
@@ -574,6 +529,21 @@ final class ChartState {
         return "Reading the range's block headers"
     }
 
+    /// What a reader needs: how many blocks, and anything that limits the range.
+    var coverageShort: String {
+        guard let page else { return "" }
+        var parts = ["\(Format.integer(UInt64(page.samples.count))) blocks"]
+        if page.limited {
+            parts.append("partial: the 20,000-header limit was reached")
+        } else if !page.complete && loading {
+            parts.append("loading")
+        } else if page.first == 0 && !page.complete {
+            parts.append("starts at genesis")
+        }
+        if !page.status.isEmpty, page.status != "Loading" { parts.append(page.status) }
+        return parts.joined(separator: " · ") + "."
+    }
+
     var coverageSentence: String {
         guard let page else { return "" }
         var parts = [
@@ -599,7 +569,7 @@ final class ChartState {
 
     /// Changes when the fee pool checkpoints must load again.
     var feePoolKey: String {
-        guard metric == .feePool, let page, !loading else { return "idle" }
+        guard let page, !loading else { return "idle" }
         return "\(page.first)|\(page.last)|\(fee.detail)|\(fee.generation)"
     }
 
@@ -888,23 +858,14 @@ private struct SelectedBlockCard: View {
     private func rows(_ sample: ChartSample) -> [Row] {
         var rows: [Row] = []
         rows.append(Row(label: "Interval", value: sample.interval.map { ChartFormat.signedSeconds($0) } ?? "Not available. The parent is not loaded or not linked."))
-        switch state.metric {
-        case .intervals:
-            break
-        case .mining:
-            rows.append(Row(label: "Mining difficulty", value: sample.mining.map(ChartFormat.exact) ?? "Not available for this block", monospaced: false))
-            rows.append(Row(label: "MA100", value: average(sample.miningAverage, kind: "mined"), monospaced: false))
-        case .staking:
-            rows.append(Row(label: "Staking difficulty", value: sample.staking.map(ChartFormat.exact) ?? "Not available for this block", monospaced: false))
-            rows.append(Row(label: "MA100", value: average(sample.stakingAverage, kind: "staked"), monospaced: false))
-            if let target = sample.posTarget { rows.append(Row(label: "PoS target", value: target, monospaced: true)) }
-            if let problem = sample.problem { rows.append(Row(label: "Problem", value: problem, monospaced: false)) }
-        case .ratio:
-            rows.append(Row(label: "100 blocks", value: ChartFormat.window(sample.window100, share: sample.share100), monospaced: false))
-            rows.append(Row(label: "1,000 blocks", value: ChartFormat.window(sample.window1000, share: sample.share1000), monospaced: false))
-        case .feePool:
-            break
-        }
+        rows.append(Row(label: "Mining difficulty", value: sample.mining.map(ChartFormat.exact) ?? "Not a mined block, or no value"))
+        rows.append(Row(label: "Mining MA100", value: average(sample.miningAverage, kind: "mined")))
+        rows.append(Row(label: "Staking difficulty", value: sample.staking.map(ChartFormat.exact) ?? "Not a staked block, or no value"))
+        rows.append(Row(label: "Staking MA100", value: average(sample.stakingAverage, kind: "staked")))
+        if let target = sample.posTarget { rows.append(Row(label: "PoS target", value: target, monospaced: true)) }
+        if let problem = sample.problem { rows.append(Row(label: "Problem", value: problem)) }
+        rows.append(Row(label: "100 blocks", value: ChartFormat.window(sample.window100, share: sample.share100)))
+        rows.append(Row(label: "1,000 blocks", value: ChartFormat.window(sample.window1000, share: sample.share1000)))
         return rows
     }
 
@@ -924,7 +885,7 @@ private struct SampleTable: View {
     @State private var expanded = false
 
     var body: some View {
-        if let page = state.page, !page.samples.isEmpty, state.metric != .feePool {
+        if let page = state.page, !page.samples.isEmpty {
             Card("Samples as a table") {
                 DisclosureGroup(isExpanded: $expanded) {
                     Table(Array(page.samples.reversed())) {
@@ -936,8 +897,14 @@ private struct SampleTable: View {
                             .width(min: 60, ideal: 70)
                         TableColumn("Interval") { Text($0.interval.map { ChartFormat.signedSeconds($0) } ?? "–").monospacedDigit() }
                             .width(min: 60, ideal: 70)
-                        TableColumn(valueTitle) { Text(valueText($0)).monospacedDigit() }
-                        TableColumn(averageTitle) { Text(averageText($0)).monospacedDigit() }
+                        TableColumn("Mining") { Text($0.mining.map { Format.difficulty($0) } ?? "–").monospacedDigit() }
+                            .width(min: 60, ideal: 70)
+                        TableColumn("Staking") { Text($0.staking.map { Format.difficulty($0) } ?? "–").monospacedDigit() }
+                            .width(min: 60, ideal: 70)
+                        TableColumn("Staked, 100") { Text($0.share100.map(Format.percent) ?? "–").monospacedDigit() }
+                            .width(min: 70, ideal: 80)
+                        TableColumn("Staked, 1,000") { Text($0.share1000.map(Format.percent) ?? "–").monospacedDigit() }
+                            .width(min: 70, ideal: 90)
                     }
                     .frame(height: 320)
                 } label: {
@@ -948,36 +915,6 @@ private struct SampleTable: View {
         }
     }
 
-    private var valueTitle: String {
-        switch state.metric {
-        case .mining: "Mining difficulty"
-        case .staking: "Staking difficulty"
-        case .ratio: "Staked share, 100"
-        default: "Value"
-        }
-    }
-
-    private var averageTitle: String {
-        state.metric == .ratio ? "Staked share, 1,000" : "MA100"
-    }
-
-    private func valueText(_ sample: ChartSample) -> String {
-        switch state.metric {
-        case .mining: sample.mining.map(ChartFormat.exact) ?? "–"
-        case .staking: sample.staking.map(ChartFormat.exact) ?? "–"
-        case .ratio: sample.share100.map(Format.percent) ?? "–"
-        default: sample.interval.map { ChartFormat.signedSeconds($0) } ?? "–"
-        }
-    }
-
-    private func averageText(_ sample: ChartSample) -> String {
-        switch state.metric {
-        case .mining: sample.miningAverage.map { ChartFormat.exact($0.value) } ?? "–"
-        case .staking: sample.stakingAverage.map { ChartFormat.exact($0.value) } ?? "–"
-        case .ratio: sample.share1000.map(Format.percent) ?? "–"
-        default: "–"
-        }
-    }
 }
 
 extension ChartSample: Identifiable {

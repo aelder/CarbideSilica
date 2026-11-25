@@ -197,10 +197,121 @@ pub struct StartArguments {
     pub problem: Option<String>,
 }
 
+// ----------------------------------------------------------------- pulse
+
+/// Blocks no more than this many seconds after the block before are one burst.
+pub(super) const BURST_SECONDS: u64 = 10;
+/// The most blocks one record reads.
+const MAX_PULSE_BLOCKS: u32 = 2_000;
+
+/// The chain's own record of how blocks arrive, for the dashboard's chain pulse. Verus
+/// blocks arrive in bursts, so the record is of bursts, not of single blocks.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct PulseHistory {
+    pub first_height: u64,
+    pub last_height: u64,
+    /// The blocks that the record holds.
+    pub blocks: u32,
+    /// Timestamp of the last block minus timestamp of the first.
+    pub covered_seconds: u64,
+    /// Blocks within this many seconds of the block before are one burst.
+    pub burst_seconds: u32,
+    /// The waits between bursts in seconds, shortest first.
+    pub waits: Vec<u32>,
+    /// The length of one counting window.
+    pub window_seconds: u32,
+    /// The number of blocks in each window, fewest first. The windows overlap: each
+    /// starts one fifth of a window after the one before.
+    pub window_counts: Vec<u32>,
+}
+
+/// The waits between bursts, shortest first. `times` are block timestamps in chain order.
+/// A wait runs from the last block of one burst to the first block of the next. A
+/// timestamp earlier than the block before stays in the same burst.
+pub(super) fn waits_between_bursts(times: &[u64], burst: u64) -> Vec<u32> {
+    let mut waits: Vec<u32> = times
+        .windows(2)
+        .filter_map(|pair| pair[1].checked_sub(pair[0]))
+        .filter(|gap| *gap > burst)
+        .map(|gap| gap.min(u64::from(u32::MAX)) as u32)
+        .collect();
+    waits.sort_unstable();
+    waits
+}
+
+/// The number of blocks in each window of `window` seconds, fewest first. Each window
+/// starts `window / 5` seconds after the one before. Only windows that the record covers
+/// completely are counted.
+pub(super) fn window_counts(times: &[u64], window: u64) -> Vec<u32> {
+    let (Some(first), Some(last)) = (times.iter().min().copied(), times.iter().max().copied())
+    else {
+        return Vec::new();
+    };
+    let step = (window / 5).max(1);
+    let mut sorted = times.to_vec();
+    sorted.sort_unstable();
+    let mut counts = Vec::new();
+    let mut start = first;
+    while window > 0 && start.saturating_add(window) <= last {
+        let from = sorted.partition_point(|time| *time < start);
+        let to = sorted.partition_point(|time| *time < start + window);
+        counts.push((to - from) as u32);
+        start += step;
+    }
+    counts.sort_unstable();
+    counts
+}
+
 // -------------------------------------------------------------- explorer
 
 #[uniffi::export(async_runtime = "tokio")]
 impl Explorer {
+    /// How blocks arrived in the `count` blocks that end at `tip`. A bulk read: it never
+    /// asks for permission and adds nothing to the cache.
+    pub async fn pulse_history(
+        &self,
+        tip: u64,
+        count: u32,
+        window_seconds: u32,
+    ) -> Outcome<PulseHistory> {
+        let count = u64::from(count.clamp(2, MAX_PULSE_BLOCKS));
+        let first = tip.saturating_sub(count - 1).max(1);
+        let client = self.unrecorded_client();
+        let mut tasks = tokio::task::JoinSet::new();
+        for height in first..=tip {
+            let client = client.clone();
+            tasks.spawn(async move {
+                (height, fetch_block(&client, BlockId::Height(height)).await)
+            });
+        }
+        let mut found = Vec::new();
+        let mut failure = None;
+        while let Some(joined) = tasks.join_next().await {
+            let (height, block) = joined.context("block request stopped")?;
+            match self.settle(block) {
+                Ok(block) => found.push((height, block.result.time)),
+                Err(error) => failure = Some(error),
+            }
+        }
+        if found.len() < 2 {
+            return Err(failure
+                .unwrap_or_else(|| anyhow::anyhow!("The source returned no blocks."))
+                .into());
+        }
+        found.sort_unstable();
+        let times: Vec<u64> = found.iter().map(|(_, time)| *time).collect();
+        Ok(PulseHistory {
+            first_height: found[0].0,
+            last_height: found[found.len() - 1].0,
+            blocks: found.len() as u32,
+            covered_seconds: times[times.len() - 1].saturating_sub(times[0]),
+            burst_seconds: BURST_SECONDS as u32,
+            waits: waits_between_bursts(&times, BURST_SECONDS),
+            window_seconds,
+            window_counts: window_counts(&times, u64::from(window_seconds)),
+        })
+    }
+
     /// The mempool with the terminal's loading pattern. With `full`, the node is asked for
     /// decoded transactions in bulk; an older node that refuses gets the plain request.
     /// Without `full`, only membership and metadata are read.

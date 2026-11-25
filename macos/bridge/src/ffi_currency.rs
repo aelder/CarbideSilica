@@ -301,6 +301,28 @@ pub struct OfferFunding {
     pub error: Option<String>,
 }
 
+/// What to read for one offer: its funding transaction, and the identity for sale.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OfferKey {
+    pub txid: String,
+    /// The identity that the offer sells. None for an offer of currencies.
+    pub identity_id: Option<String>,
+}
+
+/// When an offer was made, and who controls the identity that it sells.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OfferDetail {
+    pub txid: String,
+    pub block_height: Option<u64>,
+    pub block_time: Option<u64>,
+    /// The first primary address of the offered identity now. The app calls this the seller.
+    pub holder: Option<String>,
+    pub error: Option<String>,
+}
+
+/// The most offers that one `offer_details` request reads.
+const MAX_DETAIL_LOOKUPS: usize = 256;
+
 // ------------------------------------------------------------------- notarizations
 
 /// One system's view of another: `observer`'s node asked about `subject`.
@@ -808,6 +830,11 @@ fn links_for(offered: &Value, accepted: &Value, txid: &str, addresses: &[String]
                 value: identity.to_string(),
             });
         }
+        // An identity side has fields of its own with numbers, such as `original`. They
+        // are not currencies. Only a currency side lists currencies as its keys.
+        if fields.contains_key("identityid") || fields.contains_key("name") {
+            continue;
+        }
         for (currency, amount) in fields {
             if amount.as_f64().is_some() {
                 push(OfferLink {
@@ -824,6 +851,11 @@ fn links_for(offered: &Value, accepted: &Value, txid: &str, addresses: &[String]
         });
     }
     links
+}
+
+/// The first primary address in a `getidentity` answer.
+fn identity_holder(answer: &Value) -> Option<String> {
+    text(&answer["identity"]["primaryaddresses"][0])
 }
 
 fn offer_kind(offered: &Value, accepted: &Value) -> OfferKind {
@@ -1829,6 +1861,54 @@ impl Explorer {
         }
         found.sort_by_key(|(position, _)| *position);
         found.into_iter().map(|(_, funding)| funding).collect()
+    }
+
+    /// When each offer was made and who holds the identity it sells, for the catalogue's
+    /// filters. A bulk read: it never asks for permission and adds nothing to the cache.
+    /// At most 256 offers per request.
+    pub async fn offer_details(&self, offers: Vec<OfferKey>) -> Vec<OfferDetail> {
+        let client = self.unrecorded_client();
+        let mut tasks = tokio::task::JoinSet::new();
+        let permits = Arc::new(tokio::sync::Semaphore::new(LOOKUP_CONCURRENCY));
+        for (position, key) in offers.into_iter().take(MAX_DETAIL_LOOKUPS).enumerate() {
+            let client = client.clone();
+            let permits = permits.clone();
+            tasks.spawn(async move {
+                let _permit = permits.acquire_owned().await;
+                let funding = client.get_raw_transaction(&key.txid).await;
+                let identity = match &key.identity_id {
+                    Some(id) => Some(client.call_with_raw::<Value>("getidentity", &[json!(id)]).await),
+                    None => None,
+                };
+                (position, key.txid, funding, identity)
+            });
+        }
+        let mut found = Vec::new();
+        while let Some(Ok((position, txid, funding, identity))) = tasks.join_next().await {
+            let mut detail = OfferDetail {
+                txid,
+                block_height: None,
+                block_time: None,
+                holder: None,
+                error: None,
+            };
+            match self.settle(funding) {
+                Ok(output) => {
+                    detail.block_height = output.result["height"].as_u64();
+                    detail.block_time = output.result["blocktime"].as_u64();
+                }
+                Err(error) => detail.error = Some(readable(&error)),
+            }
+            if let Some(identity) = identity {
+                match self.settle(identity) {
+                    Ok(output) => detail.holder = identity_holder(&output.result),
+                    Err(error) => detail.error = Some(readable(&error)),
+                }
+            }
+            found.push((position, detail));
+        }
+        found.sort_by_key(|(position, _)| *position);
+        found.into_iter().map(|(_, detail)| detail).collect()
     }
 
     // --------------------------------------------------------------- notarizations
