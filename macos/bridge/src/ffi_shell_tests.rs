@@ -708,3 +708,30 @@ async fn live_shell_pulse_history_reads_without_recording() {
     // A bulk read adds nothing to the cache.
     assert_eq!(explorer.cache_info().bytes, before);
 }
+
+// ------------------------------------------------------------ the world outline
+
+#[test]
+fn the_world_outline_has_the_coasts_of_the_terminal_map() {
+    let points = world_points();
+    // The terminal's world has 5,125 points. Two that are less than a quarter of a degree
+    // apart are one dot.
+    assert!(points.len() > 4_500 && points.len() <= 5_125, "{}", points.len());
+    assert!(points.iter().all(|point| {
+        (-180.0..=180.0).contains(&point.longitude) && (-90.0..=90.0).contains(&point.latitude)
+    }));
+    let inside = |west: f64, east: f64, south: f64, north: f64| {
+        points
+            .iter()
+            .filter(|point| {
+                (west..=east).contains(&point.longitude) && (south..=north).contains(&point.latitude)
+            })
+            .count()
+    };
+    // The coast of Portugal and Spain, and the middle of the southern Pacific Ocean.
+    assert!(inside(-10.0, -6.0, 36.0, 44.0) > 5);
+    assert_eq!(inside(-130.0, -110.0, -50.0, -40.0), 0);
+    // No point is north of the northern coast of Greenland or south of Antarctica's coast.
+    assert_eq!(inside(-180.0, 180.0, 84.0, 90.0), 0);
+    assert_eq!(world_outline().len(), points.len());
+}

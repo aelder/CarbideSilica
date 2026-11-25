@@ -1,0 +1,335 @@
+<title>Peers Research</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column. What the peers are, then what the two views show, then the methods of each field, then the same peers drawn three ways, then the choice. */
+:root {
+  --bg: #f5f7f8; --surface: #ffffff; --line: #d9e0e4; --fg: #15212b; --muted: #5b6b78;
+  --accent: #0d6b82; --accent-soft: #dcedf2;
+  --mined: #b4690f; --staked: #7448b0; --warn: #b3372f; --ok: #2f7d4f;
+  --display: "Space Grotesk", "Avenir Next", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 34px; letter-spacing: -0.01em; } h2 { font-size: 24px; } h3 { font-size: 16px; }
+p { margin: 0; max-width: 70ch; }
+a { color: var(--accent); }
+.lede { font-size: 17px; color: var(--muted); }
+.note { color: var(--muted); font-size: 13.5px; }
+.figures { display: flex; flex-wrap: wrap; gap: 14px 34px; font-variant-numeric: tabular-nums; }
+.figures div { display: flex; flex-direction: column; min-width: 0; }
+.figures b { font-family: var(--display); font-size: 26px; font-weight: 600; line-height: 1.15; }
+.figures span { font-size: 13px; color: var(--muted); max-width: 26ch; }
+figure { margin: 0; }
+.plot { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.plot .scroll { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 560px; height: auto; color: var(--fg); font-family: var(--body); }
+.plot figcaption { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+.plot .tag { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 36px; }
+.fields div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fields p { font-size: 14px; }
+.fields .take { color: var(--muted); }
+ol.steps, ul.plain { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; max-width: 74ch; }
+.src { font-size: 13.5px; columns: 2 320px; column-gap: 36px; padding-left: 18px; margin: 0; }
+.src li { break-inside: avoid; margin-bottom: 6px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 14px; min-width: 640px; width: 100%; }
+th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
+
+/* The worked examples. */
+.bench { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.forms { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.forms button { font: inherit; font-size: 13px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.forms button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.forms button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.say { font-size: 17px; max-width: 78ch; }
+.stage { overflow-x: auto; }
+.stage svg { display: block; width: 100%; min-width: 620px; height: auto; color: var(--fg); font-family: var(--body); }
+.see { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+</style>
+
+<main>
+<section>
+  <h1>Peers Research</h1>
+  <p class="lede">How the leading fields show the connections of one node, and what that means for the peer map and the response-time diagram on the Node page. Each figure uses the peers of the local Verus node.</p>
+  <p>The short answer: the node has five peers, and they do not change for hours. A world map and a polar diagram are forms for many points with a pattern in space. With five points, the questions a person has are different: are the connections healthy, does the node depend on one party, and where does the data come from. The fields that watch a small set of links answer with one aligned table of measures, a count of how the links are divided between network operators, and a record of response time. A map is useful as a small second view, if it shows the peers.</p>
+</section>
+
+<section>
+  <h2>What the peers are</h2>
+  <div class="figures" id="figs"></div>
+  <ul class="plain">
+    <li><b>There are five, and they stay.</b> Each of the five has been connected for more than 7 hours. In the time of this study no peer came or went.</li>
+    <li><b>All five are outgoing.</b> The node made each connection. No other node connects to this one.</li>
+    <li><b>Three of the five use one network operator.</b> The peers in Nuremberg, Frankfurt and Falkenstein are three cities on a map and one company, Hetzner. The other two are with Charter in the United States and Kazakhtelecom in Kazakhstan.</li>
+    <li><b>Most of the data comes from that operator.</b> The three Hetzner peers supplied 81 of each 100 bytes that the node received from its peers since they connected.</li>
+    <li><b>The response times are steady.</b> The node measures each peer about each 2 minutes. In the record of this study, three of the five stayed within 8 milliseconds. Two changed by about 100 milliseconds.</li>
+    <li><b>All five are at the tip, and all five run the same version.</b> These measures say something only when one peer differs.</li>
+    <li><b>A location is an estimate.</b> The place of a peer comes from a database of IP addresses. The city of a data centre address is frequently the city of the company, not of the computer.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What the two views show today</h2>
+  <figure class="plot"><span class="tag">The frame of the map, and where the five peers are</span><div class="scroll" id="frame"></div>
+    <figcaption>The grid is the world in the projection of the map. The rectangle is the part that the map showed in the app during this study: approximately 90° west to 91° east, and 33° south to 33° north. The map cannot show more of the world at its size. The five peers are north of the frame, and one is also west of it. The card said "5 of 5 placed". No peer was in view.</figcaption></figure>
+  <ul class="plain">
+    <li><b>The map shows no peer.</b> It opens on the middle of the world, and the peers are in the north. A person must move the map to find them.</li>
+    <li><b>Three peers are one spot.</b> At the size of a world map, three cities in Germany are less than 3 points apart.</li>
+    <li><b>A dot says more than the data knows.</b> The dot has an exact position. The estimate does not.</li>
+    <li><b>The map tiles come from Apple.</b> Each time the map is shown, the app asks Apple's map service for the tiles of the area in view. The app asks the person before each other request to an outside service.</li>
+    <li><b>In the response-time diagram, the direction means nothing.</b> The peers are placed around the circle in the order of their addresses. Half of the diagram's space carries no data.</li>
+    <li><b>Its scale puts all peers in one band.</b> The rings go from 10 milliseconds to 10 seconds. The five peers are between 56 and 373 milliseconds, thus all are in one small part of the diagram.</li>
+    <li><b>The colours are a judgement without a base.</b> A response of 171 milliseconds is orange. It is a normal time for a link between two continents.</li>
+    <li><b>The list above the diagram has the same measure.</b> It shows the response time of each peer as a bar on the same scale.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What the leading fields do</h2>
+  <div class="fields">
+    <div>
+      <h3>Node software</h3>
+      <p>Bitcoin Core has a peer dashboard in its command line tool, <code>-netinfo</code>. It is one table: a row for each peer, sorted by direction and by the lowest response time, with the kind of connection, the response times, the network operator and the address. Below it is a small table of counts: incoming, outgoing and total, for each kind of network.</p>
+      <p class="take">For Carbide Silica: one sorted table of measures is the form that node developers made for themselves. A count by direction comes with it.</p>
+    </div>
+    <div>
+      <h3>Research on attacks</h3>
+      <p>Heilman and others showed that a node can be isolated when an attacker controls all its peers. Later work showed that one network operator is a more stable unit of control than an address range. Bitcoin Core therefore has an option, asmap, that spreads the outgoing connections of a node between network operators, and its dashboard shows the operator of each peer.</p>
+      <p class="take">For Carbide Silica: the operator of each peer is a safety measure. Show how the peers are divided between operators, before where they are.</p>
+    </div>
+    <div>
+      <h3>Network surveys</h3>
+      <p>Bitnodes surveys the reachable Bitcoin nodes. It has a map, but its ranked tables carry the findings: nodes by network operator and by country. In its counts of 2025, Hetzner is the largest operator after the Tor network. Surveys of Ethereum nodes report the part that is with three hosting companies.</p>
+      <p class="take">For Carbide Silica: three of five peers with Hetzner is what these surveys predict. The page can say it in one line.</p>
+    </div>
+    <div>
+      <h3>Network operations</h3>
+      <p>SmokePing is the usual tool to watch the response time of a small set of links. It draws the median as a line through time and the other measures as grey smoke around it. A steady link is a thin line. A link with trouble shows smoke before it fails.</p>
+      <p class="take">For Carbide Silica: show the range of the response time of each peer through time, not only the last measure.</p>
+    </div>
+    <div>
+      <h3>Research on location data</h3>
+      <p>Poese and others compared location databases with the known locations of the addresses of one large provider. They found that the databases are correct for the country and not for the city. Gharaibeh and others found the same for the addresses of routers.</p>
+      <p class="take">For Carbide Silica: the country of a peer is a fact to use. The city is a label, and a position on a map is approximate.</p>
+    </div>
+    <div>
+      <h3>Cartography</h3>
+      <p>The rule of map makers and of chart guides is the same: a map is the correct form when the pattern in space is the question, and when there are sufficient places to show a pattern. For an uncertain position, the usual mark is an area, not a point.</p>
+      <p class="take">For Carbide Silica: five places do not make a pattern. If the map stays, it must fit its peers, and each mark must be an area.</p>
+    </div>
+    <div>
+      <h3>Research on radial charts</h3>
+      <p>Diehl, Beck and Burch compared radial and rectangular forms of the same charts with 674 people. People were slower with the radial form. Other studies found that values are harder to read from a radial chart. A radial form helps when the data has a cycle or a direction.</p>
+      <p class="take">For Carbide Silica: response time has no direction. A common straight scale is faster to read.</p>
+    </div>
+    <div>
+      <h3>Small sets of items</h3>
+      <p>Cleveland's dot plot puts each item on its own line with its value as a position on one shared scale. For a small number of items it permits exact comparison, and each item keeps its label.</p>
+      <p class="take">For Carbide Silica: five peers are five lines. Each measure is a position on a scale that all five share.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>The same five peers, three ways</h2>
+  <p>Select a form. The first two are the views today, drawn by their rules from the measures of this study. The third is the proposal.</p>
+  <div class="bench">
+    <div class="forms" id="forms" role="group" aria-label="Form"></div>
+    <p class="say" id="say"></p>
+    <div class="stage" id="stage"></div>
+    <p class="see" id="see"></p>
+  </div>
+  <p class="note">The proposal draws each measure on a scale that the five rows share. The response time has a line from the lowest to the highest measure in the record and a dot at the last measure.</p>
+</section>
+
+<section>
+  <h2>How the forms compare</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Question</th><th>Map today</th><th>Response-time diagram today</th><th>Aligned rows with a count by operator</th></tr></thead>
+    <tbody>
+      <tr><td>How many peers, and in which direction</td><td>A count in the heading</td><td>On hover</td><td>In the sentence and in each row</td></tr>
+      <tr><td>Does the node depend on one operator</td><td>Not shown</td><td>Not shown</td><td>The first strip</td></tr>
+      <tr><td>Which peer is the fastest</td><td>A colour in three steps</td><td>Distance from the centre</td><td>The first row, and a position on a shared scale</td></tr>
+      <tr><td>Is a response time steady</td><td>Not shown</td><td>Not shown</td><td>The length of the line in the row</td></tr>
+      <tr><td>Where does the data come from</td><td>Not shown</td><td>The size of a dot</td><td>A bar in each row</td></tr>
+      <tr><td>Is a peer behind the chain</td><td>Not shown</td><td>Not shown</td><td>Words in the row, only when it is</td></tr>
+      <tr><td>Where are the peers</td><td>Dots, when in view</td><td>Not shown</td><td>The country and the city in each row, and a count by country</td></tr>
+      <tr><td>Exact figures</td><td>On hover</td><td>On hover</td><td>In each row</td></tr>
+      <tr><td>Needs a download or a request</td><td>Location data, and map tiles from Apple</td><td>No</td><td>Location data for the operator and the place</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Recommendation</h2>
+  <p>Make the peer list the one view of the peers, with its measures on shared scales, and put a count by operator above it. Remove the response-time diagram. Keep a small map only if it fits its peers.</p>
+  <ol class="steps">
+    <li><b>One sentence first.</b> "5 peers, all outgoing. 3 of the 5 use one network operator, Hetzner. All are at the tip of the chain."</li>
+    <li><b>A count by network operator and by country.</b> One square for each peer, in groups. A group that holds more than half of the peers is named in the sentence.</li>
+    <li><b>One row for each peer, fastest first.</b> The row has the place and the operator, the direction, the response time, the data received, the height against the tip, and the time connected.</li>
+    <li><b>Response time on one straight scale.</b> From zero to the slowest peer. A dot is the last measure. A line is the range in the record of this session. Colour is not a judgement of speed: a row is red only when the peer does not answer.</li>
+    <li><b>Data received as a bar.</b> The rate since the connection started, on one scale. A person sees which peers the node gets its blocks from.</li>
+    <li><b>Say only what differs.</b> "At the tip" and the version are the same for each peer in the usual case. The sentence says so once. A row shows them only when the peer differs.</li>
+    <li><b>The map becomes small and correct.</b> It opens on the area that holds all placed peers. Peers of one city or one operator in one area are one mark with a count. Each mark is an area, and the caption says that the place is an estimate.</li>
+    <li><b>Private and unplaced peers stay in the list.</b> They have a row with the same measures and the words "private address" or "no location".</li>
+  </ol>
+  <p>One decision is yours. The map today asks Apple for its tiles. A map that opens on the area of the peers tells Apple which area that is. The alternative is a map that the app draws from an outline of the countries, which needs one public-domain data file in the app and no request. I recommend the outline.</p>
+</section>
+
+<section>
+  <h2>What stays as Carbide gives it</h2>
+  <ul class="plain">
+    <li>The peer list with the terminal's fields, the ban list in the same list, and the page of each peer with the node log and the raw data.</li>
+    <li>The location and the operator from Carbide's location database, with its attribution, and the choice to install it.</li>
+    <li>The response time as the node measures it. The app does not send its own measures to a peer, except when you select Ping All.</li>
+    <li>The peer commands: add node, ping, disconnect, ban and clear bans.</li>
+    <li>Peers come only from a local node and are not stored.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Limits of this study</h2>
+  <ul class="plain">
+    <li>The study is of one node with five peers, recorded for a short time. A node that accepts incoming connections can have tens of peers, and the rows must then be grouped.</li>
+    <li>The frame of the map is calculated from the positions of the marks in the app window. It is approximate.</li>
+    <li>The accuracy of the location data for these five addresses was not measured.</li>
+    <li>The source of Bitcoin Core's dashboard and the papers on radial charts and on location data were read as summaries of their own pages.</li>
+    <li>The page does not test the forms with people.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sources</h2>
+  <ol class="src">
+    <li><a href="https://github.com/bitcoin/bitcoin/pull/19643">Bitcoin Core</a>. Pull request 19643: the <code>-netinfo</code> peer connections dashboard.</li>
+    <li><a href="https://www.bitmex.com/blog/call-to-action-testing-and-improving-asmap">BitMEX Research</a>. Call to action: testing and improving asmap.</li>
+    <li><a href="https://www.usenix.org/conference/usenixsecurity15/technical-sessions/presentation/heilman">Heilman, Kendler, Zohar and Goldberg</a>. Eclipse Attacks on Bitcoin's Peer-to-Peer Network. USENIX Security, 2015.</li>
+    <li><a href="https://bitnodes.io/">Bitnodes</a>. Reachable Bitcoin nodes by network and by country.</li>
+    <li><a href="https://cointelegraph.com/news/3-cloud-providers-accounting-for-over-two-thirds-of-ethereum-nodes-data">Cointelegraph</a>. Report of Messari's count of Ethereum nodes by hosting company.</li>
+    <li><a href="https://oss.oetiker.ch/smokeping/doc/reading.en.html">SmokePing</a>. Reading the graphs.</li>
+    <li><a href="https://inl.info.ucl.ac.be/publications/ip-geolocation-databases-unreliable.html">Poese and others</a>. IP Geolocation Databases: Unreliable? ACM SIGCOMM CCR, 2011.</li>
+    <li><a href="https://www.caida.org/publications/papers/2017/look_at_router_geolocation/look_at_router_geolocation.pdf">Gharaibeh and others</a>. A Look at Router Geolocation in Public and Commercial Databases. IMC, 2017.</li>
+    <li><a href="https://www.storytellingwithdata.com/blog/when-should-i-use-a-map">Storytelling with Data</a>. When should I use a map?</li>
+    <li><a href="https://kubakrukar.github.io/pdfs/Ranasinghe%2C%20Krukar%2C%20Kray%20-%202018%20-%20Visualizing%20Location%20Uncertainty%20on%20Mobile%20Devices.pdf">Ranasinghe, Krukar and Kray</a>. Visualizing Location Uncertainty on Mobile Devices. 2018.</li>
+    <li><a href="https://www.st.uni-trier.de/diehl/pubs/infovis10.pdf">Diehl, Beck and Burch</a>. Uncovering Strengths and Weaknesses of Radial Visualizations. IEEE InfoVis, 2010.</li>
+    <li><a href="https://db-ip.com">DB-IP</a>. IP geolocation data of the app, CC BY 4.0.</li>
+  </ol>
+</section>
+</main>
+
+<script>
+const DATA = {"peers":[{"city":"Nuremberg","cc":"DE","country":"Germany","org":"Hetzner","lat":49.4543,"lon":11.0746,"order":4,"ping":171.4,"pmin":171.1,"pmax":173.1,"recv":2021876,"rate":61.27,"conn":550},{"city":"Frankfurt","cc":"DE","country":"Germany","org":"Hetzner","lat":50.1109,"lon":8.68213,"order":3,"ping":172.9,"pmin":168.3,"pmax":172.9,"recv":1154970,"rate":35.0,"conn":549},{"city":"Falkenstein","cc":"DE","country":"Germany","org":"Hetzner","lat":50.4754,"lon":12.3683,"order":0,"ping":177.8,"pmin":174.0,"pmax":275.8,"recv":1541868,"rate":47.33,"conn":542},{"city":"Walla Walla","cc":"US","country":"United States","org":"Charter","lat":46.0646,"lon":-118.343,"order":2,"ping":63.9,"pmin":55.5,"pmax":63.9,"recv":920499,"rate":28.44,"conn":539},{"city":"Almaty","cc":"KZ","country":"Kazakhstan","org":"Kazakhtelecom","lat":43.2298,"lon":76.9487,"order":1,"ping":372.5,"pmin":245.3,"pmax":372.5,"recv":164765,"rate":6.04,"conn":455}],"frame":[-90,91,-33.5,33.5],"say":"5 peers, all outgoing. 3 of the 5 use one network operator, Hetzner. All 5 are at the tip of the chain and run the same version.","figs":[["5","peers, all outgoing"],["3 of 5","use one network operator"],["56 to 372 ms","is the range of the response times"],["81 of 100","bytes received came from that operator"],["0","peers came or went in the record"]]};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = id => document.getElementById(id);
+const P = DATA.peers;
+const merc = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+
+/* The world in the map's projection, with a frame and the peers. */
+function world(frame, W, H, lon0, lon1, lat0, lat1, marks) {
+  const sx = lon => (lon - lon0) / (lon1 - lon0) * W, y0 = merc(lat1), y1 = merc(lat0), sy = lat => (y0 - merc(lat)) / (y0 - y1) * H;
+  let out = `<rect x="0" y="0" width="${W}" height="${H}" fill="var(--accent-soft)" opacity="0.35"/>`;
+  for (let lon = Math.ceil(lon0 / 30) * 30; lon <= lon1; lon += 30) out += `<line x1="${sx(lon).toFixed(1)}" y1="0" x2="${sx(lon).toFixed(1)}" y2="${H}" stroke="var(--line)"/><text x="${(sx(lon) + 3).toFixed(1)}" y="${H - 4}" font-size="10" fill="var(--muted)">${lon === 0 ? "0°" : Math.abs(lon) + "°" + (lon < 0 ? " W" : " E")}</text>`;
+  for (let lat = Math.ceil(lat0 / 30) * 30; lat <= lat1; lat += 30) out += `<line x1="0" y1="${sy(lat).toFixed(1)}" x2="${W}" y2="${sy(lat).toFixed(1)}" stroke="${lat === 0 ? "var(--muted)" : "var(--line)"}"/><text x="4" y="${(sy(lat) - 3).toFixed(1)}" font-size="10" fill="var(--muted)">${lat === 0 ? "equator" : Math.abs(lat) + "°" + (lat < 0 ? " S" : " N")}</text>`;
+  if (frame) {
+    const x = sx(frame[0]), w = sx(frame[1]) - x, y = sy(frame[3]), h = sy(frame[2]) - y;
+    out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="var(--surface)" opacity="0.7"/><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="none" stroke="currentColor" stroke-width="1.6"/><text x="${(x + w / 2).toFixed(1)}" y="${(y + h / 2 + 4).toFixed(1)}" font-size="12.5" text-anchor="middle" fill="currentColor">the part of the world in view</text>`;
+  }
+  out += marks(sx, sy);
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="A grid of the world with the frame of the map and the five peers">${out}</svg>`;
+}
+function frameFigure() {
+  return world(DATA.frame, 760, 330, -180, 180, -58, 72, (sx, sy) => P.map((p, i) => {
+    const x = sx(p.lon), y = sy(p.lat), left = p.lon > 40;
+    const label = p.lon > 0 && p.lon < 40 ? (i === P.findIndex(q => q.lon > 0 && q.lon < 40) ? "3 peers, Germany" : "") : `${p.city}, ${p.cc}`;
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="var(--warn)" stroke="var(--surface)" stroke-width="1.2"/>` + (label ? `<text x="${(x + (left ? -9 : 9)).toFixed(1)}" y="${(y - 8).toFixed(1)}" font-size="12" text-anchor="${left ? "end" : "start"}" fill="currentColor">${esc(label)}</text>` : "");
+  }).join(""));
+}
+
+/* The response-time diagram as the app draws it: direction by address order, distance on a logarithmic scale. */
+function radar() {
+  const W = 760, H = 320, cx = W / 2, cy = H / 2, outer = H / 2 - 14;
+  const r = ms => 22 + Math.min(Math.max(Math.log10(Math.max(ms, 10) / 10) / 3, 0), 1) * (outer - 22);
+  let out = "";
+  for (const [ms, label] of [[10, "10 ms"], [100, "100 ms"], [1000, "1 s"], [10000, "10 s"]]) out += `<circle cx="${cx}" cy="${cy}" r="${r(ms).toFixed(1)}" fill="none" stroke="var(--line)"/><text x="${cx + 4}" y="${(cy - r(ms) - 3).toFixed(1)}" font-size="10" fill="var(--muted)">${label}</text>`;
+  const most = Math.max(...P.map(p => p.recv));
+  [...P].sort((a, b) => a.order - b.order).forEach((p, i) => {
+    const a = i / P.length * 2 * Math.PI - Math.PI / 2, d = r(p.ping), x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
+    const color = p.ping < 150 ? "var(--ok)" : p.ping < 1000 ? "var(--mined)" : "var(--warn)";
+    out += `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${color}" opacity="0.4"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(5 + Math.sqrt(p.recv / most) * 7).toFixed(1)}" fill="${color}"><title>${esc(p.city)} · ${Math.round(p.ping)} ms</title></circle>`;
+  });
+  out += `<circle cx="${cx}" cy="${cy}" r="8" fill="currentColor"/><text x="${cx}" y="${cy + 22}" font-size="10.5" text-anchor="middle" fill="currentColor">your node</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="The five peers around the node, by response time">${out}</svg>`;
+}
+
+/* The proposal: a count by operator and by country, then one row for each peer on shared scales. */
+function rows() {
+  const W = 760, sorted = [...P].sort((a, b) => a.ping - b.ping);
+  const group = key => { const g = {}; for (const p of P) (g[p[key]] = g[p[key]] || []).push(p); return Object.entries(g).sort((a, b) => b[1].length - a[1].length); };
+  let out = "", y = 14;
+  const strip = (title, groups) => {
+    out += `<text x="0" y="${y + 4}" font-size="12" font-weight="600" fill="var(--muted)" letter-spacing="0.04em">${title}</text>`;
+    let x = 150;
+    for (const [name, list] of groups) {
+      list.forEach((_, i) => { out += `<rect x="${x + i * 16}" y="${y - 7}" width="13" height="13" rx="2" fill="${list.length > P.length / 2 ? "var(--accent)" : "var(--muted)"}" opacity="${list.length > P.length / 2 ? 0.95 : 0.6}"/>`; });
+      out += `<text x="${x + list.length * 16 + 4}" y="${y + 4}" font-size="12.5" fill="currentColor">${esc(name)} ${list.length}</text>`;
+      x += list.length * 16 + 22 + name.length * 6.6 + 14;
+    }
+    y += 26;
+  };
+  strip("NETWORK OPERATOR", group("org")); strip("COUNTRY", group("country"));
+  y += 8;
+  const colPing = 300, pingW = 210, colData = 548, dataW = 120, top = y;
+  const maxPing = Math.ceil(Math.max(...P.map(p => p.pmax)) / 100) * 100, maxRate = Math.max(...P.map(p => p.rate));
+  out += `<text x="0" y="${y}" font-size="11.5" font-weight="600" fill="var(--muted)" letter-spacing="0.04em">PEER</text><text x="${colPing}" y="${y}" font-size="11.5" font-weight="600" fill="var(--muted)" letter-spacing="0.04em">RESPONSE TIME, 0 TO ${maxPing} MS</text><text x="${colData}" y="${y}" font-size="11.5" font-weight="600" fill="var(--muted)" letter-spacing="0.04em">DATA RECEIVED</text><text x="${W}" y="${y}" font-size="11.5" font-weight="600" text-anchor="end" fill="var(--muted)" letter-spacing="0.04em">CONNECTED</text>`;
+  y += 8;
+  sorted.forEach(p => {
+    out += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="var(--line)"/>`;
+    out += `<text x="0" y="${y + 18}" font-size="13.5" font-weight="500" fill="currentColor">${esc(p.city)}, ${esc(p.cc)}</text><text x="0" y="${y + 34}" font-size="12" fill="var(--muted)">${esc(p.org)} · outgoing</text>`;
+    const sx = ms => colPing + ms / maxPing * pingW;
+    out += `<line x1="${colPing}" y1="${y + 20}" x2="${colPing + pingW}" y2="${y + 20}" stroke="var(--line)"/><line x1="${sx(p.pmin).toFixed(1)}" y1="${y + 20}" x2="${Math.max(sx(p.pmax), sx(p.pmin) + 2).toFixed(1)}" y2="${y + 20}" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.35"/><circle cx="${sx(p.ping).toFixed(1)}" cy="${y + 20}" r="4.5" fill="var(--accent)"/>`;
+    out += `<text x="${colPing}" y="${y + 38}" font-size="12" fill="currentColor" style="font-variant-numeric: tabular-nums">${Math.round(p.ping)} ms${p.pmax - p.pmin > 5 ? ` · ${Math.round(p.pmin)} to ${Math.round(p.pmax)} in the record` : ""}</text>`;
+    out += `<rect x="${colData}" y="${y + 15}" width="${Math.max(p.rate / maxRate * dataW, 1.5).toFixed(1)}" height="10" fill="var(--accent)" opacity="0.85"/><text x="${colData}" y="${y + 38}" font-size="12" fill="currentColor" style="font-variant-numeric: tabular-nums">${p.rate >= 10 ? Math.round(p.rate) : p.rate.toFixed(1)} bytes each second</text>`;
+    out += `<text x="${W}" y="${y + 24}" font-size="12.5" text-anchor="end" fill="currentColor" style="font-variant-numeric: tabular-nums">${Math.floor(p.conn / 60)} h ${p.conn % 60} min</text>`;
+    y += 46;
+  });
+  for (let ms = 0; ms <= maxPing; ms += 100) out += `<line x1="${(colPing + ms / maxPing * pingW).toFixed(1)}" y1="${top + 6}" x2="${(colPing + ms / maxPing * pingW).toFixed(1)}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/>`;
+  return `<svg viewBox="0 0 ${W} ${y + 4}" role="img" aria-label="The five peers as rows with their measures on shared scales">${out}</svg>`;
+}
+
+const FORMS = [["map", "Map today"], ["radar", "Response-time diagram today"], ["rows", "Proposal"]];
+const state = { form: "rows" };
+function render() {
+  $("forms").innerHTML = "Form: " + FORMS.map(f => `<button type="button" data-form="${f[0]}" aria-pressed="${f[0] === state.form}">${f[1]}</button>`).join("");
+  const f = state.form;
+  $("say").textContent = f === "rows" ? DATA.say : "";
+  $("stage").innerHTML = f === "map" ? world(null, 760, 290, DATA.frame[0], DATA.frame[1], DATA.frame[2], DATA.frame[3], () => `<text x="380" y="150" font-size="13" text-anchor="middle" fill="var(--muted)">No peer is in this part of the world.</text>`) : f === "radar" ? radar() : rows();
+  $("see").textContent = f === "map" ? "The area that the map showed in the app, without the land. The five peers are north of it. The card said \"5 of 5 placed\"."
+    : f === "radar" ? "Direction is the order of the addresses. Distance is the response time on a scale from 10 milliseconds to 10 seconds. Size is the data received. The five peers use a small part of the scale, and the labels of the rings are below the dots."
+    : "The strip shows that three of the five are with one operator. The rows show that the peer in the United States answers much faster than the others, that two peers are less steady, and which peers supply the data.";
+}
+function start() {
+  $("figs").innerHTML = DATA.figs.map(f => `<div><b>${f[0]}</b><span>${f[1]}</span></div>`).join("");
+  $("frame").innerHTML = frameFigure();
+  $("forms").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.form = b.dataset.form; render(); } });
+  render();
+}
+start();
+</script>

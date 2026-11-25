@@ -27,7 +27,6 @@ struct NodeView: View {
                         if showsMap {
                             PeerMapCard(peers: node.peers, feed: feed, open: { detailPeer = $0.id })
                         }
-                        PeersRadarCard(node: node)
                         PeerControlsCard(banned: feed.banned.count, commands: commands, reload: reload)
                     } else {
                         Card("Peers") {
@@ -80,6 +79,7 @@ struct NodeView: View {
             await feed.loadTotals(model)
             while !Task.isCancelled {
                 await model.refreshNode()
+                feed.note(model.node?.peers ?? [])
                 await feed.loadBans(model)
                 try? await Task.sleep(for: .seconds(2))
             }
@@ -291,7 +291,13 @@ private struct PeerListItem: Identifiable {
 }
 
 /// Connected peers, fastest first, and the node's ban list, in one list as in the terminal.
-/// The list grows with the page. Up and Down select, Return or a double-click opens a peer.
+///
+/// A node has a small number of peers, and they stay for hours. Thus the list is the one
+/// view of them: a sentence, a count by network operator and by country, then one row for
+/// each peer with its measures on scales that all rows share. The response time is a dot
+/// at the last measure and a line for the range in this session. Colour is not a
+/// judgement of speed. The list grows with the page. Up and Down select, Return or a
+/// double-click opens a peer.
 private struct PeersCard: View {
     let node: NodeStatus
     @Bindable var feed: PeerFeed
@@ -302,27 +308,30 @@ private struct PeersCard: View {
         Card("Peers", trailing: summary) {
             if node.peers.isEmpty {
                 Note(text: "No peers are connected. The node cannot synchronize without a peer.", warning: true)
+            } else {
+                Text(sentence)
+                    .font(.title3)
+                    .fixedSize(horizontal: false, vertical: true)
+                counts
             }
             if !items.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    PeerColumns(
-                        peer: Text("Peer"), address: Text("Address"), state: Text("Direction or ban"),
-                        location: Text("Location"), response: Text("Response time"),
-                        height: Text("Peer height"), connected: Text("Connected"),
-                        received: Text("Received"), sent: Text("Sent"))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 6)
-                    Divider()
-                    TimelineView(.periodic(from: .now, by: 5)) { context in
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(items) { item in
-                                SelectableRow(id: item.id, selection: $feed.selection, open: { openItem(item.id) }) {
-                                    line(item, now: context.date).padding(.vertical, 5)
-                                }
-                                Divider()
+                TimelineView(.periodic(from: .now, by: 5)) { context in
+                    let scale = PeerScale(peers: node.peers, ranges: feed.responseRange, now: context.date)
+                    VStack(alignment: .leading, spacing: 0) {
+                        PeerColumns(
+                            peer: Text("Peer"),
+                            response: Text("Response time, 0 to \(PeerScale.time(scale.slowest))"),
+                            data: Text("Data received"), connected: Text("Connected"))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 6)
+                        Divider()
+                        ForEach(items) { item in
+                            SelectableRow(id: item.id, selection: $feed.selection, open: { openItem(item.id) }) {
+                                line(item, scale: scale, now: context.date).padding(.vertical, 6)
                             }
+                            Divider()
                         }
                     }
                 }
@@ -333,12 +342,14 @@ private struct PeersCard: View {
             }
             totals
             Text(
-                "\"Peer height\" is the chain height that the peer reported when it connected."
+                "The dot is the last response time that the node measured. The line is the range since this "
+                    + "page opened. The bar is the data received for each second of the connection."
                     + (isSyncing(node)
                         ? " Response times are high during synchronization because the peers send many blocks."
                         : ""))
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -346,31 +357,169 @@ private struct PeersCard: View {
         if let peer = items.first(where: { $0.id == id })?.peer { open(peer) }
     }
 
-    private func line(_ item: PeerListItem, now: Date) -> some View {
+    // MARK: The sentence and the counts
+
+    private func place(_ peer: PeerRow) -> PeerLocation? {
+        guard let location = feed.location(of: peer.address), location.place == .located else { return nil }
+        return location
+    }
+
+    /// The peers in groups by one property, the largest group first.
+    private func groups(_ key: (PeerLocation) -> String?) -> [(name: String, count: Int)] {
+        let names = node.peers.compactMap { peer in place(peer).flatMap(key) }
+        return Dictionary(grouping: names, by: { $0 }).map { ($0.key, $0.value.count) }
+            .sorted { ($0.1, $1.0) > ($1.1, $0.0) }
+    }
+
+    /// How many blocks the peer is behind the node. Nil when it is at the tip or not known.
+    private func behind(_ peer: PeerRow) -> UInt64? {
+        guard !isSyncing(node), let synced = peer.syncedBlocks, synced > 0 else { return nil }
+        let gap = Int64(node.blocks) - synced
+        return gap > 1 ? UInt64(gap) : nil
+    }
+
+    private var sentence: String {
+        let peers = node.peers
+        let count = peers.count
+        let incoming = peers.filter(\.inbound).count
+        var parts: [String] = []
+        let noun = count == 1 ? "peer" : "peers"
+        if count == 1 {
+            parts.append("1 peer, \(incoming == 1 ? "incoming" : "outgoing").")
+        } else if incoming == 0 {
+            parts.append("\(count) \(noun), all outgoing.")
+        } else if incoming == count {
+            parts.append("\(count) \(noun), all incoming.")
+        } else {
+            parts.append("\(count) \(noun): \(count - incoming) outgoing and \(incoming) incoming.")
+        }
+        let operators = groups(\.organization)
+        if count > 1, let largest = operators.first, largest.count * 2 > count {
+            parts.append(
+                largest.count == count
+                    ? "All \(count) use one network operator, \(largest.name)."
+                    : "\(largest.count) of the \(count) use one network operator, \(largest.name).")
+        }
+        if !isSyncing(node), peers.allSatisfy({ ($0.syncedBlocks ?? 0) > 0 }) {
+            let late = peers.compactMap(behind).count
+            var tip = late == 0
+                ? (count == 1 ? "It is at the tip of the chain" : "All \(count) are at the tip of the chain")
+                : "\(late) of the \(count) \(late == 1 ? "is" : "are") behind the node"
+            let versions = Set(peers.compactMap(\.version))
+            if count > 1, versions.count == 1 { tip += late == 0 ? " and run the same version" : ". All run the same version" }
+            parts.append(tip + ".")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    @ViewBuilder
+    private var counts: some View {
+        let operators = groups(\.organization)
+        let countries = groups(\.country)
+        if !operators.isEmpty || !countries.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                if !operators.isEmpty { countLine("Network operator", operators) }
+                if !countries.isEmpty { countLine("Country", countries) }
+            }
+        }
+    }
+
+    private func countLine(_ title: String, _ groups: [(name: String, count: Int)]) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                .frame(width: 110, alignment: .leading)
+            FlowLayout(spacing: 14) {
+                ForEach(groups, id: \.name) { group in
+                    let most = group.count * 2 > node.peers.count
+                    HStack(spacing: 5) {
+                        HStack(spacing: 3) {
+                            ForEach(0..<group.count, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(most ? Color.accentColor : Color.secondary.opacity(0.6))
+                                    .frame(width: 11, height: 11)
+                            }
+                        }
+                        Text("\(group.name) \(group.count)").font(.callout)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(group.name), \(group.count)")
+                }
+            }
+        }
+    }
+
+    // MARK: The rows
+
+    private func line(_ item: PeerListItem, scale: PeerScale, now: Date) -> some View {
         PeerColumns(
-            peer: Group {
+            peer: VStack(alignment: .leading, spacing: 2) {
                 if let peer = item.peer {
-                    Button("Peer \(peer.id)") { open(peer) }.buttonStyle(.link)
-                } else {
+                    HStack(spacing: 6) {
+                        Button("Peer \(peer.id)") { open(peer) }.buttonStyle(.link)
+                        Text(placeName(peer)).lineLimit(1)
+                    }
+                    HStack(spacing: 0) {
+                        Text(detail(peer) + " · ").lineLimit(1).layoutPriority(1)
+                        Text(peer.address).lineLimit(1).truncationMode(.middle)
+                    }
+                    .font(.callout).foregroundStyle(.secondary)
+                    .help("\(peer.address) · height at connection \(peer.startingHeight.map { Format.integer(UInt64(max($0, 0))) } ?? "unknown")")
+                    if let gap = behind(peer) {
+                        Text("\(Format.integer(gap)) blocks behind the node").font(.callout).foregroundStyle(.orange)
+                    }
+                } else if let banned = item.banned {
                     Label("Banned", systemImage: "nosign").foregroundStyle(.red)
+                    Text("\(banned.address) · \(banText(banned))")
+                        .font(.callout).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
             },
-            address: Text(item.peer?.address ?? item.banned?.address ?? "")
-                .font(.callout.monospaced())
-                .truncationMode(.middle)
-                .help(item.peer?.address ?? item.banned?.address ?? ""),
-            state: Text(item.peer.map { $0.inbound ? "Inbound" : "Outbound" } ?? item.banned.map(banText) ?? "")
-                .foregroundStyle(.secondary),
-            location: Text(item.peer.map(location) ?? "").foregroundStyle(.secondary),
-            response: Group { if let peer = item.peer { ResponseBar(milliseconds: peer.pingMs) } },
-            height: Text(item.peer?.startingHeight.map { Format.integer(UInt64(max($0, 0))) } ?? ""),
+            response: Group {
+                if let peer = item.peer {
+                    ResponseScale(milliseconds: peer.pingMs, range: feed.responseRange[peer.id], slowest: scale.slowest)
+                }
+            },
+            data: Group {
+                if let peer = item.peer {
+                    VStack(alignment: .leading, spacing: 3) {
+                        GeometryReader { geometry in
+                            Rectangle()
+                                .fill(Color.accentColor.opacity(0.85))
+                                .frame(width: max(geometry.size.width * scale.share(of: peer), 1.5))
+                        }
+                        .frame(height: 8)
+                        .accessibilityHidden(true)
+                        Text("\(Format.bytes(peer.bytesReceived)) · sent \(Format.bytes(peer.bytesSent))")
+                            .font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    .help(scale.rate(of: peer).map { "\(PeerScale.rateText($0)) for each second of the connection." } ?? "")
+                }
+            },
             connected: Text(
                 item.peer?.connectedSince.map {
                     Format.age($0, now: now).replacingOccurrences(of: " ago", with: "")
-                } ?? ""),
-            received: Text(item.peer.map { Format.bytes($0.bytesReceived) } ?? ""),
-            sent: Text(item.peer.map { Format.bytes($0.bytesSent) } ?? ""))
+                } ?? ""))
             .monospacedDigit()
+    }
+
+    private func placeName(_ peer: PeerRow) -> String {
+        guard let locations = feed.locations,
+            let location = locations.locations.first(where: { $0.address == peer.address })
+        else { return "" }
+        switch location.place {
+        case .located:
+            return [location.city, location.countryCode].compactMap { $0 }.joined(separator: ", ")
+        case .private: return "private or local address"
+        case .unresolved:
+            return locations.state == .current || locations.state == .updateAvailable
+                ? "no location found" : "no location data"
+        }
+    }
+
+    private func detail(_ peer: PeerRow) -> String {
+        var parts: [String] = []
+        if let organization = place(peer)?.organization { parts.append(organization) }
+        parts.append(peer.inbound ? "incoming" : "outgoing")
+        return parts.joined(separator: " · ")
     }
 
     private var summary: String {
@@ -379,7 +528,7 @@ private struct PeersCard: View {
     }
 
     private var items: [PeerListItem] {
-        node.peers.sorted { ($0.pingMs ?? .infinity) < ($1.pingMs ?? .infinity) }
+        node.peers.sorted { ($0.pingMs ?? .infinity, $0.id) < ($1.pingMs ?? .infinity, $1.id) }
             .map { PeerListItem(peer: $0, banned: nil) }
             + feed.banned.map { PeerListItem(peer: nil, banned: $0) }
     }
@@ -408,67 +557,103 @@ private struct PeersCard: View {
         guard let until = banned.bannedUntil, until > 0 else { return banned.reason ?? "banned" }
         return "until \(Format.date(UInt64(until)))"
     }
+}
 
-    private func location(_ peer: PeerRow) -> String {
-        guard let locations = feed.locations,
-            let location = locations.locations.first(where: { $0.address == peer.address })
-        else { return "" }
-        switch location.place {
-        case .located:
-            return [location.city, location.countryCode].compactMap { $0 }.joined(separator: ", ")
-        case .private: return "private or local"
-        case .unresolved:
-            return locations.state == .current || locations.state == .updateAvailable ? "not found" : "no location data"
+/// The scales that all rows of the peer list share.
+struct PeerScale {
+    /// The top of the response-time scale, in milliseconds: the slowest peer, rounded up.
+    let slowest: Double
+    private let rates: [Int64: Double]
+    private let fastestRate: Double
+
+    init(peers: [PeerRow], ranges: [Int64: ClosedRange<Double>], now: Date) {
+        let times = peers.compactMap(\.pingMs) + peers.compactMap { ranges[$0.id]?.upperBound }
+        slowest = Self.round(times.max() ?? 100)
+        var rates: [Int64: Double] = [:]
+        for peer in peers {
+            guard let since = peer.connectedSince else { continue }
+            let seconds = now.timeIntervalSince1970 - Double(since)
+            if seconds >= 1 { rates[peer.id] = Double(peer.bytesReceived) / seconds }
         }
+        self.rates = rates
+        fastestRate = max(rates.values.max() ?? 0, 1)
+    }
+
+    /// The next step above a time: 100, 200, 500, then 1, 2 and 5 seconds, to 10 seconds.
+    static func round(_ milliseconds: Double) -> Double {
+        for step in [100.0, 200, 300, 400, 500, 750, 1000, 2000, 5000, 10_000] where milliseconds <= step {
+            return step
+        }
+        return 10_000
+    }
+
+    static func time(_ milliseconds: Double) -> String {
+        milliseconds < 1000
+            ? "\(Int(milliseconds.rounded())) ms"
+            : (milliseconds / 1000).formatted(.number.precision(.fractionLength(0...1))) + " s"
+    }
+
+    static func rateText(_ bytes: Double) -> String {
+        bytes >= 10 ? Format.bytes(UInt64(bytes)) : "\(bytes.formatted(.number.precision(.fractionLength(1)))) bytes"
+    }
+
+    func rate(of peer: PeerRow) -> Double? { rates[peer.id] }
+
+    /// The data rate of a peer as a part of the highest rate, from 0 to 1.
+    func share(of peer: PeerRow) -> Double {
+        min((rates[peer.id] ?? 0) / fastestRate, 1)
     }
 }
 
-/// One column layout for the peer list's heading and rows. Flexible columns share the
-/// page width, so every column fits without a horizontal scroll.
-private struct PeerColumns<A: View, B: View, C: View, D: View, E: View, F: View, G: View, H: View, I: View>: View {
+/// One column layout for the peer list's heading and rows. The flexible columns share the
+/// page width, so each column fits without a horizontal scroll.
+private struct PeerColumns<A: View, B: View, C: View, D: View>: View {
     let peer: A
-    let address: B
-    let state: C
-    let location: D
-    let response: E
-    let height: F
-    let connected: G
-    let received: H
-    let sent: I
+    let response: B
+    let data: C
+    let connected: D
 
     var body: some View {
-        HStack(spacing: 8) {
-            peer.frame(width: 64, alignment: .leading)
-            address.frame(minWidth: 110, maxWidth: 230, alignment: .leading)
-            state.frame(minWidth: 70, maxWidth: 140, alignment: .leading)
-            location.frame(minWidth: 60, maxWidth: 130, alignment: .leading)
-            response.frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
-            height.frame(width: 76, alignment: .trailing)
-            connected.frame(width: 64, alignment: .trailing)
-            received.frame(width: 64, alignment: .trailing)
-            sent.frame(width: 64, alignment: .trailing)
+        HStack(alignment: .top, spacing: 16) {
+            peer.frame(minWidth: 220, maxWidth: .infinity, alignment: .leading)
+            response.frame(minWidth: 180, maxWidth: 300, alignment: .leading)
+            data.frame(width: 170, alignment: .leading)
+            connected.frame(width: 70, alignment: .trailing)
         }
-        .lineLimit(1)
     }
 }
 
-/// A bar whose length is the peer's response time on a logarithmic scale from 10 ms to 10 s.
-private struct ResponseBar: View {
+/// A response time on a straight scale from zero to the slowest peer. The dot is the last
+/// measure. The line is the range of the measures in this session.
+private struct ResponseScale: View {
     let milliseconds: Double?
+    let range: ClosedRange<Double>?
+    let slowest: Double
 
     var body: some View {
         if let milliseconds {
-            HStack(spacing: 8) {
-                GeometryReader { geometry in
-                    Capsule()
-                        .fill(color(milliseconds))
-                        .frame(width: max(geometry.size.width * fraction(milliseconds), 4))
-                        .frame(maxHeight: .infinity, alignment: .center)
+            VStack(alignment: .leading, spacing: 3) {
+                Canvas { context, size in
+                    let middle = size.height / 2
+                    func x(_ ms: Double) -> CGFloat { 5 + CGFloat(min(ms / slowest, 1)) * (size.width - 10) }
+                    context.fill(
+                        Path(CGRect(x: 5, y: middle - 0.5, width: size.width - 10, height: 1)),
+                        with: .color(.secondary.opacity(0.35)))
+                    context.fill(
+                        Path(CGRect(x: 5 - 0.5, y: middle - 4, width: 1, height: 8)), with: .color(.secondary.opacity(0.6)))
+                    if let range, range.upperBound - range.lowerBound > 0 {
+                        let from = x(range.lowerBound)
+                        let band = CGRect(x: from, y: middle - 2, width: max(x(range.upperBound) - from, 2), height: 4)
+                        context.fill(Path(roundedRect: band, cornerRadius: 2), with: .color(.primary.opacity(0.35)))
+                    }
+                    let at = x(milliseconds)
+                    context.fill(
+                        Path(ellipseIn: CGRect(x: at - 4.5, y: middle - 4.5, width: 9, height: 9)),
+                        with: .color(.accentColor))
                 }
-                .frame(height: 8)
-                Text(label(milliseconds))
-                    .monospacedDigit()
-                    .frame(width: 64, alignment: .trailing)
+                .frame(height: 12)
+                .accessibilityHidden(true)
+                Text(label(milliseconds)).font(.callout).lineLimit(1)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Response time \(label(milliseconds))")
@@ -477,15 +662,11 @@ private struct ResponseBar: View {
         }
     }
 
-    private func fraction(_ ms: Double) -> Double {
-        min(max(log10(max(ms, 10) / 10) / 3, 0.02), 1)
-    }
-
-    private func color(_ ms: Double) -> Color {
-        ms < 150 ? .green : ms < 1000 ? .orange : .red
-    }
-
     private func label(_ ms: Double) -> String {
-        ms < 1000 ? "\(Int(ms.rounded())) ms" : (ms / 1000).formatted(.number.precision(.fractionLength(1))) + " s"
+        var text = PeerScale.time(ms)
+        if let range, range.upperBound - range.lowerBound >= 5 {
+            text += " · \(PeerScale.time(range.lowerBound)) to \(PeerScale.time(range.upperBound))"
+        }
+        return text
     }
 }

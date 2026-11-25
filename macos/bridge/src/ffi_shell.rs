@@ -150,6 +150,81 @@ pub struct PeerLocations {
     pub locations: Vec<PeerLocation>,
 }
 
+/// A point on a coast of the world, in degrees.
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+pub struct WorldPoint {
+    pub longitude: f64,
+    pub latitude: f64,
+}
+
+/// The grid that the coast points are read from: one dot is a quarter of a degree.
+const OUTLINE_COLUMNS: u16 = 720;
+const OUTLINE_ROWS: u16 = 180;
+
+/// The coasts of the world as the terminal's peer map draws them: the high resolution
+/// world of the terminal's drawing library. The library does not give its points to
+/// other code, thus the bridge draws the map on a fine grid and reads the dots back.
+fn world_points() -> Vec<WorldPoint> {
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+    use ratatui::style::Color;
+    use ratatui::symbols::Marker;
+    use ratatui::widgets::Widget;
+    use ratatui::widgets::canvas::{Canvas, Map, MapResolution};
+
+    let area = Rect::new(0, 0, OUTLINE_COLUMNS, OUTLINE_ROWS);
+    let mut buffer = Buffer::empty(area);
+    Canvas::default()
+        .marker(Marker::Braille)
+        .x_bounds([-180.0, 180.0])
+        .y_bounds([-90.0, 90.0])
+        .paint(|context| {
+            context.draw(&Map {
+                resolution: MapResolution::High,
+                color: Color::White,
+            });
+        })
+        .render(area, &mut buffer);
+
+    // A Braille cell has 2 columns and 4 rows of dots. The bit of each dot:
+    const DOTS: [[u32; 2]; 4] = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]];
+    let across = f64::from(OUTLINE_COLUMNS) * 2.0 - 1.0;
+    let down = f64::from(OUTLINE_ROWS) * 4.0 - 1.0;
+    let mut points = Vec::new();
+    for row in 0..OUTLINE_ROWS {
+        for column in 0..OUTLINE_COLUMNS {
+            let Some(symbol) = buffer[(column, row)].symbol().chars().next() else {
+                continue;
+            };
+            let code = u32::from(symbol);
+            if !(0x2801..=0x28FF).contains(&code) {
+                continue;
+            }
+            for (dot_row, bits) in DOTS.iter().enumerate() {
+                for (dot_column, bit) in bits.iter().enumerate() {
+                    if (code - 0x2800) & bit != 0 {
+                        let x = f64::from(column) * 2.0 + dot_column as f64;
+                        let y = f64::from(row) * 4.0 + dot_row as f64;
+                        points.push(WorldPoint {
+                            longitude: -180.0 + x / across * 360.0,
+                            latitude: 90.0 - y / down * 180.0,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    points
+}
+
+static WORLD: std::sync::LazyLock<Vec<WorldPoint>> = std::sync::LazyLock::new(world_points);
+
+/// The coast points of the world, for a map that the app draws without a map service.
+#[uniffi::export]
+pub fn world_outline() -> Vec<WorldPoint> {
+    WORLD.clone()
+}
+
 /// One entry in the node's ban list.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct BannedPeer {

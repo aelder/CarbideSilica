@@ -1,5 +1,4 @@
 import CarbideCore
-import MapKit
 import SwiftUI
 
 /// Peer data beside `NodeStatus`: the ban list, the one-time traffic totals and peer
@@ -18,6 +17,23 @@ final class PeerFeed {
     private(set) var installMessage: String?
     /// The peer list's selection, kept for the session.
     var selection: String?
+    /// The lowest and highest response time of each peer since the page opened, in
+    /// milliseconds, by peer ID.
+    private(set) var responseRange: [Int64: ClosedRange<Double>] = [:]
+
+    /// Records the response time of each peer. The record of a peer that left is removed.
+    func note(_ peers: [PeerRow]) {
+        var kept: [Int64: ClosedRange<Double>] = [:]
+        for peer in peers {
+            let known = responseRange[peer.id]
+            guard let ms = peer.pingMs else {
+                kept[peer.id] = known
+                continue
+            }
+            kept[peer.id] = min(known?.lowerBound ?? ms, ms)...max(known?.upperBound ?? ms, ms)
+        }
+        if kept != responseRange { responseRange = kept }
+    }
 
     func loadBans(_ model: AppModel) async {
         guard let explorer = model.explorer else { return }
@@ -67,10 +83,12 @@ final class PeerFeed {
     }
 }
 
-/// Connected peers on a world map, placed by Carbide's location database.
+/// Connected peers on a map of the world, placed by Carbide's location database.
 ///
-/// Private and unresolved peers have no place on a map. The terminal draws them in empty
-/// sea areas; the app lists them under the map instead, so every pin is a real position.
+/// The app draws the map itself, from the coast points of the terminal's map, and makes no
+/// request to a map service. The map opens on the area that holds all placed peers. Private
+/// and unresolved peers have no place on a map. The terminal draws them in empty sea areas.
+/// The app lists them below the map, so that each mark is a real position.
 struct PeerMapCard: View {
     let peers: [PeerRow]
     let feed: PeerFeed
@@ -78,7 +96,6 @@ struct PeerMapCard: View {
 
     @Environment(AppModel.self) private var model
     @State private var confirmingInstall = false
-    @State private var hovered: String?
 
     var body: some View {
         Card("Peers on a map", trailing: stateText) {
@@ -148,41 +165,20 @@ struct PeerMapCard: View {
         }
     }
 
+    @ViewBuilder
     private func map(_ locations: PeerLocations) -> some View {
         let pins = located(locations)
-        return VStack(alignment: .leading, spacing: 6) {
-            Map(initialPosition: .rect(.world)) {
-                ForEach(pins, id: \.0.id) { peer, location in
-                    Annotation(
-                        peer.address,
-                        coordinate: CLLocationCoordinate2D(
-                            latitude: location.latitude ?? 0, longitude: location.longitude ?? 0),
-                        anchor: .center
-                    ) {
-                        Button {
-                            open(peer)
-                        } label: {
-                            Circle()
-                                .fill(color(peer))
-                                .stroke(.white, lineWidth: 1.5)
-                                .frame(width: hovered == peer.address ? 16 : 12)
-                        }
-                        .buttonStyle(.plain)
-                        .onHover { hovered = $0 ? peer.address : nil }
-                        .help("\(peer.address) · \(place(location))")
-                    }
-                    .annotationTitles(.hidden)
-                }
+        if !pins.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                PeerOutlineMap(pins: pins, open: open)
+                Text(
+                    "Each mark is the approximate area of the IP address of a peer. The city of a data centre "
+                        + "address can be the city of its company. The land is drawn as the coast points of the "
+                        + "terminal's map. The app makes no request to a map service.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
-            .frame(height: 340)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            Text(
-                "Each dot is a connected peer at the approximate location of its IP address. "
-                    + "Green is a response time under 150 ms, orange under 1 s, red slower. Click a dot to open the peer."
-            )
-            .font(.callout)
-            .foregroundStyle(.secondary)
         }
     }
 
@@ -254,15 +250,6 @@ struct PeerMapCard: View {
             }
         }
         .lineLimit(1)
-    }
-
-    private func color(_ peer: PeerRow) -> Color {
-        guard let ms = peer.pingMs else { return .gray }
-        return ms < 150 ? .green : ms < 1000 ? .orange : .red
-    }
-
-    private func place(_ location: PeerLocation) -> String {
-        PeerMapCard.placeName(location)
     }
 
     /// "City, Country (CC)", as the terminal's peer overview.

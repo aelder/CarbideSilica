@@ -210,6 +210,43 @@ fn a_missing_input_value_makes_the_statement_incomplete() {
     assert!(statement.closing.is_empty());
 }
 
+#[test]
+fn a_transaction_with_no_expiry_height_does_not_expire() {
+    assert_eq!(expiry_height(&json!({"expiryheight": 0})), None);
+    assert_eq!(expiry_height(&json!({})), None);
+    assert_eq!(expiry_height(&json!({"expiryheight": 4_336_416_u64})), Some(4_336_416));
+}
+
+/// A confirmed transaction, an unknown one, and the limit of one request.
+#[tokio::test]
+#[ignore]
+async fn live_waiting_transactions() {
+    let explorer = super::super::super::tests::live_explorer();
+    let payment = "78ee5ec530126584f88fec33a4b561cc30c433ea5e20d851b992118ca8de730b";
+    let unknown = "00000000000000000000000000000000000000000000000000000000000000aa";
+    let found = explorer
+        .waiting_transactions(vec![payment.into(), unknown.into()])
+        .await;
+    assert_eq!(found.len(), 2);
+    let first = &found[0];
+    println!(
+        "tags {:?} expiry {:?} height {:?} parties {}",
+        first.tags,
+        first.expiry_height,
+        first.height,
+        first.statement.as_ref().map_or(0, |statement| statement.parties.len())
+    );
+    assert!(first.found);
+    assert_eq!(first.height, Some(4_335_986));
+    assert!(first.block_hash.is_some());
+    assert_eq!(first.statement.as_ref().unwrap().parties.len(), 3);
+    assert_balanced(first.statement.as_ref().unwrap());
+    assert!(!found[1].found);
+    assert!(found[1].statement.is_none());
+    let many = vec![payment.to_string(); MAX_WAITING + 5];
+    assert_eq!(explorer.waiting_transactions(many).await.len(), MAX_WAITING);
+}
+
 /// The eleven transactions of the design study, on the chain.
 #[tokio::test]
 #[ignore]

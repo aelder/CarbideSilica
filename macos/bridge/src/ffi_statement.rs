@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 
 use super::{
-    Context, FeeKind, Flow, FlowKind, ShieldedAccounting, ValueAccounting, clamp_sats,
+    Context, Explorer, FeeKind, Flow, FlowKind, ShieldedAccounting, ValueAccounting, clamp_sats,
     decimal_value_to_zat, text,
 };
 
@@ -435,6 +435,88 @@ pub(super) fn statement(
         marks,
         routes,
         complete,
+    }
+}
+
+/// A transaction that waits for a block, or one that left the mempool, with what the
+/// Mempool page says about it.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct WaitingTransaction {
+    pub txid: String,
+    /// False when the node does not have the transaction. The other fields are then empty.
+    pub found: bool,
+    pub tags: Vec<String>,
+    pub statement: Option<TransactionStatement>,
+    pub coinbase: bool,
+    pub fee_pool_checkpoint: bool,
+    /// The last height at which a block can take the transaction. None when it does not
+    /// expire.
+    pub expiry_height: Option<u64>,
+    /// The block that took it. None while it waits.
+    pub height: Option<u64>,
+    pub block_hash: Option<String>,
+    /// The native currency's name.
+    pub coin: String,
+}
+
+/// The most transactions that one request reads. Each one needs the sources of its inputs.
+pub(super) const MAX_WAITING: usize = 24;
+
+pub(super) fn expiry_height(raw: &Value) -> Option<u64> {
+    raw["expiryheight"].as_u64().filter(|height| *height > 0)
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl Explorer {
+    /// Reads transactions for the Mempool page: Carbide's tags, the statement by party,
+    /// the expiry height and the block, when a block has taken it. The answer is always
+    /// from the node now: a waiting transaction is not served from stored data.
+    pub async fn waiting_transactions(&self, txids: Vec<String>) -> Vec<WaitingTransaction> {
+        let coin = self.config.chain.name.clone();
+        let native = self.config.chain.system_id.get().map(ToString::to_string);
+        let mut found = Vec::new();
+        for txid in txids.into_iter().take(MAX_WAITING) {
+            let raw = self
+                .settle(self.client.get_raw_transaction(txid.trim()).await)
+                .ok()
+                .map(|output| output.result);
+            let Some(raw) = raw else {
+                found.push(WaitingTransaction {
+                    txid,
+                    found: false,
+                    tags: Vec::new(),
+                    statement: None,
+                    coinbase: false,
+                    fee_pool_checkpoint: false,
+                    expiry_height: None,
+                    height: None,
+                    block_hash: None,
+                    coin: coin.clone(),
+                });
+                continue;
+            };
+            let context = self.context(&raw).await;
+            let flows = super::transaction_flows(&raw, &context, native.as_deref());
+            let accounting = super::value_accounting(&raw, &flows, &context, &coin);
+            found.push(WaitingTransaction {
+                txid,
+                found: true,
+                tags: super::display_tags(&raw, &context),
+                statement: Some(statement(&raw, &flows, &context, native.as_deref(), &accounting)),
+                coinbase: flows.iter().any(|flow| flow.coinbase),
+                fee_pool_checkpoint: raw["vout"].as_array().is_some_and(|outputs| {
+                    outputs
+                        .iter()
+                        .any(|output| output["scriptPubKey"]["feepool"].is_object())
+                }),
+                expiry_height: expiry_height(&raw),
+                height: text(&raw["blockhash"]).and(raw["height"].as_u64()),
+                block_hash: text(&raw["blockhash"]),
+                coin: coin.clone(),
+            });
+        }
+        self.forgive();
+        found
     }
 }
 

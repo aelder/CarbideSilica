@@ -19,10 +19,12 @@ struct ChainPulse: View {
 
     @Environment(AppModel.self) private var model
     @State private var hovered: String?
-    @State private var history: PulseHistory?
-    @State private var historyProblem: String?
+    @State private var record = WaitRecord.shared
 
-    private let span: Double = 25 * 60
+    private var history: PulseHistory? { record.history }
+    private var historyProblem: String? { record.problem }
+
+    private let span = WaitRecord.span
     /// The target time between blocks.
     private let target: Double = 60
 
@@ -97,24 +99,9 @@ struct ChainPulse: View {
 
     // MARK: The chain's record
 
-    /// Reads the record at the start and each 10 minutes. The waits of a day change slowly.
+    /// The record of waits is shared with the Mempool page.
     private func keepHistory() async {
-        while !Task.isCancelled {
-            if let explorer = model.explorer, let tip = model.status?.blocks, live {
-                // A public API answers slowly and sees each request. Ask it for less.
-                let count: UInt32 = model.status?.source == .publicApi ? 180 : 1440
-                do {
-                    history = try await explorer.pulseHistory(
-                        tip: tip, count: count, windowSeconds: UInt32(span))
-                    historyProblem = nil
-                } catch {
-                    historyProblem = describe(error)
-                }
-                try? await Task.sleep(for: .seconds(600))
-            } else {
-                try? await Task.sleep(for: .seconds(2))
-            }
-        }
+        await record.keep(model, live: live)
     }
 
     private var burstSeconds: Int { Int(history?.burstSeconds ?? 10) }

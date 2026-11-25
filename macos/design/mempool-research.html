@@ -1,0 +1,393 @@
+<title>Mempool Research</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column. What the mempool is, then what the tiles show, then the methods of each field, then real moments drawn two ways, then the choice. */
+:root {
+  --bg: #f5f7f8; --surface: #ffffff; --line: #d9e0e4; --fg: #15212b; --muted: #5b6b78;
+  --accent: #0d6b82; --accent-soft: #dcedf2;
+  --mined: #b4690f; --staked: #7448b0; --warn: #b3372f; --ok: #2f7d4f;
+  --display: "Space Grotesk", "Avenir Next", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 34px; letter-spacing: -0.01em; } h2 { font-size: 24px; } h3 { font-size: 16px; }
+p { margin: 0; max-width: 70ch; }
+a { color: var(--accent); }
+.lede { font-size: 17px; color: var(--muted); }
+.note { color: var(--muted); font-size: 13.5px; }
+.figures { display: flex; flex-wrap: wrap; gap: 14px 34px; font-variant-numeric: tabular-nums; }
+.figures div { display: flex; flex-direction: column; min-width: 0; }
+.figures b { font-family: var(--display); font-size: 26px; font-weight: 600; line-height: 1.15; }
+.figures span { font-size: 13px; color: var(--muted); max-width: 26ch; }
+figure { margin: 0; }
+.plot { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.plot .scroll { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 560px; height: auto; color: var(--fg); font-family: var(--body); }
+.plot figcaption { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+.plot .tag { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 36px; }
+.fields div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fields p { font-size: 14px; }
+.fields .take { color: var(--muted); }
+ol.steps, ul.plain { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; max-width: 74ch; }
+.src { font-size: 13.5px; columns: 2 320px; column-gap: 36px; padding-left: 18px; margin: 0; }
+.src li { break-inside: avoid; margin-bottom: 6px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 14px; min-width: 640px; width: 100%; }
+th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
+
+/* The worked examples. */
+:root { --k-pay: #0d6b82; --k-conv: #7a4fc0; --k-imp: #b4690f; --k-exp: #2f7d4f; --k-other: #7b8894; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --k-pay: #5cc0d8; --k-conv: #b99be8; --k-imp: #e8a95a; --k-exp: #6fcf94; --k-other: #93a4b0; } }
+:root[data-theme="dark"] { --k-pay: #5cc0d8; --k-conv: #b99be8; --k-imp: #e8a95a; --k-exp: #6fcf94; --k-other: #93a4b0; }
+.bench { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.picker, .forms { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.picker button, .forms button { font: inherit; font-size: 13px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.picker button[aria-pressed="true"], .forms button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.picker button:focus-visible, .forms button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ident { font-size: 12.5px; color: var(--muted); }
+.say { font-size: 17px; max-width: 78ch; }
+.stage { overflow-x: auto; }
+.stage svg { display: block; width: 100%; min-width: 600px; height: auto; color: var(--fg); font-family: var(--body); }
+.see { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+.kinds { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.kinds span { display: inline-flex; align-items: center; gap: 6px; }
+.kinds i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.rows { display: flex; flex-direction: column; }
+.rowline { display: grid; grid-template-columns: 96px minmax(0, 1fr) 110px 70px; gap: 12px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.rowline b { font-weight: 600; font-size: 12.5px; }
+.rowline span.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.rowline.more { color: var(--muted); display: block; }
+.fill { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+.fill div { height: 8px; border-radius: 2px; background: var(--accent-soft); position: relative; overflow: hidden; }
+.fill div i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); min-width: 2px; }
+</style>
+
+<main>
+<section>
+  <h1>Mempool Research</h1>
+  <p class="lede">How the leading fields show transactions that wait for a block, and what that means for the tiles on the Mempool page. Each figure uses the Verus chain, read from the local node.</p>
+  <p>The short answer: the tiles are a form for a full mempool where transactions compete for space. The Verus mempool is not that. It is empty most of the time, it holds one transaction when it is not empty, and each block takes all that waits. The fields that show a small queue well do not draw the size of each item. They show what waits, how long it has waited against the usual wait, when it will leave, and what left most recently.</p>
+</section>
+
+<section>
+  <h2>What the mempool is</h2>
+  <div class="figures" id="figs"></div>
+  <figure class="plot"><span class="tag">Transactions that waited for each block</span><div class="scroll" id="hist"></div>
+    <figcaption>Each bar is the blocks of one range, divided by the number of transactions that each block took from the mempool. Block rewards and stakes do not wait, and they are not counted.</figcaption></figure>
+  <figure class="plot"><span class="tag">Thirty blocks in sequence, and what each took</span><div class="scroll" id="took"></div>
+    <div class="kinds" id="legend"></div>
+    <figcaption>One column for each block. One square for each transaction that the block took. The top row is from the quiet range and the bottom row is from the busy range.</figcaption></figure>
+  <ul class="plain">
+    <li><b>It is empty most of the time.</b> On a quiet day, 1,365 of 1,500 blocks took nothing from the mempool. On a busy day, 106 of 300 took nothing.</li>
+    <li><b>When it is not empty, it holds a small number.</b> On a quiet day, 94 of the 135 blocks that took a transaction took one. The largest number in the busy range is 36.</li>
+    <li><b>Nothing competes for space.</b> The largest block in the two ranges is 72 KB. The limit is 2,000 KB. Each block has room for all that waits, thus a fee does not buy a place.</li>
+    <li><b>The wait is the wait for the next block.</b> Half of the waits between blocks on the quiet day are shorter than 14 seconds, and 4 of each 100 are longer than 5 minutes. A transaction in the mempool is in that same wait.</li>
+    <li><b>The mempool fills during a long wait.</b> On the quiet day, a block that came more than 2 minutes after the last one took 0.59 transactions on average. A block that came less than 10 seconds after took 0.06.</li>
+    <li><b>The kind is the content.</b> On the quiet day the transactions are payments. On the busy day, 79 of each 100 are conversions, imports, exports and notarizations.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What the tiles show today</h2>
+  <ul class="plain">
+    <li><b>The usual picture is an empty box or one tile.</b> One transaction fills the full area. During this study the page showed one blue rectangle with the word "Transaction".</li>
+    <li><b>The size of a tile is its bytes.</b> Bytes decide nothing here, because no block is near full.</li>
+    <li><b>The shade is the age, to 90 seconds.</b> The shade has no scale, and it does not show the age against the usual wait for a block.</li>
+    <li><b>The tile does not say what the transaction does.</b> The label is the first tag, or "Transaction" for a payment.</li>
+    <li><b>The page does not show what occurs next or what occurred last.</b> The time of the last block is in the line of totals. The transactions that left with it are not on the page.</li>
+    <li><b>The tiles move.</b> They are in order of size, thus each arrival changes the position of the others.</li>
+  </ul>
+  <p class="note">The tiles of Carbide's terminal are not this form. They are cards in a list, one for each transaction, with the arrival, the fee, the entry height, the parents and the tags.</p>
+</section>
+
+<section>
+  <h2>What the leading fields do</h2>
+  <div class="fields">
+    <div>
+      <h3>Bitcoin mempool explorers</h3>
+      <p>mempool.space shows the mempool as projected blocks: the blocks that miners will make if they take the highest fee rates first. Its fee estimates are the median rates of the first three projected blocks. Johoe's charts show the mempool through time as stacked bands of fee rate. Both forms answer one question: what fee rate gets a transaction into a block.</p>
+      <p class="take">For Carbide Silica: that question does not exist on Verus now. The useful part is the projected block: one block, with the part of its space that the waiting transactions fill.</p>
+    </div>
+    <div>
+      <h3>Live transaction displays</h3>
+      <p>TxStreet draws each transaction as a person who walks to a bus, and the bus leaves when a block is made. The size of the person is the size of the transaction. Bitfeed shows the same path from unconfirmed to confirmed. The metaphor is a waiting room: arrival, wait, departure.</p>
+      <p class="take">For Carbide Silica: show the arrival, the wait and the departure of each transaction. The size is the least useful part of these displays.</p>
+    </div>
+    <div>
+      <h3>Research on data streams</h3>
+      <p>Huron, Vuillemot and Fekete made visual sedimentation for items that arrive at irregular rates. A new item is shown alone. As it gets old it joins a layer that shows only the total. New data stays readable, and old data stays in view without clutter.</p>
+      <p class="take">For Carbide Silica: a waiting transaction gets a full row. A transaction that left is one mark on its block.</p>
+    </div>
+    <div>
+      <h3>Transaction monitors</h3>
+      <p>Blocknative reports each change of state of a transaction: pending, stuck, dropped, confirmed. The record of a transaction is a sequence of states, not one position in a picture.</p>
+      <p class="take">For Carbide Silica: keep a transaction on the page after it leaves the mempool, with the block that took it or the fact that the node dropped it.</p>
+    </div>
+    <div>
+      <h3>Passenger information</h3>
+      <p>A departure board lists what waits and when it leaves. Studies of displays at stops in London, The Hague and Seattle found that people with wait information judged their wait to be 13 to 28 of each 100 shorter.</p>
+      <p class="take">For Carbide Silica: the time of the next block is not known, but the record of recent waits is. Show the wait so far against that record, as the chain pulse does.</p>
+    </div>
+    <div>
+      <h3>Queue analysis</h3>
+      <p>Traffic engineers draw a queue as two cumulative lines on one time axis: arrivals and departures. The vertical distance between the lines is the number that waits. The horizontal distance is the wait of one item.</p>
+      <p class="take">For Carbide Silica: one time axis with the blocks on it, and one line for each transaction from its arrival to its block.</p>
+    </div>
+    <div>
+      <h3>Research on treemaps</h3>
+      <p>Kong, Heer and Agrawala tested how people compare the areas of treemap tiles. People compare areas with less accuracy than lengths, and the form is useful where a bar chart has no room: thousands of items. Nielsen Norman Group gives the same limit: a treemap does not permit exact comparison.</p>
+      <p class="take">For Carbide Silica: one to thirty-six items is not a quantity for a treemap. A list has room for each one.</p>
+    </div>
+    <div>
+      <h3>Empty states</h3>
+      <p>The design systems of IBM and SAP give one rule for a view with no data: say why it is empty and what will change that. For data that comes with time, say what the view waits for.</p>
+      <p class="take">For Carbide Silica: the empty page is the usual page. It must carry information: the last block, what it took, and the recent record.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>A record of the live mempool</h2>
+  <figure class="plot"><span class="tag" id="liveTag"></span><div class="scroll" id="live"></div>
+    <figcaption id="liveCap"></figcaption></figure>
+</section>
+
+<section>
+  <h2>Real moments, drawn two ways</h2>
+  <p>Each moment is the mempool immediately before a real block: the transactions that the block took. Select a moment, then a form.</p>
+  <div class="bench">
+    <div class="picker" id="picker" role="group" aria-label="Moment"></div>
+    <div class="ident" id="ident"></div>
+    <div class="forms" id="forms" role="group" aria-label="Form"></div>
+    <div id="stage"></div>
+    <p class="see" id="see"></p>
+  </div>
+  <p class="note">The arrival time of each transaction in these blocks is not in the chain, thus the tiles have one shade and the list has no wait for each row. The live page has both.</p>
+</section>
+
+<section>
+  <h2>How the forms compare</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Question</th><th>Tiles today</th><th>Projected blocks</th><th>Waiting list with a time record</th></tr></thead>
+    <tbody>
+      <tr><td>Nothing waits</td><td>An empty box</td><td>An empty block</td><td>The last block, what it took, and the recent record</td></tr>
+      <tr><td>One transaction waits</td><td>One tile that fills the area</td><td>One mark in a block</td><td>One row that says what it does</td></tr>
+      <tr><td>Thirty-six wait</td><td>Readable as a count, not as content</td><td>Marks in one block</td><td>A count for each kind, then the rows</td></tr>
+      <tr><td>What does each one do</td><td>The first tag on the larger tiles</td><td>On hover</td><td>In each row</td></tr>
+      <tr><td>How long has it waited</td><td>A shade with no scale</td><td>Not shown</td><td>A figure and a line on the time axis</td></tr>
+      <tr><td>Is the wait unusual</td><td>Not shown</td><td>Not shown</td><td>Against the record of recent waits</td></tr>
+      <tr><td>Will it be in the next block</td><td>Not shown</td><td>Shown by position</td><td>One bar: the part of a block that the queue fills</td></tr>
+      <tr><td>Where did my transaction go</td><td>Not shown</td><td>In the last confirmed block</td><td>In the list of what left, with its block</td></tr>
+      <tr><td>Position of an item through time</td><td>Changes with each arrival</td><td>Changes with each arrival</td><td>Fixed: order of arrival</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Recommendation</h2>
+  <p>Replace the tiles with a waiting list on a time record. Keep the sortable list as the second view.</p>
+  <ol class="steps">
+    <li><b>One sentence first.</b> "Nothing waits. The last block came 40 seconds ago and took 3 transactions." Or: "2 transactions wait. The last block came 3 minutes ago, longer than 89 of 100 recent waits."</li>
+    <li><b>A time record with the blocks on it.</b> The last 15 minutes on one axis that ends at the present. Each block is a mark, as in the chain pulse. Each transaction that the app saw is a line from its arrival to the block that took it. A line that is open at the right is a transaction that waits now.</li>
+    <li><b>A row for each waiting transaction.</b> The row has the kind, the sentence of the transaction statement, the wait, the fee, the size, the expiry in blocks, and the parents that also wait. The rows are in order of arrival and do not move. A child is below its parent.</li>
+    <li><b>The next block as one bar.</b> The bytes that wait as a part of the 2,000 KB limit, with the words "all of these fit in the next block". If the queue is ever larger than one block, the bar shows that, and the fee rate then matters.</li>
+    <li><b>What left.</b> Below the waiting rows, the transactions that the last blocks took, with the block and the wait of each one that the app saw. A person who sent a transaction finds it here after it leaves the mempool.</li>
+    <li><b>Many transactions get counts first.</b> Above 12 rows, the page shows the number of each kind, and each count is a filter.</li>
+    <li><b>The list stays.</b> The second view is the table of the terminal: arrival, fee, size, entry height, parents and tags, with a sort on each column.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>What stays as Carbide gives it</h2>
+  <ul class="plain">
+    <li>The mempool comes only from a node, each 2 seconds, and is not stored. An old mempool says nothing about the mempool now.</li>
+    <li>The tags of each transaction, and "classification pending" until the app has the transaction.</li>
+    <li>The fee, the size, the entry height and the parents that the node gives.</li>
+    <li>The totals: the number of transactions, the serialized size, the last block and the refresh state.</li>
+    <li>The app does not predict the time of the next block. It shows the record of recent waits.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Limits of this study</h2>
+  <ul class="plain">
+    <li>The chain does not record when a transaction arrived. The counts for each block are what the block took, which is what waited at that moment or was made with the block.</li>
+    <li>Imports and exports can be made by the node that makes the block. Some of them do not wait in the mempool of other nodes.</li>
+    <li>The live record is short. The node was quiet during the study.</li>
+    <li>The two ranges are 1,500 recent blocks and 300 blocks with much DeFi activity. Other ranges can have other proportions.</li>
+    <li>The source pages of Bitfeed and of the sedimentation paper were not available to read in full. Their descriptions here are from the summaries of their own pages.</li>
+    <li>The page does not test the forms with people.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sources</h2>
+  <ol class="src">
+    <li><a href="https://mempool.space/docs/faq">mempool.space</a>. Frequently asked questions: projected blocks and fee estimates.</li>
+    <li><a href="https://mempool.jhoenicke.de/">Johoe's Bitcoin Mempool Statistics</a>.</li>
+    <li><a href="https://github.com/txstreet/txstreet">TxStreet</a>. Source and description.</li>
+    <li><a href="https://github.com/bitfeed-project/bitfeed">Bitfeed</a>. Source and description.</li>
+    <li><a href="https://ieeevis.org/year/2013/paper/infovis/visual-sedimentation">Huron, Vuillemot and Fekete</a>. Visual Sedimentation. IEEE InfoVis, 2013.</li>
+    <li><a href="https://www.blocknative.com/api">Blocknative</a>. Transaction state changes.</li>
+    <li><a href="https://dx.doi.org/10.1016/j.tra.2006.11.006">Dziekan and Kottenhoff</a>. Dynamic at-stop real-time information displays for public transport. Transportation Research Part A, 2007.</li>
+    <li><a href="https://ideas.repec.org/a/eee/transa/v45y2011i8p839-848.html">Watkins and others</a>. Where Is My Bus? Transportation Research Part A, 2011.</li>
+    <li><a href="https://web.mit.edu/1.041/www/lectures/L3-cumulative-diagram-2024sp.pdf">MIT 1.041</a>. The cumulative diagram for queues.</li>
+    <li><a href="https://idl.uw.edu/papers/perception-treemaps">Kong, Heer and Agrawala</a>. Perceptual Guidelines for Creating Rectangular Treemaps. IEEE InfoVis, 2010.</li>
+    <li><a href="https://www.nngroup.com/articles/treemaps/">Nielsen Norman Group</a>. Treemaps.</li>
+    <li><a href="https://carbondesignsystem.com/patterns/empty-states-pattern/">IBM Carbon</a>. Empty states.</li>
+    <li><a href="https://www.sap.com/design-system/fiori-design-web/v1-96/foundations/best-practices/global-patterns/designing-for-empty-states">SAP Fiori</a>. Designing for empty states.</li>
+  </ol>
+</section>
+</main>
+
+<script>
+const DATA = {"hist":[{"name":"1,500 blocks on a quiet day","parts":[["None",1365],["One",94],["2 to 5",32],["6 to 20",9],["More than 20",0]]},{"name":"300 blocks on a busy day","parts":[["None",106],["One",31],["2 to 5",90],["6 to 20",61],["More than 20",12]]}],"took":[{"name":"Quiet range, from block 4,335,905","blocks":[{"h":4335905,"k":[]},{"h":4335906,"k":[]},{"h":4335907,"k":[]},{"h":4335908,"k":[]},{"h":4335909,"k":[]},{"h":4335910,"k":[]},{"h":4335911,"k":["Payment"]},{"h":4335912,"k":[]},{"h":4335913,"k":["Payment"]},{"h":4335914,"k":[]},{"h":4335915,"k":[]},{"h":4335916,"k":[]},{"h":4335917,"k":[]},{"h":4335918,"k":[]},{"h":4335919,"k":[]},{"h":4335920,"k":[]},{"h":4335921,"k":[]},{"h":4335922,"k":[]},{"h":4335923,"k":[]},{"h":4335924,"k":[]},{"h":4335925,"k":[]},{"h":4335926,"k":[]},{"h":4335927,"k":[]},{"h":4335928,"k":[]},{"h":4335929,"k":[]},{"h":4335930,"k":[]},{"h":4335931,"k":[]},{"h":4335932,"k":[]},{"h":4335933,"k":[]},{"h":4335934,"k":[]}]},{"name":"Busy range, from block 3,962,100","blocks":[{"h":3962100,"k":[]},{"h":3962101,"k":["Import","Payment"]},{"h":3962102,"k":[]},{"h":3962103,"k":["Conversion","Payment"]},{"h":3962104,"k":[]},{"h":3962105,"k":["Import","Payment"]},{"h":3962106,"k":[]},{"h":3962107,"k":["Import","Payment"]},{"h":3962108,"k":["Conversion","Conversion","Conversion"]},{"h":3962109,"k":[]},{"h":3962110,"k":["Other","Payment"]},{"h":3962111,"k":["Other","Other","Other","Other","Other","Other","Other","Other","Other","Conversion","Payment","Conversion","Conversion","Conversion","Conversion","Conversion","Payment","Payment","Payment"]},{"h":3962112,"k":[]},{"h":3962113,"k":["Export","Import","Export","Export","Export","Export","Import","Import","Import","Import","Payment","Payment","Conversion","Conversion","Conversion"]},{"h":3962114,"k":["Payment"]},{"h":3962115,"k":["Import","Conversion","Payment"]},{"h":3962116,"k":[]},{"h":3962117,"k":["Conversion","Payment"]},{"h":3962118,"k":[]},{"h":3962119,"k":["Export","Import","Conversion","Conversion","Payment","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion"]},{"h":3962120,"k":["Conversion","Conversion"]},{"h":3962121,"k":["Import","Export","Export","Export","Import","Import","Import","Payment"]},{"h":3962122,"k":["Export","Export","Import","Import","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion"]},{"h":3962123,"k":["Import","Payment"]},{"h":3962124,"k":["Other","Other","Other","Other","Other","Other","Other","Other","Other","Other","Other","Other","Export","Import","Conversion","Conversion","Payment","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Conversion","Payment"]},{"h":3962125,"k":["Payment"]},{"h":3962126,"k":["Conversion","Payment"]},{"h":3962127,"k":["Import","Conversion","Payment"]},{"h":3962128,"k":["Conversion","Payment"]},{"h":3962129,"k":["Export","Export","Export","Import","Import","Import","Conversion","Conversion","Conversion","Conversion","Conversion"]}]}],"gaps":[-2,-2,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,7,7,7,7,7,7,7,7,7,7,7,7,7,7,8,8,8,8,8,8,8,8,9,9,9,9,9,9,9,9,9,9,9,9,10,10,10,10,10,10,10,10,11,11,11,11,11,11,11,12,12,12,12,12,12,13,13,13,13,13,13,13,13,14,14,14,14,14,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,16,16,16,16,16,16,16,16,16,16,16,17,17,17,17,17,17,17,18,18,18,18,18,18,19,19,19,19,19,19,19,19,20,20,20,20,20,20,20,20,21,21,21,21,21,21,21,21,21,21,21,21,22,22,22,22,22,22,22,23,23,23,23,23,23,23,23,23,23,23,23,23,23,24,24,24,24,24,24,24,25,25,25,25,25,25,25,25,25,25,26,26,26,26,26,26,27,27,27,27,27,27,27,27,27,27,28,28,28,28,28,29,29,29,29,29,29,29,29,30,30,30,30,30,30,30,30,31,31,31,31,31,31,31,31,31,32,32,32,32,32,33,33,33,33,34,34,34,34,34,35,35,35,35,36,36,36,36,36,36,36,37,37,37,37,37,37,38,38,38,38,39,39,39,39,40,40,40,40,41,41,42,42,42,42,43,43,43,43,43,44,44,44,44,44,44,44,44,45,45,45,45,45,46,46,46,46,46,46,46,46,46,46,46,47,47,47,47,47,47,47,47,47,48,48,48,48,48,48,49,49,49,49,49,49,50,50,50,50,50,50,51,51,51,51,52,52,52,52,52,53,53,53,53,53,54,54,54,54,54,54,54,54,54,55,55,55,55,55,55,55,55,55,56,56,56,58,58,58,58,58,58,58,59,59,59,59,59,60,61,61,61,61,62,62,62,62,63,63,63,63,64,64,64,64,65,65,65,65,66,66,66,67,67,68,68,69,69,70,70,70,70,70,71,71,71,71,71,72,72,72,72,73,73,73,74,74,74,74,75,75,75,75,77,77,77,78,78,78,78,78,78,78,78,78,80,80,81,81,81,81,81,82,83,83,83,84,84,84,85,85,86,86,86,86,87,87,87,87,88,88,88,89,89,90,90,91,92,92,93,93,93,94,94,94,94,94,94,94,94,94,96,96,96,97,97,98,98,99,99,99,100,100,100,100,100,101,101,101,102,103,104,104,105,106,106,107,108,108,108,108,108,109,110,110,110,110,111,111,112,112,112,113,114,114,114,115,116,116,116,117,118,118,118,118,119,120,120,120,121,121,122,122,122,123,124,125,125,125,127,128,128,128,128,129,130,130,131,131,132,132,133,134,134,135,136,136,136,136,136,138,138,138,138,138,138,138,139,139,139,139,139,140,140,140,140,140,141,141,141,142,142,143,143,143,143,143,144,145,145,146,146,146,146,146,147,148,150,150,150,151,152,153,155,158,158,160,163,163,165,165,166,167,168,168,169,169,169,170,170,170,171,171,172,173,174,177,179,179,180,180,181,182,183,183,183,183,184,184,184,184,185,185,185,186,186,187,189,193,194,195,196,197,198,200,202,203,205,206,207,208,211,211,212,214,214,215,216,217,219,219,219,222,224,226,228,228,229,230,230,230,230,231,231,231,232,233,233,235,235,237,240,240,241,241,243,245,246,247,248,249,251,251,252,252,253,258,262,262,263,270,274,274,275,277,277,278,279,281,282,282,283,285,288,289,289,290,294,300,301,305,306,309,312,313,317,320,321,322,326,326,327,335,339,339,341,342,344,345,362,369,369,369,369,369,372,373,379,380,383,393,397,400,401,405,407,411,417,417,418,425,429,441,446,465,469,487,506,525,535,538,540,587,598,602,611,613,641,671,680,753,799,872,952],"moments":[{"label":"Empty, the usual state","h":4335912,"gap":58,"before":1,"txs":[],"seeTiles":"This is the page for 91 of each 100 blocks on a quiet day. It says that nothing is there.","seeRoom":"The empty state says what occurred last. The time record above the list shows the recent blocks and what they took."},{"label":"One payout","h":4335913,"gap":326,"before":0,"txs":[{"size":1685,"fee":0.0039,"kind":"Payment","what":"Payment of 3.08072313 VRSC to 39 addresses"}],"seeTiles":"One transaction fills the area. The tile says \"Transaction\". It does not say that 39 addresses get a payment.","seeRoom":"One row. It says what the transaction does, and that the wait for a block is already longer than most."},{"label":"Fifteen in a quiet hour","h":4336895,"gap":602,"before":0,"txs":[{"size":245,"fee":0.0001,"kind":"Payment","what":"Payment of 5 VRSC to 1 address"},{"size":1956,"fee":0.0047,"kind":"Payment","what":"Payment of 4.2739456 VRSC to 47 addresses"},{"size":540,"fee":0.0001,"kind":"Payment","what":"Payment of 0.06986721 VRSC to 1 address"},{"size":392,"fee":0.0001,"kind":"Payment","what":"Payment of 0.34136409 VRSC to 1 address"},{"size":539,"fee":0.0001,"kind":"Payment","what":"Payment of 0.46385505 VRSC to 1 address"},{"size":244,"fee":0.0001,"kind":"Payment","what":"Payment of 0.10195793 VRSC to 1 address"},{"size":392,"fee":0.0001,"kind":"Payment","what":"Payment of 0.10450222 VRSC to 1 address"},{"size":687,"fee":0.0001,"kind":"Payment","what":"Payment of 0.34641346 VRSC to 1 address"},{"size":244,"fee":0.0001,"kind":"Payment","what":"Payment of 0.10092952 VRSC to 1 address"},{"size":391,"fee":0.0001,"kind":"Payment","what":"Payment of 0.16542954 VRSC to 1 address"},{"size":244,"fee":0.0001,"kind":"Payment","what":"Payment of 0.00387689 VRSC to 1 address"},{"size":244,"fee":0.0001,"kind":"Payment","what":"Payment of 0.16815057 VRSC to 1 address"},{"size":245,"fee":0.0001,"kind":"Payment","what":"Payment of 0.13956701 VRSC to 1 address"},{"size":539,"fee":0.0001,"kind":"Payment","what":"Payment of 0.03791305 VRSC to 1 address"},{"size":540,"fee":0.0001,"kind":"Payment","what":"Payment of 0.02581315 VRSC to 1 address"}],"seeTiles":"Fifteen tiles after a wait of 10 minutes for a block. Two payouts are large, thus they take most of the area. The thirteen payments are small tiles without labels.","seeRoom":"A count for each kind, then the rows in order. The two payouts are rows of the same height as each payment."},{"label":"Five on a busy day","h":3962020,"gap":164,"before":0,"txs":[{"size":970,"fee":null,"kind":"Export","what":"Export for VerusIDX, 1 transfer"},{"size":1880,"fee":null,"kind":"Import","what":"Import into VerusIDX, 3 transfers"},{"size":540,"fee":null,"kind":"Conversion","what":"Conversion of 1,000 VRSC to tBTC.vETH through NATI🦉"},{"size":1149,"fee":null,"kind":"Conversion","what":"Conversion of 6.7 VRSC to vUSDC.vETH through Floralis, and 1 more"},{"size":1179,"fee":null,"kind":"Conversion","what":"Conversion of 0.00330331 vETH to scrvUSD.vETH through SUPER🛒, and 1 more"}],"seeTiles":"Five tiles. The labels are the first tag of each. The amounts and the currencies are not shown.","seeRoom":"Five rows. Each conversion names its amount, its currencies and the currency it goes through."},{"label":"Thirty-six, the most","h":3962119,"gap":508,"before":0,"txs":[{"size":890,"fee":null,"kind":"Export","what":"Export for NATI, 1 transfer"},{"size":2073,"fee":null,"kind":"Import","what":"Import into NATI, 3 transfers"},{"size":912,"fee":null,"kind":"Conversion","what":"Conversion of 19.5777318 DAI.vETH to tBTC.vETH through Floralis"},{"size":415,"fee":null,"kind":"Conversion","what":"Conversion of 19.34270935 VRSC to tBTC.vETH through Pure"},{"size":2513,"fee":0.0046,"kind":"Payment","what":"Payment of 17.15167824 VRSC to 46 addresses"},{"size":1089,"fee":null,"kind":"Conversion","what":"Conversion of 0.00028 tBTC.vETH to vUSDC.vETH through Floralis, and 1 more"},{"size":827,"fee":null,"kind":"Conversion","what":"Conversion of 112 CHIPS to scrvUSD.vETH through SUPER🛒"},{"size":1006,"fee":null,"kind":"Conversion","what":"Conversion of 0.00028 tBTC.vETH to vUSDC.vETH through Floralis, and 1 more"},{"size":1004,"fee":null,"kind":"Conversion","what":"Conversion of 0.0006345 vETH to vUSDT.vETH through Floralis, and 1 more"},{"size":1065,"fee":null,"kind":"Conversion","what":"Conversion of 19.5182557 DAI.vETH to VRSC through Bridge.vETH, and 1 more"},{"size":616,"fee":null,"kind":"Conversion","what":"Conversion of 0.00500999 vETH to DAI.vETH through Bridge.vETH"},{"size":1395,"fee":null,"kind":"Conversion","what":"Conversion of 47.41535301 vUSDT.vETH to Kaiju"},{"size":1738,"fee":null,"kind":"Conversion","what":"Conversion of 10 VRSC to NATI.vETH through NATI, and 3 more"},{"size":1912,"fee":null,"kind":"Conversion","what":"Conversion of 10 VRSC to NATI.vETH through NATI, and 3 more"},{"size":1008,"fee":null,"kind":"Conversion","what":"Conversion of 4.95549255 vUSDC.vETH to EURC.vETH through Switch, and 1 more"},{"size":712,"fee":null,"kind":"Conversion","what":"Conversion of 138.3333 DAI.vETH to vETH through Bridge.vETH"},{"size":1063,"fee":null,"kind":"Conversion","what":"Conversion of 19.5103242 DAI.vETH to VRSC through Bridge.vETH, and 1 more"},{"size":415,"fee":null,"kind":"Conversion","what":"Conversion of 19.33722506 VRSC to tBTC.vETH through Pure"},{"size":415,"fee":null,"kind":"Conversion","what":"Conversion of 19.32999182 VRSC to tBTC.vETH through Pure"},{"size":740,"fee":null,"kind":"Conversion","what":"Conversion of 19.5916547 vUSDT.vETH to tBTC.vETH through Floralis"},{"size":1182,"fee":null,"kind":"Conversion","what":"Conversion of 19.4992259 DAI.vETH to VRSC through Bridge.vETH, and 1 more"},{"size":1355,"fee":null,"kind":"Conversion","what":"Conversion of 19.4816606 DAI.vETH to VRSC through Bridge.vETH, and 1 more"},{"size":1119,"fee":null,"kind":"Conversion","what":"Conversion of 19.5525395 DAI.vETH to VRSC through Bridge.vETH, and 1 more"},{"size":1117,"fee":null,"kind":"Conversion","what":"Conversion of 0.008 vETH to DAI.vETH through Bridge.vETH, and 1 more"},{"size":768,"fee":null,"kind":"Conversion","what":"Conversion of 19.5781871 vUSDT.vETH to tBTC.vETH through Floralis"},{"size":768,"fee":null,"kind":"Conversion","what":"Conversion of 19.5901409 DAI.vETH to tBTC.vETH through Floralis"},{"size":768,"fee":null,"kind":"Conversion","what":"Conversion of 19.5874207 vUSDT.vETH to tBTC.vETH through Floralis"},{"size":1117,"fee":null,"kind":"Conversion","what":"Conversion of 0.00028 tBTC.vETH to vUSDC.vETH through Floralis, and 1 more"},{"size":622,"fee":null,"kind":"Conversion","what":"Conversion of 19.563687 DAI.vETH to vETH through Floralis"},{"size":1117,"fee":null,"kind":"Conversion","what":"Conversion of 0.00028 tBTC.vETH to vUSDC.vETH through Floralis, and 1 more"},{"size":1117,"fee":null,"kind":"Conversion","what":"Conversion of 19.5900917 DAI.vETH to VRSC through Bridge.vETH, and 1 more"},{"size":740,"fee":null,"kind":"Conversion","what":"Conversion of 59.98106575 vUSDC.vETH to tBTC.vETH through Floralis"},{"size":740,"fee":null,"kind":"Conversion","what":"Conversion of 66.54211554 vUSDC.vETH to tBTC.vETH through Floralis"},{"size":566,"fee":null,"kind":"Conversion","what":"Conversion of 15 DAI.vETH to VRSC through Bridge.vETH"},{"size":714,"fee":null,"kind":"Conversion","what":"Conversion of 15 DAI.vETH to VRSC through Bridge.vETH"},{"size":566,"fee":null,"kind":"Conversion","what":"Conversion of 15 DAI.vETH to VRSC through Bridge.vETH"}],"seeTiles":"The largest number in the two ranges. The tiles show that there are many and that some are larger. Most have no room for a label.","seeRoom":"The counts say that 33 of the 36 are conversions. All 36 fill 1.8 of each 100 of a block."}],"live":{"t0":1795586654.5,"t1":1795587090.2,"blocks":[{"h":4337460,"t":1795586720.6},{"h":4337461,"t":1795586855.8},{"h":4337463,"t":1795586906.9},{"h":4337465,"t":1795586909.9},{"h":4337466,"t":1795586912.9},{"h":4337467,"t":1795586915.9},{"h":4337468,"t":1795586936.9},{"h":4337469,"t":1795587060.1}],"txs":[{"first":1795586681.5,"last":1795586717.5,"kind":"Payment","what":"Payment of 7.35402106 VRSC to 1 address"}],"tag":"7 minutes of the mempool of the local node","cap":"The node was read each 3 seconds. 8 blocks came, and 1 transaction waited. The mempool was empty in 91 of each 100 readings. A dashed line is a block. A thick line is a transaction, from the reading that first had it to the reading that last had it."},"figs":[["91 of 100","blocks on a quiet day took nothing from the mempool"],["1","transaction is the usual number when it is not empty"],["36","transactions is the largest number in the two ranges"],["3.6 of 100","is the part of the block limit that the largest block used"],["13 s","is the median wait for a block on the quiet day"]]};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = id => document.getElementById(id);
+const KIND = { Payment: "var(--k-pay)", Conversion: "var(--k-conv)", Transfer: "var(--k-conv)", Import: "var(--k-imp)", Export: "var(--k-exp)" };
+const color = k => KIND[k] || "var(--k-other)";
+const span = s => s >= 120 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${Math.round(s)} s`;
+const bytes = n => n >= 1000 ? `${(n / 1000).toFixed(1)} KB` : `${n} bytes`;
+
+function hist() {
+  const W = 760, bar = 24, shades = [0.18, 0.45, 0.65, 0.82, 1];
+  let y = 6, out = "";
+  for (const h of DATA.hist) {
+    const total = h.parts.reduce((a, p) => a + p[1], 0);
+    out += `<text x="0" y="${y + 12}" font-size="13" font-weight="600" fill="currentColor">${esc(h.name)}</text><text x="${W}" y="${y + 12}" font-size="12" text-anchor="end" fill="var(--muted)">${total.toLocaleString("en-US")} blocks</text>`;
+    y += 20; let x = 0;
+    h.parts.forEach((p, i) => {
+      const w = p[1] / total * W;
+      out += `<rect x="${x.toFixed(1)}" y="${y}" width="${Math.max(0, w - 2).toFixed(1)}" height="${bar}" rx="2" fill="${i ? "var(--accent)" : "var(--muted)"}" opacity="${shades[i]}"><title>${esc(p[0])}: ${p[1]} blocks</title></rect>`;
+      const share = p[1] / total * 100;
+      out += `<rect x="${i * 150}" y="${y + bar + 8}" width="9" height="9" rx="2" fill="${i ? "var(--accent)" : "var(--muted)"}" opacity="${shades[i]}"/><text x="${i * 150 + 14}" y="${y + bar + 17}" font-size="12" fill="currentColor">${esc(p[0])}: ${share < 10 ? share.toFixed(1) : Math.round(share)}%</text>`;
+      x += w;
+    });
+    y += bar + 38;
+  }
+  return `<svg viewBox="0 0 ${W} ${y - 10}" role="img" aria-label="Share of blocks by the number of transactions that waited for them">${out}</svg>`;
+}
+
+function took() {
+  const W = 760, col = W / 30, cell = 7, rowH = 122;
+  let out = "";
+  DATA.took.forEach((range, r) => {
+    const base = 14 + r * (rowH + 22) + rowH - 14;
+    out += `<text x="0" y="${base - rowH + 20}" font-size="12" font-weight="600" fill="var(--muted)">${esc(range.name)}</text>`;
+    range.blocks.forEach((b, i) => {
+      const x = i * col + col / 2;
+      out += `<rect x="${(x - 1).toFixed(1)}" y="${base}" width="2" height="9" fill="var(--muted)"/>`;
+      const shown = b.k.slice(0, 13);
+      shown.forEach((k, j) => { out += `<rect x="${(x - cell / 2).toFixed(1)}" y="${base - 4 - (j + 1) * (cell + 1)}" width="${cell}" height="${cell}" rx="1" fill="${color(k)}"><title>${esc(k)}</title></rect>`; });
+      if (b.k.length > shown.length) out += `<text x="${x.toFixed(1)}" y="${base - 8 - shown.length * (cell + 1)}" font-size="9.5" text-anchor="middle" fill="var(--muted)">+${b.k.length - shown.length}</text>`;
+    });
+    out += `<line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="var(--line)"/>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${14 + 2 * (rowH + 22)}" role="img" aria-label="What each of thirty blocks took from the mempool, quiet range and busy range">${out}</svg>`;
+}
+
+function live() {
+  const L = DATA.live, W = 760, t0 = L.t0, t1 = L.t1, sx = t => 8 + (t - t0) / (t1 - t0) * (W - 16);
+  const lanes = Math.max(1, L.txs.length), H = 64 + lanes * 18;
+  let out = `<line x1="8" y1="${H - 24}" x2="${W - 8}" y2="${H - 24}" stroke="var(--muted)"/>`;
+  let labelled = -100;
+  for (const b of L.blocks) {
+    const x = sx(b.t);
+    out += `<line x1="${x.toFixed(1)}" y1="14" x2="${x.toFixed(1)}" y2="${H - 24}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 3"/><rect x="${(x - 2).toFixed(1)}" y="${H - 30}" width="4" height="12" rx="1" fill="currentColor"/>`;
+    if (x - labelled >= 62) { out += `<text x="${x.toFixed(1)}" y="${H - 4}" font-size="10.5" text-anchor="middle" fill="var(--muted)">${b.h.toLocaleString("en-US")}</text>`; labelled = x; }
+  }
+  L.txs.forEach((t, i) => {
+    const y = 22 + i * 18, a = sx(t.first), b = sx(t.last);
+    out += `<line x1="${a.toFixed(1)}" y1="${y}" x2="${Math.max(b, a + 3).toFixed(1)}" y2="${y}" stroke="${color(t.kind)}" stroke-width="5" stroke-linecap="round"/><text x="${(Math.max(b, a + 3) + 8).toFixed(1)}" y="${y + 4}" font-size="12" fill="currentColor">${esc(t.what)} · waited ${span(t.last - t.first)}</text>`;
+  });
+  if (!L.txs.length) out += `<text x="${W / 2}" y="34" font-size="13" text-anchor="middle" fill="var(--muted)">No transaction arrived in this time.</text>`;
+  out += `<text x="8" y="12" font-size="10.5" fill="var(--muted)">start</text><text x="${W - 8}" y="12" font-size="10.5" text-anchor="end" fill="var(--muted)">${span(t1 - t0)} later</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Blocks and waiting transactions in the recorded time">${out}</svg>`;
+}
+
+/* The tiles as the app draws them: strips of tiles, widest transactions first. */
+function tiles(m) {
+  const W = 760, H = 280, rows = [...m.txs].sort((a, b) => b.size - a.size), total = rows.reduce((a, r) => a + r.size, 0);
+  if (!rows.length) return `<svg viewBox="0 0 ${W} 200" role="img" aria-label="An empty mempool"><text x="${W / 2}" y="92" font-size="18" text-anchor="middle" fill="currentColor">The mempool is empty.</text><text x="${W / 2}" y="116" font-size="13.5" text-anchor="middle" fill="var(--muted)">All known transactions are in a block.</text></svg>`;
+  const strips = Math.min(Math.max(Math.ceil(rows.length / 3), 1), 5), per = total / strips;
+  const groups = [[]]; let filled = 0;
+  for (const r of rows) { if (filled >= per && groups.length < strips) { groups.push([]); filled = 0; } groups[groups.length - 1].push(r); filled += r.size; }
+  let out = "", y = 0;
+  for (const g of groups) {
+    const sum = g.reduce((a, r) => a + r.size, 0), h = sum / total * H; let x = 0;
+    for (const r of g) {
+      const w = r.size / sum * W;
+      out += `<rect x="${(x + 1.5).toFixed(1)}" y="${(y + 1.5).toFixed(1)}" width="${Math.max(0, w - 3).toFixed(1)}" height="${Math.max(0, h - 3).toFixed(1)}" rx="4" fill="var(--accent)" opacity="0.6"><title>${esc(r.what)}</title></rect>`;
+      if (w > 110 && h > 30) out += `<text x="${(x + 10).toFixed(1)}" y="${(y + 21).toFixed(1)}" font-size="11.5" font-weight="600" fill="currentColor">${r.kind === "Payment" ? "Transaction" : esc(r.kind === "Conversion" ? "Reserve Transfer" : r.kind)}</text>`;
+      x += w;
+    }
+    y += h;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="The waiting transactions as tiles sized by bytes">${out}</svg>`;
+}
+
+function room(m) {
+  const n = m.txs.length, total = m.txs.reduce((a, r) => a + r.size, 0);
+  const rank = DATA.gaps.filter(g => g < m.gap).length / DATA.gaps.length * 100;
+  const say = n === 0
+    ? `Nothing waits. The last block came ${span(m.gap)} ago.`
+    : `${n} ${n === 1 ? "transaction waits" : "transactions wait"}. The last block came ${span(m.gap)} ago, longer than ${Math.round(rank)} of 100 recent waits.`;
+  let html = `<p class="say">${esc(say)}</p>`;
+  if (n > 12) {
+    const count = {}; for (const r of m.txs) count[r.kind] = (count[r.kind] || 0) + 1;
+    html += `<div class="kinds">` + Object.entries(count).sort((a, b) => b[1] - a[1]).map(([k, c]) => `<span><i style="background:${color(k)}"></i>${esc(k)} ${c}</span>`).join("") + `</div>`;
+  }
+  if (n) {
+    const shown = m.txs.slice(0, 8);
+    html += `<div class="rows">` + shown.map(r => `<div class="rowline"><b style="color:${color(r.kind)}">${esc(r.kind)}</b><span>${esc(r.what)}</span><span class="num">${r.fee == null ? "" : "fee " + r.fee}</span><span class="num">${bytes(r.size)}</span></div>`).join("")
+      + (n > shown.length ? `<div class="rowline more">${n - shown.length} more</div>` : "") + `</div>`;
+    const part = total / 2000000 * 100;
+    html += `<div class="fill"><span>The next block: ${bytes(total)} of 2,000 KB, ${part < 1 ? part.toFixed(2) : part.toFixed(1)} of each 100. All of these fit.</span><div><i style="width:${Math.max(part, 0.3)}%"></i></div></div>`;
+  } else {
+    html += `<div class="rows"><div class="rowline more">The last block took ${m.before} ${m.before === 1 ? "transaction" : "transactions"}. The record of recent blocks is above the list.</div></div>`;
+  }
+  return html;
+}
+
+const FORMS = [["tiles", "Tiles today"], ["room", "Waiting list"]];
+const state = { m: 3, form: "room" };
+function render() {
+  const m = DATA.moments[state.m];
+  $("picker").innerHTML = "Moment: " + DATA.moments.map((x, i) => `<button type="button" data-m="${i}" aria-pressed="${i === state.m}">${esc(x.label)}</button>`).join("");
+  $("forms").innerHTML = "Form: " + FORMS.map(f => `<button type="button" data-form="${f[0]}" aria-pressed="${f[0] === state.form}">${f[1]}</button>`).join("");
+  $("ident").textContent = `Before block ${m.h.toLocaleString("en-US")} · ${m.txs.length} ${m.txs.length === 1 ? "transaction" : "transactions"} · ${bytes(m.txs.reduce((a, r) => a + r.size, 0))}`;
+  $("stage").innerHTML = state.form === "tiles" ? `<div class="stage">${tiles(m)}</div>` : room(m);
+  $("see").textContent = state.form === "tiles" ? m.seeTiles : m.seeRoom;
+}
+function start() {
+  $("figs").innerHTML = DATA.figs.map(f => `<div><b>${f[0]}</b><span>${f[1]}</span></div>`).join("");
+  $("hist").innerHTML = hist();
+  $("took").innerHTML = took();
+  $("legend").innerHTML = ["Payment", "Conversion", "Import", "Export", "Other"].map(k => `<span><i style="background:${color(k)}"></i>${k}</span>`).join("");
+  $("liveTag").textContent = DATA.live.tag;
+  $("live").innerHTML = live();
+  $("liveCap").textContent = DATA.live.cap;
+  $("picker").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.m = Number(b.dataset.m); render(); } });
+  $("forms").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.form = b.dataset.form; render(); } });
+  render();
+}
+start();
+</script>

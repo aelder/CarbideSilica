@@ -420,16 +420,45 @@ struct TransactionStatementView: View {
 
     // MARK: Words
 
-    private func currency(_ id: String?) -> String {
+    private var words: StatementWords {
+        // Reads the setting, so that the words follow a change of it.
+        _ = showsNames
+        return StatementWords(
+            statement: statement, coin: coin, tags: transaction.tags,
+            coinbase: transaction.accounting.inputs.coinbase, feePool: transaction.feePoolCheckpoint,
+            model: model)
+    }
+
+    private func currency(_ id: String?) -> String { words.currency(id) }
+    private func amount(_ amount: StatementAmount) -> String { words.amount(amount) }
+    private func name(_ party: StatementParty) -> String { words.name(party) }
+    private func rowTitle(_ party: StatementParty) -> String { words.rowTitle(party) }
+    private var sentence: String { words.sentence }
+}
+
+/// The words of a statement: the names of its parties and currencies, and the sentence
+/// that says what the transaction did. The Transaction page and the Mempool page use the
+/// same words.
+@MainActor
+struct StatementWords {
+    let statement: TransactionStatement
+    let coin: String
+    let tags: [String]
+    let coinbase: Bool
+    let feePool: Bool
+    let model: AppModel
+
+
+    func currency(_ id: String?) -> String {
         id.map { model.currencyName($0) } ?? coin
     }
 
-    private func amount(_ amount: StatementAmount) -> String {
+    func amount(_ amount: StatementAmount) -> String {
         "\(Format.coins(abs(amount.sats))) \(currency(amount.currencyId))"
     }
 
     /// A party in the middle of a sentence.
-    private func name(_ party: StatementParty) -> String {
+    func name(_ party: StatementParty) -> String {
         switch party.kind {
         case .address:
             // An output script can name more than one address. The lists below show each.
@@ -444,12 +473,11 @@ struct TransactionStatementView: View {
         }
     }
 
-    private func rowTitle(_ party: StatementParty) -> String {
+    func rowTitle(_ party: StatementParty) -> String {
         StatementText.capital(name(party).replacingOccurrences(of: "the ", with: "", options: .anchored))
     }
 
-    private var sentence: String {
-        _ = showsNames
+    var sentence: String {
         let parties = statement.parties
         let givers = parties.filter { $0.net.contains { $0.sats < 0 } }
         let receivers = parties.filter { party in !party.net.isEmpty && !party.net.contains { $0.sats < 0 } }
@@ -462,14 +490,14 @@ struct TransactionStatementView: View {
         func money(_ sats: Int64) -> String { "\(Format.coins(abs(sats))) \(currency(column))" }
         var parts: [String] = []
 
-        if transaction.accounting.inputs.coinbase {
+        if coinbase {
             let total = addresses.map(net).reduce(0, +)
             let to = addresses.count == 1 ? name(addresses[0]) : "\(addresses.count) addresses"
             parts.append("The block reward of \(money(total)) went to \(to).")
-            if transaction.feePoolCheckpoint { parts.append("One output records the fee pool.") }
+            if feePool { parts.append("One output records the fee pool.") }
             return parts.joined(separator: " ")
         }
-        if transaction.tags.contains("Stake"), givers.isEmpty, receivers.isEmpty,
+        if tags.contains("Stake"), givers.isEmpty, receivers.isEmpty,
             let owner = parties.first, let stayed = owner.carried.first
         {
             return "This transaction staked the block. \(amount(stayed)) stayed at \(name(owner)). No value moved."
@@ -527,7 +555,7 @@ struct TransactionStatementView: View {
             parts.append("\(StatementText.capital(giver)) wrote: \(StatementText.list(labels)).")
         } else if givers.isEmpty, receivers.isEmpty, parts.isEmpty {
             parts.append(
-                transaction.tags.isEmpty ? "No value moved." : "\(transaction.tags.prefix(3).joined(separator: ", ")). No value moved.")
+                tags.isEmpty ? "No value moved." : "\(tags.prefix(3).joined(separator: ", ")). No value moved.")
         }
 
         if statement.closingKind == .fee, let fee = statement.closing.first(where: { $0.currencyId == nil }) {

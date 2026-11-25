@@ -18,8 +18,15 @@ figures and the raw JSON one step away.
   and API state, peers), the chain pulse (bursts of blocks on a time axis, with the current
   wait set among a day of recorded waits), recent blocks, and recent confirmed
   transactions with their tags. Stream blocks keeps the newest block in view.
-- Mempool: unconfirmed transactions as tiles sized by bytes and shaded by age, or as a
-  list with arrival, fee, size, entry height, unconfirmed parents and tags.
+- Mempool: a waiting list on a time record. One sentence says what waits and how the
+  wait since the last block compares with recent waits. The last 15 minutes are one
+  axis with each block on it and a line for each transaction from its arrival to its
+  block. Each waiting transaction is a row with its tags, the sentence of its
+  statement, its wait, fee, size, expiry and waiting parents, in order of arrival. One
+  bar shows the part of a block that the queue fills. Below, the transactions that the
+  last 30 blocks took, with the wait of each one that the app saw. The second view is
+  the terminal's list with arrival, fee, size, entry height, unconfirmed parents and
+  tags. `design/mempool-research.html` has the study behind this form.
 - Charts: block rate, mining and staking difficulty with MA100 lines, the staked share
   over 100 and 1,000 blocks, and the fee pool, as five panels on one time axis with one
   cursor through all of them. The block rate has process limits and the staked share has
@@ -40,8 +47,14 @@ figures and the raw JSON one step away.
 - Bookmarks, in Carbide's own bookmark file, including notarization views with their
   perspective, manual entry, and Carbide's optional start-up population.
 - Node and peers: synchronization progress, validation speed, peers and bans in one
-  list, network totals, a peer page with the node log and raw JSON, peers by response
-  time, a world map of peers, and side branches.
+  list, network totals, a peer page with the node log and raw JSON, a map of peers, and
+  side branches. The peer list starts with one sentence and a count of the peers by
+  network operator and by country. Each row has its measures on scales that all rows
+  share: the response time as a dot with the range of the session, and the data received
+  as a bar. The map opens on the area that holds all placed peers, joins near peers into
+  one mark, and is drawn by the app from the coast points of the terminal's map: it
+  makes no request to a map service. `design/peers-research.html` has the study behind
+  this form.
 - Sources: each node and public API with its state (Disabled, Enabled, Monitored), its
   traffic and its recorded activity.
 
@@ -117,8 +130,8 @@ settings.
   2-hour span.
 - The local node needs the identity index (`-idindex=1`) for requests by address or
   authority. Without it, the app says so.
-- The peer map needs location data (DB-IP City Lite and ASN Lite, CC BY 4.0). You install
-  it from the Node page. The app does not download it without your confirmation.
+- The place and the network operator of a peer need location data (DB-IP City Lite and
+  ASN Lite, CC BY 4.0). You install it from the Node page. The app does not download it without your confirmation.
 - Not verified on live data, because no such data was available: a second PBaaS node for
   the other notarization view, a block on a side branch, a tokenized identity, and a
   mempool with transactions.
