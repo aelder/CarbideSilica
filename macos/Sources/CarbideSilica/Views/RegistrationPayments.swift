@@ -1,66 +1,136 @@
 import CarbideCore
 import SwiftUI
 
-/// How an identity registration's cost was split: payments to other identities, which are
-/// usually referrals or the issuer's charge, and the transaction fee.
+/// How an identity registration's cost was split, checked as Carbide checks it: referral
+/// payments, the issuer's charge, the native instruction budget and the transaction fee,
+/// against the issuer's own fee rules. Nothing shows for a transaction that does not
+/// register an identity.
 struct RegistrationPaymentsCard: View {
-    let transaction: TransactionDetail
-    @Environment(AppModel.self) private var model
+    let txid: String
+    /// False when the transaction has no reservation output, so there is nothing to check.
+    private let candidate: Bool
 
-    private var payers: Set<String> { Set(transaction.inputs.flatMap(\.addresses)) }
-
-    private var payments: [(String, Int64)] {
-        var result: [(String, Int64)] = []
-        for output in transaction.outputs {
-            guard let address = output.addresses.first, address.hasPrefix("i"), address.count == 34,
-                !payers.contains(address), output.tags.isEmpty, let sats = output.valueSats, sats > 0
-            else { continue }
-            if let index = result.firstIndex(where: { $0.0 == address }) {
-                result[index].1 += sats
-            } else {
-                result.append((address, sats))
-            }
-        }
-        return result
+    init(txid: String) {
+        self.txid = txid
+        self.candidate = true
     }
 
-    private var fee: Int64? {
-        let inputs = transaction.inputs.compactMap(\.valueSats)
-        guard inputs.count == transaction.inputs.count, !inputs.isEmpty else { return nil }
-        let out = transaction.outputs.compactMap(\.valueSats).reduce(0, +)
-        return inputs.reduce(0, +) - out
+    init(transaction: TransactionDetail) {
+        self.txid = transaction.txid
+        self.candidate = transaction.json.contains("\"identityreservation\"")
+            || transaction.json.contains("\"identityadvancedreservation\"")
+    }
+
+    @Environment(AppModel.self) private var model
+    @State private var phase: Phase = .checking
+    @State private var attempt = 0
+
+    private enum Phase {
+        case checking
+        case failed(String)
+        case done(RegistrationPayments)
     }
 
     var body: some View {
-        if !payments.isEmpty {
-            Card("Registration payments") {
-                ForEach(payments, id: \.0) { payment in
-                    HStack {
-                        RouteLink(text: payment.0, route: .identity(name: payment.0), shorten: true)
-                        Spacer()
-                        CoinAmount(sats: payment.1)
+        if candidate { card }
+    }
+
+    private var card: some View {
+        Group {
+            switch phase {
+            case .checking:
+                Card("Registration payments") {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Checking historical evidence").foregroundStyle(.secondary)
                     }
                 }
-                if let fee, fee >= 0 {
-                    Divider()
-                    HStack {
-                        Text("Transaction fee").foregroundStyle(.secondary)
-                        Spacer()
-                        CoinAmount(sats: fee)
-                    }
-                    HStack {
-                        Text("Total").fontWeight(.semibold)
-                        Spacer()
-                        CoinAmount(sats: payments.map(\.1).reduce(0, +) + fee).fontWeight(.semibold)
-                    }
+            case .failed(let message):
+                Card("Registration payments") {
+                    Note(text: message, warning: true)
+                    Button("Try Again") { attempt += 1 }
                 }
-                HStack(spacing: 10) {
-                    ConfidenceMark(level: .candidate, label: "Not confirmed")
-                    Text("A payment to an identity in a registration is usually a referral or a charge from the issuer. The chain does not record the type.")
-                        .font(.caption).foregroundStyle(.secondary)
+            case .done(let payments):
+                if payments.status != .notRegistration {
+                    Card("Registration payments") { content(payments) }
                 }
             }
-            .task(id: transaction.txid) { await model.resolveNames(payments.map(\.0)) }
         }
+        .task(id: "\(txid)|\(model.generation)|\(attempt)") {
+            phase = .checking
+            do {
+                let payments = try await model.requireExplorer().registrationPayments(txid: txid)
+                phase = .done(payments)
+                var ids: [String?] = payments.referrals.flatMap { [$0.recipient, $0.currency] }
+                ids += [payments.issuer, payments.charge?.recipient]
+                await model.resolveNames(ids)
+            } catch is CancellationError {
+            } catch {
+                phase = .failed(describe(error))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func content(_ payments: RegistrationPayments) -> some View {
+        switch payments.status {
+        case .unverified(let reason):
+            ConfidenceMark(level: .unknown, label: "Unverified")
+            Text(reason).foregroundStyle(.secondary)
+            Text("Carbide marks the registration payments verified only when every payment matches the issuer's fee rules and the referral chain.")
+                .font(.caption).foregroundStyle(.secondary)
+        case .verified, .notRegistration:
+            HStack(spacing: 10) {
+                ConfidenceMark(level: .verified, label: "Verified against the issuer's rules")
+                if let issuer = payments.issuer {
+                    Text("Issuer").foregroundStyle(.secondary)
+                    IDLink(id: issuer, route: .currency(name: issuer))
+                }
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                row(
+                    label: "Referrals (\(payments.referrals.count))",
+                    amount: payments.referrals.first.map {
+                        model.amountText(payments.referralTotalSats, currency: $0.currency)
+                    } ?? model.amountText(0, currency: payments.issuer ?? model.coin))
+                ForEach(payments.referrals, id: \.output) { referral in
+                    paymentRow(referral).padding(.leading, 18)
+                }
+                if let charge = payments.charge {
+                    Divider().padding(.vertical, 4)
+                    paymentRow(charge)
+                    row(label: "Native instruction budget", amount: "\(Format.coins(payments.budgetSats)) \(model.coin)")
+                }
+                Divider().padding(.vertical, 4)
+                row(label: "Transaction fee", amount: "\(Format.coins(payments.feeSats)) \(model.coin)")
+                row(label: "Total", amount: total(payments), bold: true)
+            }
+        }
+    }
+
+    private func total(_ payments: RegistrationPayments) -> String {
+        let native = "\(Format.coins(payments.totalNativeSats)) \(model.coin)"
+        guard let issuerSats = payments.totalIssuerSats, let issuer = payments.issuer else { return native }
+        return "\(model.amountText(issuerSats, currency: issuer)) + \(native)"
+    }
+
+    private func paymentRow(_ payment: PaymentRow) -> some View {
+        HStack(spacing: 10) {
+            Text(payment.annotation).frame(width: 210, alignment: .leading)
+            Text("output \(payment.output)").foregroundStyle(.secondary).monospacedDigit()
+            IDLink(id: payment.recipient, route: .identity(name: payment.recipient))
+            Spacer()
+            Text(model.amountText(payment.amountSats, currency: payment.currency)).monospacedDigit()
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func row(label: String, amount: String, bold: Bool = false) -> some View {
+        HStack {
+            Text(label).foregroundStyle(bold ? .primary : .secondary).fontWeight(bold ? .semibold : .regular)
+            Spacer()
+            Text(amount).monospacedDigit().fontWeight(bold ? .semibold : .regular)
+        }
+        .padding(.vertical, 4)
     }
 }

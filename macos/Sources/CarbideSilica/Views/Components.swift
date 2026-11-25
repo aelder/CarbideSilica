@@ -159,6 +159,7 @@ struct FieldRow: View {
     var monospaced = false
 
     @Environment(AppModel.self) private var model
+    @AppStorage(DisplayKey.showsNames) private var showsNames = true
 
     private func isCurrency(_ route: Route) -> Bool {
         if case .currency = route { return true }
@@ -172,7 +173,7 @@ struct FieldRow: View {
                 .frame(width: 170, alignment: .leading)
             if let route {
                 // A known name is shown before the raw ID; the ID stays one hover or copy away.
-                if let name = model.names[value] {
+                if showsNames, let name = model.names[value] {
                     // A currency's name is its identity's name without the trailing "@".
                     Button(isCurrency(route) && name.hasSuffix("@") ? String(name.dropLast()) : name) {
                         model.open(route)
@@ -248,6 +249,7 @@ struct RouteLink: View {
     var shorten = true
 
     @Environment(AppModel.self) private var model
+    @AppStorage(DisplayKey.showsNames) private var showsNames = true
 
     /// A currency's name is its identity's name without the trailing "@".
     private var isCurrency: Bool {
@@ -256,7 +258,7 @@ struct RouteLink: View {
     }
 
     var body: some View {
-        if let name = model.names[text] {
+        if showsNames, let name = model.names[text] {
             Button(isCurrency && name.hasSuffix("@") ? String(name.dropLast()) : name) {
                 model.open(route)
             }
@@ -273,31 +275,24 @@ struct RouteLink: View {
     }
 }
 
-/// The daemon's JSON for the current object, collapsed by default.
+/// The daemon's JSON for the current object, collapsed by default. Expanded, it is a tree
+/// with links, names and dates; see `JSONTreeView`.
+///
+/// Names and dates follow the app's display settings. `showNames` and `showDates` override
+/// them when set.
 struct JSONSection: View {
     let json: String
+    var showNames: Bool?
+    var showDates: Bool?
     @State private var expanded = false
-
-    private static let displayLimit = 200_000
 
     var body: some View {
         Card("Raw JSON") {
             DisclosureGroup(isExpanded: $expanded) {
-                VStack(alignment: .leading, spacing: 8) {
-                    if json.count > Self.displayLimit {
-                        Text("This is the first part of a large document. Use Copy to get the full document.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    ScrollView(.horizontal) {
-                        Text(json.prefix(Self.displayLimit))
-                            .font(.callout.monospaced())
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.bottom, 8)
-                    }
+                if expanded {
+                    JSONTreeView(json: json, showNames: showNames, showDates: showDates)
+                        .padding(.top, 8)
                 }
-                .padding(.top, 8)
             } label: {
                 HStack {
                     Text(expanded ? "Hide" : "Show the data from the node")

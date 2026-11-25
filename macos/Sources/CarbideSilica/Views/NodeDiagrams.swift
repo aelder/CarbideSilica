@@ -4,8 +4,7 @@ import SwiftUI
 /// Peers placed around the node, with distance from the centre as response time.
 ///
 /// A slow connection sits at the edge and a fast one near the middle, so the quality of
-/// the node's links is a shape. Direction carries no meaning: the app has no location
-/// data for peers, and does not pretend to.
+/// the node's links is a shape. Direction carries no meaning. The peer map shows location.
 struct PeersRadarCard: View {
     let node: NodeStatus
     @State private var hovered: Int64?

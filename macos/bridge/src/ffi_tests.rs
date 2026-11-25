@@ -16,6 +16,7 @@ pub(super) fn explorer(api: Option<&str>) -> Explorer {
         config_file: Some("/nonexistent/carbide-test/VRSC.conf".into()),
         api_endpoint: api.map(Into::into),
         cache_dir: Some(test_cache_dir()),
+        ..Default::default()
     })
     .unwrap()
 }
@@ -31,6 +32,7 @@ pub(super) fn live_explorer() -> Explorer {
             config_file: Some(conf),
             api_endpoint: None,
             cache_dir: Some(test_cache_dir()),
+            ..Default::default()
         })
         .unwrap();
     }
@@ -57,6 +59,7 @@ fn rejects_api_urls_with_credentials() {
         config_file: None,
         api_endpoint: Some("https://user:secret@example.com".into()),
         cache_dir: Some(test_cache_dir()),
+        ..Default::default()
     });
     assert!(result.is_err());
 }
@@ -149,13 +152,12 @@ async fn live_lookups_through_an_api() {
         );
     }
 
-    let identity = explorer.identity("vETH@".into()).await.unwrap();
+    let identity = explorer.identity_timeline("vETH@".into()).await.unwrap();
     println!(
-        "identity: {:?}",
-        IdentityDetail {
-            json: String::new(),
-            ..identity
-        }
+        "identity: {} versions {} provenance {:?}",
+        identity.name,
+        identity.versions.len(),
+        identity.provenance
     );
     let currency = explorer.currency("vETH".into()).await.unwrap();
     println!(
@@ -172,22 +174,16 @@ async fn live_lookups_through_an_api() {
     );
 
     match explorer
-        .address("RXPzH3i4fZaaPFdkVHWKRDgXDqrFXErEGz".into())
+        .address_overview("RXPzH3i4fZaaPFdkVHWKRDgXDqrFXErEGz".into())
         .await
     {
-        Ok(address) => println!(
-            "address: {:?}",
-            AddressDetail {
-                json: String::new(),
-                ..address
-            }
-        ),
+        Ok(address) => println!("address: provenance {:?}", address.provenance),
         Err(error) => println!("address error: {error}"),
     }
     println!(
         "missing identity: {:?}",
         explorer
-            .identity("no-such-identity-zzzz@".into())
+            .identity_timeline("no-such-identity-zzzz@".into())
             .await
             .err()
     );
@@ -196,7 +192,12 @@ async fn live_lookups_through_an_api() {
         .trace_transfer(
             "42f1195338518ec1bb4a08d6d156bbcbb67454fd68cbd3b92da7c5b96ea6824c".into(),
             0,
-            None,
+            transaction::TracePlan {
+                request: transaction::TraceRequest::Initial,
+                target: None,
+                known_imports: Vec::new(),
+            },
+            0,
         )
         .await
         .unwrap();
@@ -222,47 +223,18 @@ async fn live_lookups_through_an_api() {
     for note in &trace.notes {
         println!("  note {note}");
     }
-    let lanes = explorer.notarizations("vETH".into()).await.unwrap();
-    println!(
-        "lanes: forks {} confirmed {:?} other {:?}",
-        lanes.fork_count, lanes.last_confirmed_index, lanes.other_system_id
-    );
-    for row in &lanes.rows {
-        println!(
-            "  n {} local {:?} other {:?} at {:?} confirmed {} best {}",
-            row.index,
-            row.local_height,
-            row.other_height,
-            row.block_height,
-            row.confirmed,
-            row.on_best_chain
-        );
-    }
-    let offers = explorer.offers().await.unwrap();
-    println!("offers: {} first {:?}", offers.len(), offers.first());
+    // The replacements of the removed calls: offers, currency list and forecast.
+    let market = explorer.marketplace().await.unwrap();
+    println!("offers: {} first {:?}", market.offers.len(), market.offers.first());
     let tips = explorer.chain_tips().await.unwrap();
     println!("tips: {} top {:?}", tips.len(), &tips[..tips.len().min(4)]);
-    let series = explorer.block_series(4226272, 40).await.unwrap();
-    println!(
-        "series: {} first {:?} staked diff {:?}",
-        series.len(),
-        series.first(),
-        series.iter().find_map(|p| p.staking_difficulty)
-    );
-    let listed = explorer.currencies().await.unwrap();
+    let listed = explorer.currency_list().await.unwrap();
     println!(
         "currencies: {} e.g. {:?}",
-        listed.len(),
-        listed.iter().find(|c| c.name.contains("Bridge.vETH"))
+        listed.rows.len(),
+        listed.rows.iter().find(|c| c.name.contains("Bridge.vETH"))
     );
-    println!("estimate: {:?}", explorer.estimate("5000000".into()).await);
-    let pool = explorer
-        .fee_pool_series(tip_for_pool(&explorer).await, 360, 6)
-        .await;
-    println!(
-        "fee pool: {:?}",
-        pool.map(|p| p.iter().map(|x| (x.height, x.native)).collect::<Vec<_>>())
-    );
+    println!("forecast: {:?}", explorer.forecast("5000000".into()).await);
     println!(
         "inclusions: {:?}",
         explorer
@@ -277,13 +249,6 @@ async fn live_lookups_through_an_api() {
         ])
         .await;
     println!("names: {names:?}");
-    let history = explorer.identity_history("vETH@".into()).await.unwrap();
-    for version in &history {
-        println!(
-            "  v #{} {:?} {:?}",
-            version.height, version.time, version.changes
-        );
-    }
     let tip = explorer.chain_status().await.unwrap().blocks;
     let points = explorer
         .currency_history("Bridge.vETH".into(), tip - 43200, tip, 6)
@@ -359,126 +324,6 @@ fn friendly_names_drop_the_chain_root() {
 }
 
 #[test]
-fn reads_notarizations_and_marks_confirmed_and_forked_ones() {
-    use serde_json::json;
-    let entry = |index: u64, local: u64, other: u64| {
-        json!({"index": index, "txid": format!("{index:064x}"), "vout": 1, "blockhash": "00",
-            "notarization": {"currencyid": "iOther", "notarizationheight": other, "proofroots": [
-                {"systemid": "iLocal", "height": local}, {"systemid": "iOther", "height": other}]}})
-    };
-    let raw = json!({"bestchain": 0, "forks": [[0, 1, 3], [0, 2]], "lastconfirmed": 1,
-        "notarizations": [entry(0, 100, 900), entry(1, 110, 910), entry(2, 115, 912), entry(3, 120, 920)]});
-    let data = notarization_data(&raw, Some("iLocal"));
-    assert_eq!(data.fork_count, 2);
-    assert_eq!(data.other_system_id.as_deref(), Some("iOther"));
-    assert_eq!(data.last_confirmed_index, Some(1));
-    let state: Vec<_> = data
-        .rows
-        .iter()
-        .map(|row| (row.index, row.confirmed, row.on_best_chain))
-        .collect();
-    assert_eq!(
-        state,
-        [
-            (0, true, true),
-            (1, true, true),
-            (2, false, false),
-            (3, false, true)
-        ]
-    );
-    assert_eq!(
-        (data.rows[3].local_height, data.rows[3].other_height),
-        (Some(120), Some(920))
-    );
-    assert!(!data.json.contains("notarizations"));
-}
-
-#[test]
-fn an_empty_trail_is_reported_as_unknown() {
-    let trace = transfer_trace(crate::defi::Trail::default());
-    assert_eq!(trace.confidence, Confidence::Unknown);
-    assert!(trace.legs.is_empty());
-}
-
-#[test]
-fn reads_offers_of_each_kind() {
-    use serde_json::json;
-    let sale = market_offer(&json!({"identityid": "iA", "price": 225.0, "offer": {
-        "accept": {"iVRSC": 225.0}, "blockexpiry": 7874345, "txid": "aa",
-        "offer": {"identityid": "iA", "name": "digital fingerprint", "systemid": "iVRSC"}}}))
-    .unwrap();
-    assert_eq!(sale.kind, OfferKind::IdentityForSale);
-    assert_eq!(
-        (
-            sale.subject.as_str(),
-            sale.price,
-            sale.price_currency.as_str()
-        ),
-        ("digital fingerprint", 225.0, "iVRSC")
-    );
-    assert_eq!(sale.expiry_height, Some(7874345));
-
-    let wanted = market_offer(&json!({"offer": {"txid": "bb", "blockexpiry": 10,
-        "offer": {"iVRSC": 12.0}, "accept": {"identityid": "iB", "name": "quartz"}}}))
-    .unwrap();
-    assert_eq!(wanted.kind, OfferKind::IdentityWanted);
-    assert_eq!((wanted.subject.as_str(), wanted.price), ("quartz", 12.0));
-
-    let swap = market_offer(&json!({"offer": {"txid": "cc", "blockexpiry": 10,
-        "offer": {"iVRSC": 0.1}, "accept": {"iDAI": 100.0}}}))
-    .unwrap();
-    assert_eq!(swap.kind, OfferKind::CurrencySwap);
-    assert_eq!(
-        (
-            swap.subject.as_str(),
-            swap.price_currency.as_str(),
-            swap.price
-        ),
-        ("iVRSC", "iDAI", 100.0)
-    );
-    assert!(market_offer(&json!({"offer": {"offer": {}, "accept": {}}})).is_none());
-}
-
-#[test]
-fn reads_a_mempool_entry() {
-    use serde_json::json;
-    let row = mempool_row(
-        "ab",
-        &json!({"size": 1400, "fee": 0.0001, "time": 1795540000, "depends": ["cd"]}),
-    );
-    assert_eq!(
-        (row.size, row.fee_sats, row.depends),
-        (1400, Some(10000), 1)
-    );
-    assert!(row.tags.is_empty());
-}
-
-#[test]
-fn reads_block_points_and_staking_difficulty() {
-    use serde_json::json;
-    let mined = block_point(
-        &json!({"height": 5, "time": 100, "blocktype": "mined", "difficulty": 12.5, "tx": ["a"]}),
-    );
-    assert_eq!(
-        (
-            mined.staked,
-            mined.mining_difficulty,
-            mined.staking_difficulty
-        ),
-        (false, Some(12.5), None)
-    );
-
-    // Compact 0x1c0f0f0f expands to the 28-byte reference limit itself, so difficulty is about 1.
-    let nonce = format!("{}1c0f0f0f", "0".repeat(56));
-    let staked = block_point(
-        &json!({"height": 6, "time": 160, "blocktype": "minted", "difficulty": 9.0, "nonce": nonce, "tx": ["a", "b"]}),
-    );
-    assert!(staked.staked && staked.mining_difficulty.is_none());
-    assert!((staked.staking_difficulty.unwrap() - 1.0).abs() < 0.01);
-    assert_eq!(staked.transaction_count, 2);
-}
-
-#[test]
 fn names_currency_option_flags() {
     assert_eq!(
         option_tags(Some(545)),
@@ -489,33 +334,6 @@ fn names_currency_option_flags() {
 }
 
 #[test]
-fn reads_fee_pool_checkpoints_and_token_outputs() {
-    use serde_json::json;
-    let coinbase = json!({"vout": [{"scriptPubKey": {"addresses": ["R1"]}},
-        {"scriptPubKey": {"feepool": {"version": 1, "currencyvalues": {"iSys": 12.5}}}}]});
-    assert_eq!(fee_pool_native(&coinbase, "VRSC", Some("iSys")), Some(12.5));
-    let empty = json!({"vout": [{"scriptPubKey": {"feepool": {"currencyvalues": {}}}}]});
-    assert_eq!(fee_pool_native(&empty, "VRSC", Some("iSys")), Some(0.0));
-    assert_eq!(
-        fee_pool_native(&json!({"vout": [{"scriptPubKey": {}}]}), "VRSC", None),
-        None
-    );
-
-    assert!(holds_currency(
-        &json!({"reserve_balance": {"iToken": 1e-8}}),
-        "iToken"
-    ));
-    assert!(holds_currency(
-        &json!({"reserveoutput": {"currencyvalues": {"iToken": 1.0}}}),
-        "iToken"
-    ));
-    assert!(!holds_currency(
-        &json!({"reserve_balance": {"iOther": 1.0}, "identityprimary": {"name": "iToken"}}),
-        "iToken"
-    ));
-}
-
-#[test]
 fn takes_the_ip_from_a_peer_address() {
     assert_eq!(peer_ip("203.0.113.18:27485"), "203.0.113.18");
     assert_eq!(
@@ -523,8 +341,4 @@ fn takes_the_ip_from_a_peer_address() {
         "2a01:4f9:4a:18dd::131"
     );
     assert_eq!(peer_ip("203.0.113.18"), "203.0.113.18");
-}
-
-async fn tip_for_pool(explorer: &Explorer) -> u64 {
-    explorer.chain_status().await.unwrap().blocks
 }

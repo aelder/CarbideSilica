@@ -1,27 +1,57 @@
 import CarbideCore
 import SwiftUI
 
-/// A block's header and its transactions.
+/// A block's header, its place in the chain and its transactions.
+///
+/// Names and dates follow the app's display settings. `showNames` and `showDates` override
+/// them when set.
 struct BlockView: View {
     /// A height or a block hash.
     let id: String
+    var showNames: Bool?
+    var showDates: Bool?
 
     @Environment(AppModel.self) private var model
+    @AppStorage(DisplayKey.showsDates) private var showsDatesSetting = false
+    @State private var reloads = 0
+
+    private var dates: Bool { showDates ?? showsDatesSetting }
 
     var body: some View {
-        LoadView(key: "block:\(id)") { explorer in
+        LoadView(key: "block:\(id)|\(reloads)") { explorer in
             try await explorer.block(id: id)
         } content: { block in
+            page(block)
+                .focusedSceneValue(
+                    \.adjacentObjects,
+                    AdjacentObjects(
+                        noun: "Block",
+                        previous: block.previousHash.map { hash in { model.open(.block(id: hash)) } },
+                        next: block.nextHash.map { hash in { model.open(.block(id: hash)) } }))
+        }
+        .focusedSceneValue(\.placeActions, PlaceActions(refresh: { reloads += 1 }))
+        .navigationTitle("Block")
+    }
+
+    private func page(_ block: BlockDetail) -> some View {
             Page {
                 PageHeader(
                     kind: "Block",
                     title: "#\(Format.integer(block.row.height))",
                     subtitle: block.row.hash,
-                    tags: [block.row.staked ? "Staked" : "Mined"]
-                        + (block.confirmations == 1 ? ["Chain tip"] : [])
-                        + ((block.confirmations ?? 1) < 0 ? ["Not on the active chain"] : [])
+                    tags: [block.row.staked ? "Staked" : "Mined"] + block.combinedTags
                 )
-                HStack {
+                ProvenanceNote(provenance: block.provenance)
+                HStack(spacing: 12) {
+                    chainStatus(block)
+                    Spacer()
+                    Button {
+                        model.showCharts(
+                            at: block.row.height, hash: block.onActiveChain ? nil : block.row.hash)
+                    } label: {
+                        Label("Open in Charts", systemImage: "chart.xyaxis.line")
+                    }
+                    .help("Open Charts at this block.")
                     Button {
                         if let hash = block.previousHash { model.open(.block(id: hash)) }
                     } label: {
@@ -35,20 +65,37 @@ struct BlockView: View {
                     }
                     .disabled(block.nextHash == nil)
                 }
+                if !block.onActiveChain, block.confirmations.map({ $0 < 0 }) == true {
+                    HStack(spacing: 10) {
+                        Note(text: "This block is not on the active chain.", warning: true)
+                        if let active = block.activeHash {
+                            Button("Open the active block at height \(Format.integer(block.row.height))") {
+                                model.open(.block(id: active))
+                            }
+                            .buttonStyle(.link)
+                        }
+                    }
+                }
 
                 Card("Header") {
                     FieldRow(label: "Hash", value: block.row.hash, monospaced: true)
+                    if dates {
+                        FieldRow(label: "Height", value: "\(Format.integer(block.row.height)), recorded \(Format.date(block.row.time))")
+                    }
                     FieldRow(
                         label: "Time",
                         value: "\(Format.date(block.row.time)) (\(Format.age(block.row.time)))")
                     if let confirmations = block.confirmations {
-                        FieldRow(label: "Confirmations", value: "\(confirmations)")
+                        FieldRow(
+                            label: "Confirmations",
+                            value: dates && confirmations > 0
+                                ? HeightDates.shared.confirmations(confirmations, blockTime: block.row.time)
+                                : (confirmations >= 0 ? Format.integer(UInt64(confirmations)) : "\(confirmations)"))
                     }
-                    if let size = block.row.size {
-                        FieldRow(label: "Size", value: Format.bytes(size))
-                    }
-                    FieldRow(
-                        label: "Produced", value: block.row.staked ? "Staked" : "Mined")
+                    FieldRow(label: "Type", value: productionText(block))
+                    FieldRow(label: "Size", value: block.row.size.map { "\(Format.integer($0)) bytes" } ?? "Unknown")
+                    FieldRow(label: "Transactions", value: "\(block.row.transactionCount)")
+                    FieldRow(label: "Detail", value: detail(block))
                     OptionalFieldRow(
                         label: "Previous block", value: block.previousHash,
                         route: { .block(id: $0) }, monospaced: true)
@@ -61,6 +108,11 @@ struct BlockView: View {
                 }
 
                 Card("Transactions", trailing: "\(block.transactions.count)") {
+                    if !block.combinedTags.isEmpty {
+                        TagRow(tags: block.combinedTags)
+                        Text("The tags of all transactions in the block, without Coinbase and Stake.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     VStack(spacing: 0) {
                         ForEach(Array(block.transactions.enumerated()), id: \.element.txid) {
                             index, transaction in
@@ -70,10 +122,29 @@ struct BlockView: View {
                     }
                 }
 
-                JSONSection(json: block.json)
+                BlockBranchesCard(hash: block.row.hash)
+
+                JSONSection(json: block.json, showNames: showNames, showDates: showDates)
             }
+    }
+
+    /// The block's place in the chain, with shape, colour and a word.
+    @ViewBuilder private func chainStatus(_ block: BlockDetail) -> some View {
+        switch block.chainStatus {
+        case "Chain tip": ConfidenceMark(level: .verified, label: "Chain tip")
+        case "Active": ConfidenceMark(level: .verified, label: "Active chain")
+        case "Orphaned": ConfidenceMark(level: .unknown, label: "Orphaned")
+        case let other?: ConfidenceMark(level: .unknown, label: other)
+        case nil: ConfidenceMark(level: .unknown, label: "Chain status unknown")
         }
-        .navigationTitle("Block")
+    }
+
+    private func detail(_ block: BlockDetail) -> String {
+        let count = block.transactions.count
+        if Int(block.bodiesLoaded) >= count {
+            return "All \(count) transaction\(count == 1 ? "" : "s") loaded"
+        }
+        return "\(block.bodiesLoaded) of \(count) transactions loaded. Tags and totals cover the loaded ones."
     }
 }
 
@@ -100,4 +171,13 @@ struct TransactionRowView: View {
         }
         .padding(.vertical, 7)
     }
+}
+
+/// "Staked" or "Mined", the app's words, with the node's own block type when it differs.
+@MainActor
+private func productionText(_ block: BlockDetail) -> String {
+    let word = block.row.staked ? "Staked" : "Mined"
+    let reported = block.production.trimmingCharacters(in: .whitespaces)
+    return reported.isEmpty || reported.lowercased() == word.lowercased()
+        ? word : "\(word) (the node reports \"\(reported)\")"
 }

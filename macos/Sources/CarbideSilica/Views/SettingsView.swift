@@ -12,6 +12,9 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.apiEnabled) private var apiEnabled = false
     @AppStorage(SettingsKey.apiURL) private var apiURL = SettingsKey.defaultAPI
     @AppStorage(SettingsKey.useUTC) private var useUTC = false
+    @AppStorage(DisplayKey.showsNames) private var showsNames = true
+    @AppStorage(DisplayKey.showsDates) private var showsDates = false
+    @AppStorage(SettingsKey.cacheDir) private var cacheDir = ""
     @State private var cache: CacheInfo?
     @State private var cacheMessage: String?
     @State private var confirmingClear = false
@@ -31,46 +34,76 @@ struct SettingsView: View {
                 Text("Local node")
             } footer: {
                 Text(daemonSummary)
-                    .foregroundStyle(.secondary)
+                    .footerStyle()
             }
 
             Section {
-                Toggle("Use a public API when the local node cannot answer", isOn: $apiEnabled)
                 TextField("API address", text: $apiURL, prompt: Text(SettingsKey.defaultAPI))
-                    .disabled(!apiEnabled)
+                Toggle("Allow this API without asking", isOn: $apiEnabled)
             } header: {
                 Text("Public API")
             } footer: {
                 Text(
-                    "When this setting is on, the app sends requests to this server if the local node cannot answer. "
-                        + "The requests include the addresses and identities that you search for."
+                    "Sources lists this API. When the local node cannot answer a page that you open, the app asks before it sends the request to the API. "
+                        + "Turn on the setting if this Mac has no node. The app then uses the API without asking. "
+                        + "The operator of the API can see the addresses and identities that you look up."
                 )
-                .foregroundStyle(.secondary)
+                .footerStyle()
             }
 
             Section {
+                Toggle("Show names in place of identity and currency IDs", isOn: $showsNames)
+                Toggle("Show dates for block heights and times", isOn: $showsDates)
                 Toggle("Show times in UTC", isOn: $useUTC)
             } header: {
                 Text("Display")
             } footer: {
-                Text("The setting applies to pages that you open after the change.").foregroundStyle(.secondary)
+                Text("The settings apply at the latest to pages that you open after the change.").footerStyle()
             }
 
             Section {
                 if let cache {
                     LabeledContent("Size", value: Format.bytes(cache.bytes))
-                    LabeledContent("Location", value: cache.path)
+                    LabeledContent("File") {
+                        Text(cache.path)
+                            .textSelection(.enabled)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                    }
+                    if let problem = cache.problem {
+                        Note(text: problem, warning: true)
+                    }
                 }
-                Button("Clear Cache…") { confirmingClear = true }
-                    .disabled(cache == nil)
+                HStack {
+                    Button("Choose Folder…", action: chooseCacheFolder)
+                    Button("Use Default Folder") {
+                        cacheDir = ""
+                        model.connect()
+                    }
+                    .disabled(cacheDir.isEmpty)
+                    Button("Show in Finder") {
+                        if let cache {
+                            NSWorkspace.shared.activateFileViewerSelecting(
+                                [URL(fileURLWithPath: cache.path)])
+                        }
+                    }
+                    .disabled(cache.map { !FileManager.default.fileExists(atPath: $0.path) } ?? true)
+                    Spacer()
+                    Button("Clear Cache…") { confirmingClear = true }
+                        .disabled(cache == nil)
+                }
                 if let cacheMessage {
                     Text(cacheMessage).foregroundStyle(.secondary)
                 }
             } header: {
-                Text("Storage")
+                Text("Cache")
             } footer: {
-                Text("The cache contains data from transfer traces and witness searches. It does not contain bookmarks or settings.")
-                    .foregroundStyle(.secondary)
+                Text(
+                    "The cache keeps every answer from your sources, with the source and the time. The app uses it to show stored data when no source answers, and for block history. "
+                        + "It does not contain bookmarks or settings. The cache grows with use. Choose a folder on another disk to keep it off this Mac's internal disk. "
+                        + "A new folder starts a new cache. The previous cache stays where it is."
+                )
+                .footerStyle()
             }
 
             HStack {
@@ -110,6 +143,25 @@ struct SettingsView: View {
         return "The app found no configuration file at \(file). It tries \(connection.daemonUrl)."
     }
 
+    /// A folder for the cache. The app reconnects at once and starts a cache there.
+    private func chooseCacheFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Use Folder"
+        panel.message = "Select a folder for the cache. The app stores one file for each network in it."
+        if let cache {
+            panel.directoryURL = URL(fileURLWithPath: cache.path).deletingLastPathComponent()
+        }
+        if panel.runModal() == .OK, let url = panel.url {
+            cacheDir = url.path
+            cacheMessage = nil
+            model.connect()
+        }
+    }
+
     private func chooseConfigFile() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
@@ -122,5 +174,15 @@ struct SettingsView: View {
         if panel.runModal() == .OK, let url = panel.url {
             configFile = url.path
         }
+    }
+}
+
+extension View {
+    /// A section footer: secondary text from the leading edge. A grouped form otherwise
+    /// aligns a footer of several lines to the trailing edge.
+    fileprivate func footerStyle() -> some View {
+        foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

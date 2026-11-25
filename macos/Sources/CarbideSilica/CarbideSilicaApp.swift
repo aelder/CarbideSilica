@@ -5,6 +5,7 @@ import SwiftUI
 @main
 struct CarbideSilicaApp: App {
     @State private var model = AppModel()
+    @State private var shell = ShellState()
 
     init() {
         // Lets the app take focus when run outside a bundle (`swift run`).
@@ -15,31 +16,20 @@ struct CarbideSilicaApp: App {
         Window("Carbide Silica", id: "main") {
             RootView()
                 .environment(model)
+                .environment(shell)
                 .frame(minWidth: 980, minHeight: 560)
         }
         .defaultSize(width: 1280, height: 820)
         .commands {
-            CommandGroup(after: .textEditing) {
-                Button("Find…") { model.searchFocusRequests += 1 }
-                    .keyboardShortcut("f", modifiers: .command)
-            }
-            CommandMenu("Go") {
-                Button("Dashboard") { model.show(.dashboard) }
-                    .keyboardShortcut("1", modifiers: .command)
-                Button("Mempool") { model.show(.mempool) }
-                    .keyboardShortcut("2", modifiers: .command)
-                Button("Marketplace") { model.show(.marketplace) }
-                    .keyboardShortcut("3", modifiers: .command)
-                Button("Node") { model.show(.node) }
-                    .keyboardShortcut("4", modifiers: .command)
-                Button("Back") { _ = model.path.popLast() }
-                    .keyboardShortcut("[", modifiers: .command)
-                    .disabled(model.path.isEmpty)
-                Divider()
-                Button("Refresh") { Task { await model.refresh() } }
-                    .keyboardShortcut("r", modifiers: .command)
-            }
+            // Menus and shortcuts for every function: see ShellCommands.swift.
+            ShellCommands(model: model, shell: shell)
         }
+
+        Window("Keyboard Shortcuts", id: KeyboardReference.windowID) {
+            KeyboardReference()
+                .environment(model)
+        }
+        .defaultSize(width: 720, height: 720)
 
         Settings {
             SettingsView()
@@ -51,8 +41,12 @@ struct CarbideSilicaApp: App {
 /// The window's content: a navigation stack rooted at the dashboard, with search in the toolbar.
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(ShellState.self) private var shell
     @State private var bookmarking: Route?
     @State private var bookmarkNote = ""
+    @State private var estimating = false
+    @State private var estimateText = ""
+    @State private var showsArgumentProblem = Launch.arguments.problem != nil
 
     var body: some View {
         @Bindable var model = model
@@ -65,24 +59,59 @@ struct RootView: View {
                     switch model.sidebar {
                     case .dashboard: DashboardView()
                     case .mempool: MempoolView()
-                    case .charts: ChartsView()
+                    case .charts:
+                        ChartsView(anchorHeight: model.chartAnchor, anchorHash: model.chartAnchorHash)
+                            .id("\(model.chartAnchor ?? 0) \(model.chartAnchorHash ?? "")")
                     case .currencies: CurrenciesView()
                     case .marketplace: MarketplaceView()
                     case .bookmarks: BookmarksView()
                     case .node: NodeView()
+                    case .sources: SourcesView()
                     }
                 }
+                // Each page carries the path bar itself: an inset on the stack shows only on
+                // the root page.
+                .safeAreaInset(edge: .top, spacing: 0) { Breadcrumb() }
                 .navigationDestination(for: Route.self) { route in
                     destination(route)
+                        .safeAreaInset(edge: .top, spacing: 0) { Breadcrumb() }
                 }
             }
+        }
+        .alert("Start-up arguments", isPresented: $showsArgumentProblem) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The app did not use the start-up arguments. \(Launch.arguments.problem ?? "")")
+        }
+        .onChange(of: model.path) { old, new in shell.pathChanged(from: old, to: new) }
+        .onChange(of: model.sidebar) { shell.clearForward() }
+        .onChange(of: shell.bookmarkRequests) {
+            guard let current = model.path.last, current.isBookmarkable else { return }
+            bookmarkNote = ""
+            bookmarking = current
+        }
+        .onChange(of: shell.estimateRequests) {
+            estimateText = ""
+            estimating = true
+        }
+        .alert("Estimate a future block", isPresented: $estimating) {
+            TextField("Height or date", text: $estimateText)
+            Button("Estimate") {
+                let target = estimateText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !target.isEmpty else { return }
+                model.searchText = "estimate:" + target
+                Task { await model.search() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Enter a future block height such as 5000000, or a date such as 2028-11-08 or in 2 hours.")
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 SearchField()
             }
             ToolbarItem(placement: .primaryAction) {
-                if let current = model.path.last {
+                if let current = model.path.last, current.isBookmarkable {
                     Button {
                         bookmarkNote = ""
                         bookmarking = current
@@ -129,6 +158,7 @@ struct RootView: View {
         } message: {
             Text(model.searchError ?? "")
         }
+        .modifier(PermissionPrompt())
     }
 
     @ViewBuilder
@@ -139,6 +169,8 @@ struct RootView: View {
         case .identity(let name): IdentityView(name: name)
         case .currency(let name): CurrencyView(name: name)
         case .address(let address): AddressView(address: address)
+        case .currencies: CurrenciesView()
+        case .estimate(let query): EstimateView(query: query)
         }
     }
 }
@@ -169,6 +201,7 @@ struct Sidebar: View {
                 Label("Node", systemImage: "server.rack")
                     .badge(model.syncFraction.map { Text(Format.percent($0)) })
                     .tag(SidebarItem.node)
+                Label("Sources", systemImage: "antenna.radiowaves.left.and.right").tag(SidebarItem.sources)
             }
             if !model.recent.isEmpty {
                 Section("Recent") {
@@ -176,18 +209,34 @@ struct Sidebar: View {
                         Button {
                             model.path = [route]
                         } label: {
-                            Label(route.title, systemImage: route.symbol)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
+                            Label(
+                                route.crumbTitle(names: showsNames ? model.names : [:]),
+                                systemImage: route.symbol
+                            )
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .help(route.title)
                     }
                 }
             }
         }
         .listStyle(.sidebar)
+        // Names for identity and currency IDs in the Recent list.
+        .task(id: model.recent) {
+            await model.resolveNames(model.recent.map { route -> String? in
+                switch route {
+                case .identity(let name), .currency(let name): name
+                default: nil
+                }
+            })
+        }
     }
+
+    @AppStorage(DisplayKey.showsNames) private var showsNames = true
 
     /// Nothing is selected while an object page is open on top of a sidebar place.
     private var selection: Binding<SidebarItem?> {
@@ -218,6 +267,11 @@ struct SearchField: View {
             .textFieldStyle(.plain)
             .focused($focused)
             .onSubmit { Task { await model.search() } }
+            // Esc cancels the input, as in the terminal.
+            .onExitCommand {
+                model.searchText = ""
+                focused = false
+            }
             .disabled(model.isSearching)
         }
         .padding(.horizontal, 8)

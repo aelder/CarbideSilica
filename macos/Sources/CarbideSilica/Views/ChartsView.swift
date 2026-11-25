@@ -1,317 +1,1041 @@
 import CarbideCore
-import Charts
 import SwiftUI
 
-/// The chain's recent behaviour as charts: block intervals, mining difficulty, staking
-/// difficulty, and the share of blocks that were staked. Below them, the block estimator.
+/// Charts of block intervals, mining and staking difficulty, the share of staked blocks and
+/// the fee pool, over a range of header time that can be paged and sought. Below them, the
+/// estimator for future blocks.
+///
+/// Other screens open the charts at a block with `ChartsView(anchorHeight:)`. Without an
+/// anchor the charts open at the chain tip. A block on a side branch also needs its hash,
+/// `ChartsView(anchorHeight:anchorHash:)`: the chart then follows parent hashes from it.
 struct ChartsView: View {
+    var anchorHeight: UInt64?
+    var anchorHash: String?
+
     @Environment(AppModel.self) private var model
-    @State private var span = Span.sixHours
-    @State private var metric = Metric.intervals
-    @State private var points: [BlockPoint] = []
-    @State private var failure: String?
-    @State private var loading = true
-    @State private var limited = false
+    @State private var state = ChartState()
+    @FocusState private var plotFocused: Bool
 
-    enum Span: String, CaseIterable, Identifiable {
-        case twoHours = "2 hours"
-        case sixHours = "6 hours"
-        case day = "1 day"
-        var id: String { rawValue }
-        var blocks: UInt32 {
-            switch self {
-            case .twoHours: 120
-            case .sixHours: 360
-            case .day: 1440
-            }
-        }
+    init(anchorHeight: UInt64? = nil, anchorHash: String? = nil) {
+        self.anchorHeight = anchorHeight
+        self.anchorHash = anchorHash
     }
-
-    enum Metric: String, CaseIterable, Identifiable {
-        case intervals = "Block intervals"
-        case mining = "Mining difficulty"
-        case staking = "Staking difficulty"
-        case mix = "Staked share"
-        case feePool = "Fee pool"
-        var id: String { rawValue }
-    }
-
-    /// A public API answers one block at a time and slowly, so keep its requests modest.
-    private let apiLimit: UInt32 = 240
-    private let mixWindow = 100
 
     var body: some View {
         Page {
-            Card("Charts", trailing: range) {
-                HStack {
-                    Picker("Metric", selection: $metric) {
-                        ForEach(Metric.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    Spacer(minLength: 16)
-                    Picker("Span", selection: $span) {
-                        ForEach(Span.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(maxWidth: 260)
+            Card(state.metric.title, trailing: state.rangeLabel) {
+                controls
+                if state.viaAPI {
+                    Note(text: "A public API supplies blocks one at a time and slowly. The charts open with a 2-hour span. A longer span can take many minutes. A local node loads 7 days in seconds.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                if loading {
-                    ProgressView("Loading blocks…").frame(maxWidth: .infinity, minHeight: 280)
-                } else if let failure {
-                    Label(failure, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
-                } else if metric == .feePool, let end = points.last?.height {
-                    FeePoolChart(
-                        endHeight: end, blocks: UInt32(points.count),
-                        viaAPI: model.status?.source == .publicApi)
-                } else {
-                    chart.frame(height: 280)
-                    Text(summary).font(.callout)
-                    if limited {
-                        Text("The chart shows the latest \(apiLimit) blocks. A public API supplies blocks slowly. A local node supplies the full range.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    if model.syncFraction != nil {
-                        Text("The node is not fully synchronized. This data is not current.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                coverage
+                if let provenance = state.page?.provenance, provenance.retained {
+                    ProvenanceNote(provenance: provenance)
                 }
+                plotArea
+                legend
+                notes
             }
-            EstimatorCard()
+            SeekCard(state: state)
+            if state.metric == .feePool {
+                FeePoolSection(state: state)
+            } else {
+                SelectedBlockCard(state: state)
+            }
+            SampleTable(state: state)
+            BlockEstimator()
         }
         .navigationTitle("Charts")
-        .task(id: "\(span.rawValue)|\(model.generation)|\(model.status != nil)") { await load() }
-    }
-
-    private var range: String? {
-        guard let first = points.first, let last = points.last, !loading else { return nil }
-        return "blocks \(Format.integer(first.height)) to \(Format.integer(last.height))"
-    }
-
-    private func load() async {
-        guard let tip = model.status?.blocks, tip > 1 else { return }
-        loading = true
-        failure = nil
-        let api = model.status?.source == .publicApi
-        limited = api && span.blocks > apiLimit
-        do {
-            points = try await model.requireExplorer().blockSeries(
-                endHeight: tip, count: api ? min(span.blocks, apiLimit) : span.blocks)
-        } catch is CancellationError {
-            return
-        } catch {
-            points = []
-            failure = describe(error)
+        .onAppear {
+            state.prepare(anchor: anchorHeight, hash: anchorHash, viaAPI: model.status?.source == .publicApi)
+            // The keys work while the plot has focus, so it takes focus when the page opens.
+            plotFocused = true
         }
-        loading = false
-    }
-
-    private struct Sample: Identifiable {
-        let id: UInt64
-        let date: Date
-        let value: Double
-        let staked: Bool
-    }
-
-    private func date(_ point: BlockPoint) -> Date {
-        Date(timeIntervalSince1970: TimeInterval(point.time))
-    }
-
-    /// Seconds between each block and the one before it.
-    private var intervals: [Sample] {
-        zip(points, points.dropFirst()).map { previous, block in
-            Sample(
-                id: block.height, date: date(block),
-                value: Double(block.time) - Double(previous.time), staked: block.staked)
+        // The plot exists only once a range has loaded. Give it focus then, once.
+        .onChange(of: state.page != nil) { _, shown in
+            if shown { plotFocused = true }
+        }
+        .focusedSceneValue(\.placeActions, PlaceActions(refresh: { state.refresh() }))
+        .onChange(of: model.generation) {
+            state.reconnected(viaAPI: model.status?.source == .publicApi)
+        }
+        // A new request id cancels the previous load. Leaving the view cancels it too.
+        .task(id: "\(state.requestID)|\(model.generation)") {
+            guard let explorer = try? model.requireExplorer() else { return }
+            await state.run(explorer)
+        }
+        .task(id: "\(state.feePoolKey)|\(model.generation)") {
+            guard state.metric == .feePool, let explorer = try? model.requireExplorer() else { return }
+            await state.loadFeePool(explorer)
         }
     }
 
-    private var series: [Sample] {
-        switch metric {
-        case .intervals:
-            return intervals
-        case .mining:
-            return points.compactMap { point in
-                point.miningDifficulty.map { Sample(id: point.height, date: date(point), value: $0, staked: false) }
-            }
-        case .staking:
-            return points.compactMap { point in
-                point.stakingDifficulty.map { Sample(id: point.height, date: date(point), value: $0, staked: true) }
-            }
-        case .feePool:
-            return []
-        case .mix:
-            guard points.count >= mixWindow else { return [] }
-            var staked = points.prefix(mixWindow).filter(\.staked).count
-            var result: [Sample] = []
-            for index in (mixWindow - 1)..<points.count {
-                if index >= mixWindow {
-                    staked += (points[index].staked ? 1 : 0) - (points[index - mixWindow].staked ? 1 : 0)
+    // MARK: Controls
+
+    private var controls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Picker("Chart", selection: Binding(get: { state.metric }, set: { state.setMetric($0) })) {
+                    ForEach(ChartState.Metric.allCases) { Text($0.shortTitle).tag($0) }
                 }
-                result.append(
-                    Sample(
-                        id: points[index].height, date: date(points[index]),
-                        value: Double(staked) / Double(mixWindow), staked: true))
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Spacer(minLength: 16)
+                Picker("Span", selection: Binding(get: { state.span }, set: { state.setSpan($0) })) {
+                    ForEach(ChartState.Span.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 280)
             }
-            return result
+            HStack(spacing: 8) {
+                Button {
+                    state.older()
+                } label: {
+                    Label("Older range", systemImage: "chevron.left")
+                }
+                .disabled(!state.canPageOlder)
+                .help("Load the range before this one ( [ or Page Up )")
+                Button {
+                    state.newer()
+                } label: {
+                    Label("Newer range", systemImage: "chevron.right")
+                }
+                .disabled(!state.canPageNewer)
+                .help("Load the range after this one ( ] or Page Down )")
+                // The tip moves on after a range loads, so this stays available.
+                Button("Latest") { state.latest() }
+                    .help("Load the range that ends at the current chain tip")
+                Spacer()
+                if state.loading {
+                    ProgressView().controlSize(.small)
+                    Text(state.loadingText)
+                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    Button("Stop") { state.stop() }
+                } else if state.metric == .feePool && state.fee.loading {
+                    ProgressView().controlSize(.small)
+                    Text("Reading fee pool checkpoints")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Button {
+                    state.refresh()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .help("Load this range again and check that its newest block is on the active chain (⌘R)")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
     }
+
+    // MARK: Coverage
 
     @ViewBuilder
-    private var chart: some View {
-        let samples = series
-        if samples.isEmpty {
-            Text(metric == .mix ? "This chart needs a minimum of \(mixWindow) blocks. Select a longer range." : "The range contains no blocks of this type.")
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            Chart {
-                switch metric {
-                case .intervals:
-                    ForEach(samples) { sample in
-                        BarMark(x: .value("Time", sample.date), y: .value("Seconds", sample.value), width: 2)
-                            .foregroundStyle(sample.value > 180 ? Color.red : sample.staked ? Color.purple : Color.orange)
-                    }
-                    RuleMark(y: .value("Target", 60))
-                        .foregroundStyle(.secondary)
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                        .annotation(position: .top, alignment: .trailing) {
-                            Text("60 s target").font(.caption2).foregroundStyle(.secondary)
-                        }
-                case .mining, .staking:
-                    ForEach(samples) { sample in
-                        LineMark(x: .value("Time", sample.date), y: .value(metric.rawValue, sample.value))
-                            .foregroundStyle(metric == .mining ? Color.orange : Color.purple)
-                            .interpolationMethod(.monotone)
-                    }
-                case .feePool:
-                    RuleMark(y: .value("None", 0))
-                case .mix:
-                    ForEach(samples) { sample in
-                        LineMark(x: .value("Time", sample.date), y: .value("Staked share", sample.value))
-                            .foregroundStyle(Color.purple)
-                    }
-                    RuleMark(y: .value("Even", 0.5))
-                        .foregroundStyle(.secondary)
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                }
-            }
-            .chartYScale(domain: metric == .mix ? .automatic(includesZero: true) : .automatic(includesZero: metric == .intervals))
-            .chartYAxis {
-                AxisMarks { value in
-                    AxisGridLine()
-                    AxisValueLabel {
-                        if let number = value.as(Double.self) {
-                            Text(axisLabel(number))
-                        }
+    private var coverage: some View {
+        if let page = state.page, let first = page.samples.first, let last = page.samples.last {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 16) {
+                    endpoint("Start", first)
+                    endpoint("End", last)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Covers").font(.caption).foregroundStyle(.secondary)
+                        Text(ChartFormat.duration(Int64(last.time) - Int64(first.time)) + " of header time")
+                            .monospacedDigit()
                     }
                 }
-            }
-            .chartOverlay { proxy in
-                GeometryReader { geometry in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .onTapGesture(coordinateSpace: .local) { location in
-                            guard let plot = proxy.plotFrame else { return }
-                            let x = location.x - geometry[plot].origin.x
-                            guard let tapped: Date = proxy.value(atX: x) else { return }
-                            let nearest = samples.min {
-                                abs($0.date.timeIntervalSince(tapped)) < abs($1.date.timeIntervalSince(tapped))
-                            }
-                            if let nearest { model.open(.block(id: "\(nearest.id)")) }
-                        }
-                }
-            }
-        }
-    }
-
-    private func axisLabel(_ value: Double) -> String {
-        switch metric {
-        case .intervals: "\(Int(value)) s"
-        case .mix: Format.percent(value)
-        case .mining, .staking, .feePool: Format.difficulty(value)
-        }
-    }
-
-    private var summary: String {
-        let samples = series
-        guard !samples.isEmpty else { return "" }
-        let values = samples.map(\.value)
-        let mean = values.reduce(0, +) / Double(values.count)
-        switch metric {
-        case .intervals:
-            let slow = values.filter { $0 > 180 }.count
-            let longest = samples.max { $0.value < $1.value }
-            var text = "The average block interval was \(Int(mean.rounded())) seconds."
-            if let longest {
-                text += " The longest interval was \(Int(longest.value) / 60) min \(Int(longest.value) % 60) s, before block \(Format.integer(longest.id))."
-            }
-            text += slow == 0 ? " No interval was longer than 3 minutes." : " \(slow) intervals were longer than 3 minutes."
-            return text + " Click a bar to open the block."
-        case .mining, .staking:
-            let first = values.first ?? 0
-            let last = values.last ?? 0
-            let change = first > 0 ? (last - first) / first : 0
-            let direction = abs(change) < 0.02 ? "almost the same as" : change > 0 ? "\(Format.percent(change)) higher than" : "\(Format.percent(-change)) lower than"
-            return "\(metric.rawValue) is \(Format.difficulty(last)). This is \(direction) the value at the start of the range."
-        case .feePool:
-            return ""
-        case .mix:
-            return "In the last \(mixWindow) blocks, \(Format.percent(values.last ?? 0)) were staked blocks. The dashed line shows 50%."
-        }
-    }
-}
-
-/// When a future block will arrive, or what height a future moment will be.
-private struct EstimatorCard: View {
-    @Environment(AppModel.self) private var model
-    @State private var query = ""
-    @State private var result: BlockEstimate?
-    @State private var failure: String?
-    @State private var running = false
-
-    var body: some View {
-        Card("Future block estimate") {
-            HStack {
-                TextField("Target", text: $query, prompt: Text("Height or date. Examples: 5000000, 2028-11-08, in 2 hours"))
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { Task { await run() } }
-                Button("Estimate") { Task { await run() } }
-                    .disabled(running || query.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            if running {
-                ProgressView().controlSize(.small)
-            } else if let failure {
-                Label(failure, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-            } else if let result {
-                Text(sentence(result)).font(.title3)
-                Text(
-                    "The rate is \(result.secondsPerBlock.formatted(.number.precision(.fractionLength(2)))) seconds for each block, "
-                        + "measured from block \(Format.integer(result.measuredFrom)) to block \(Format.integer(result.measuredTo)). Source: \(result.source)."
-                )
-                .font(.callout).foregroundStyle(.secondary)
-                Text("This is an estimate. It assumes that the block rate does not change.")
+                Text(state.coverageSentence)
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
 
-    private func sentence(_ estimate: BlockEstimate) -> String {
-        let date = Date(timeIntervalSince1970: TimeInterval(estimate.time))
-        let when = date.formatted(date: .abbreviated, time: .shortened)
-        let relative = date.formatted(.relative(presentation: .named))
-        return "The estimated time of block \(Format.integer(estimate.height)) is \(when) (\(relative))."
+    private func endpoint(_ label: String, _ sample: ChartSample) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Button("#\(Format.integer(sample.height))") { model.open(.block(id: sample.hash)) }
+                    .buttonStyle(.link)
+                    .help(sample.hash)
+                Text(Format.date(sample.time)).monospacedDigit()
+            }
+        }
     }
 
-    private func run() async {
-        running = true
+    // MARK: Plot
+
+    @ViewBuilder
+    private var plotArea: some View {
+        if let failure = state.failure {
+            Note(text: failure, warning: true)
+        }
+        if let stopped = state.stopped {
+            Note(text: stopped, warning: true)
+        }
+        if let page = state.page, !page.samples.isEmpty {
+            Group {
+                if state.metric == .feePool {
+                    FeePoolPlot(state: state)
+                } else {
+                    BlockPlot(
+                        samples: page.samples,
+                        first: page.first,
+                        last: page.last,
+                        metric: state.metric,
+                        selected: state.selectedSample?.hash,
+                        select: { state.select(hash: $0) })
+                }
+            }
+            .frame(height: 300)
+            .focusable()
+            .focusEffectDisabled()
+            .focused($plotFocused)
+            .onKeyPress { press in state.handle(press, open: { model.open(.block(id: $0)) }) }
+            .simultaneousGesture(TapGesture().onEnded { plotFocused = true })
+            Text(
+                plotFocused
+                    ? "Keys: j k ↑ ↓ select, Home End ends, [ ] ranges, − + span, 1–5 charts, g seek, Return open"
+                    : "Click the plot to use the keys."
+            )
+            .font(.caption2).foregroundStyle(.secondary)
+        } else if state.loading {
+            ProgressView("Loading block headers…").frame(maxWidth: .infinity, minHeight: 300)
+        } else if state.failure == nil {
+            Text("No blocks in this range.")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 300)
+        }
+    }
+
+    @ViewBuilder
+    private var legend: some View {
+        switch state.metric {
+        case .intervals:
+            ChartLegend(items: [
+                .init(shape: .bar, color: ChartColors.block, text: "Seconds from the parent block's timestamp"),
+                .init(shape: .dash, color: .secondary, text: "60-second target"),
+            ])
+        case .mining, .staking:
+            ChartLegend(items: [
+                .init(shape: .dot, color: ChartColors.block, text: state.metric == .mining ? "Mined block" : "Staked block"),
+                .init(shape: .line, color: ChartColors.average, text: "MA100: mean over the trailing 100 chain heights"),
+            ])
+        case .ratio:
+            ChartLegend(items: [
+                .init(shape: .dot, color: ChartColors.block, text: "Block: mined row at one third, staked row at two thirds"),
+                .init(shape: .line, color: ChartColors.average, text: "Staked share, 100 blocks"),
+                .init(shape: .line, color: ChartColors.long, text: "Staked share, 1,000 blocks"),
+                .init(shape: .dash, color: .secondary, text: "50/50"),
+            ])
+        case .feePool:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var notes: some View {
+        if let page = state.page {
+            VStack(alignment: .leading, spacing: 4) {
+                switch state.metric {
+                case .intervals:
+                    if page.negativeIntervals > 0 {
+                        Text("\(page.negativeIntervals) negative timestamp intervals in this range are not drawn. Select a block to see its signed interval.")
+                    }
+                    Text("An interval is the signed difference between a block's timestamp and its linked parent's timestamp. The plot starts at zero.")
+                case .mining:
+                    Text("Mining difficulty is the node's value at mined blocks. The average leaves out staked blocks. A gap means that the trailing 100 heights are incomplete or hold a mined block without a value.")
+                case .staking:
+                    if page.unavailableStake > 0 {
+                        Text("\(page.unavailableStake) staked blocks have no staking difficulty. Select one to see why.")
+                    }
+                    Text("Difficulty = fixed initial Verus LWMA posLimit / observed block PoS target. The target comes from the nonce and must equal postarget. The average leaves out mined blocks.")
+                case .ratio:
+                    Text("Time is horizontal. A share line needs a complete window of known blocks. Lines break at gaps and where a timestamp does not increase.")
+                case .feePool:
+                    EmptyView()
+                }
+                if let note = state.seekNote {
+                    Text(note)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - State
+
+/// The chart screen's state and its loading. Loading runs in steps so that a new request,
+/// or leaving the view, stops it after the current step.
+@MainActor
+@Observable
+final class ChartState {
+    enum Span: CaseIterable, Identifiable {
+        case twoHours, sixHours, day, week
+        var id: Self { self }
+        var seconds: UInt64 {
+            switch self {
+            case .twoHours: 7_200
+            case .sixHours: 21_600
+            case .day: 86_400
+            case .week: 604_800
+            }
+        }
+        var title: String {
+            switch self {
+            case .twoHours: "2 hours"
+            case .sixHours: "6 hours"
+            case .day: "1 day"
+            case .week: "7 days"
+            }
+        }
+    }
+
+    enum Metric: Int, CaseIterable, Identifiable {
+        case intervals = 1, mining, staking, ratio, feePool
+        var id: Int { rawValue }
+        var title: String {
+            switch self {
+            case .intervals: "Block intervals"
+            case .mining: "Mining difficulty"
+            case .staking: "Staking difficulty"
+            case .ratio: "PoW ratio"
+            case .feePool: "Fee pool balances"
+            }
+        }
+        var shortTitle: String {
+            switch self {
+            case .intervals: "Intervals"
+            case .mining: "Mining"
+            case .staking: "Staking"
+            case .ratio: "PoW ratio"
+            case .feePool: "Fee pool"
+            }
+        }
+        /// Trailing heights each sample needs. Carbide uses the same values.
+        var context: UInt32 {
+            switch self {
+            case .intervals, .mining, .staking: 100
+            case .ratio: 1_000
+            case .feePool: 2
+            }
+        }
+    }
+
+    var span = Span.day
+    var metric = Metric.intervals
+    var page: ChartPage?
+    var loading = false
+    var headersRead: UInt32 = 0
+    var failure: String?
+    var stopped: String?
+    var selected: String?
+    var seekNote: String?
+    var viaAPI = false
+    var fee = FeePoolState()
+
+    private(set) var requestID = 0
+    private var request: ChartRequest?
+    private var loadedContext: UInt32 = 0
+    private var prepared = false
+
+    // MARK: Requests
+
+    func prepare(anchor: UInt64?, hash: String? = nil, viaAPI: Bool) {
+        guard !prepared else { return }
+        prepared = true
+        self.viaAPI = viaAPI
+        if viaAPI { span = .twoHours }
+        begin(end: anchor, anchor: hash)
+    }
+
+    private func begin(
+        end: UInt64?, anchor: String?, newer: Bool = false, focus: ChartBlock? = nil, context: UInt32? = nil
+    ) {
+        request = ChartRequest(
+            spanSeconds: span.seconds,
+            endHeight: end,
+            anchorHash: anchor,
+            newer: newer,
+            context: context ?? metric.context,
+            focusHeight: focus?.height,
+            focusHash: focus?.hash,
+            chunk: viaAPI ? 25 : 500)
         failure = nil
-        defer { running = false }
+        stopped = nil
+        loading = true
+        headersRead = 0
+        requestID += 1
+    }
+
+    func run(_ explorer: Explorer) async {
+        guard let request, loading else { return }
+        let id = requestID
+        let load = explorer.chartLoad(request: request)
+        var published = Date.distantPast
         do {
-            result = try await model.requireExplorer().estimate(query: query)
+            while true {
+                try Task.checkCancellation()
+                let progress = try await load.step()
+                guard id == requestID, !Task.isCancelled else { return }
+                headersRead = progress.headers
+                if progress.done || Date.now.timeIntervalSince(published) > 0.4 {
+                    if let next = await load.page(), id == requestID {
+                        page = next
+                        if progress.done { loadedContext = request.context }
+                    }
+                    published = .now
+                }
+                if progress.done {
+                    stopped = progress.stopped
+                    break
+                }
+            }
+        } catch is CancellationError {
+            return
         } catch {
-            result = nil
+            guard id == requestID else { return }
             failure = describe(error)
         }
+        if id == requestID { loading = false }
+    }
+
+    /// A new connection can be another chain or source. Load the latest range again.
+    func reconnected(viaAPI: Bool) {
+        self.viaAPI = viaAPI
+        fee.reset(keepCheckpoints: false)
+        page = nil
+        latest()
+    }
+
+    func stop() {
+        requestID += 1
+        loading = false
+        stopped = "Loading stopped. The chart shows what loaded before."
+    }
+
+    func setSpan(_ value: Span) {
+        guard value != span else { return }
+        span = value
+        seekNote = nil
+        begin(end: page?.last, anchor: page?.samples.last?.hash)
+    }
+
+    func setMetric(_ value: Metric) {
+        guard value != metric else { return }
+        metric = value
+        // A longer context extends the same range. The range and the selection stay.
+        if value.context > loadedContext, let page {
+            begin(end: page.last, anchor: page.samples.last?.hash)
+        }
+        if let sample = selectedSample, self.value(sample) == nil { selected = nil }
+    }
+
+    var canPageOlder: Bool { !loading && (page?.first ?? 0) > 0 }
+    var canPageNewer: Bool { !loading && page.map { $0.last < $0.tip } ?? false }
+
+    func older() {
+        guard canPageOlder, let page else { return }
+        seekNote = nil
+        begin(end: page.first - 1, anchor: nil)
+    }
+
+    func newer() {
+        guard canPageNewer, let page else { return }
+        seekNote = nil
+        begin(end: page.last, anchor: page.samples.last?.hash, newer: true)
+    }
+
+    func refresh() {
+        begin(end: page?.last, anchor: page?.samples.last?.hash)
+        fee.reset(keepCheckpoints: false)
+    }
+
+    func latest() {
+        seekNote = nil
+        selected = nil
+        begin(end: nil, anchor: nil)
+    }
+
+    /// Loads a range centred on a sought block, and selects that block.
+    func show(_ outcome: SeekOutcome) {
+        selected = outcome.block.hash
+        seekNote = outcome.note
+        begin(end: outcome.end.height, anchor: outcome.end.hash, focus: outcome.block)
+    }
+
+    // MARK: Selection
+
+    func value(_ sample: ChartSample) -> Double? {
+        switch metric {
+        case .intervals: sample.interval.map(Double.init)
+        case .mining: sample.mining
+        case .staking: sample.staking
+        case .ratio:
+            switch sample.production {
+            case .mined: 0
+            case .staked: 1
+            case .unknown: nil
+            }
+        case .feePool: fee.checkpoints[sample.hash].flatMap { $0.known ? 1 : nil }
+        }
+    }
+
+    private var candidates: [ChartSample] {
+        (page?.samples ?? []).filter { value($0) != nil }
+    }
+
+    var selectedSample: ChartSample? {
+        guard let samples = page?.samples else { return nil }
+        if let selected {
+            if let found = samples.first(where: { $0.hash == selected }) { return found }
+            if loading { return nil }
+        }
+        return samples.last { value($0) != nil }
+    }
+
+    func select(hash: String) {
+        selected = hash
+        seekNote = nil
+    }
+
+    /// Moves the selection to an older (negative) or newer (positive) sample.
+    func move(_ delta: Int) {
+        let list = candidates
+        guard !list.isEmpty else { return }
+        let index = selectedSample.flatMap { current in list.firstIndex { $0.hash == current.hash } } ?? list.count - 1
+        selected = list[min(max(index + delta, 0), list.count - 1)].hash
+        seekNote = nil
+    }
+
+    func moveToEnd(newest: Bool) {
+        let list = candidates
+        selected = (newest ? list.last : list.first)?.hash
+        seekNote = nil
+    }
+
+    // MARK: Keys
+
+    func handle(_ press: KeyPress, open: (String) -> Void) -> KeyPress.Result {
+        switch press.key {
+        case .downArrow: move(-1); return .handled
+        case .upArrow: move(1); return .handled
+        case .home: moveToEnd(newest: false); return .handled
+        case .end: moveToEnd(newest: true); return .handled
+        case .pageUp: older(); return .handled
+        case .pageDown: newer(); return .handled
+        case .return:
+            if let hash = selectedSample?.hash { open(hash) }
+            return .handled
+        default: break
+        }
+        switch press.characters {
+        case "j": move(-1)
+        case "k": move(1)
+        case "[": older()
+        case "]": newer()
+        case "-": step(span: -1)
+        case "+", "=": step(span: 1)
+        case "1", "2", "3", "4", "5":
+            if let number = Int(press.characters), let metric = Metric(rawValue: number) { setMetric(metric) }
+        case "g": focusSeek += 1
+        case "v" where metric == .feePool: fee.cycleCurrency()
+        case "z" where metric == .feePool: fee.cycleScale()
+        case "t" where metric == .feePool: fee.detail.toggle()
+        default: return .ignored
+        }
+        return .handled
+    }
+
+    /// Incremented to move focus to the seek field.
+    var focusSeek = 0
+
+    private func step(span delta: Int) {
+        let all = Span.allCases
+        guard let index = all.firstIndex(of: span) else { return }
+        setSpan(all[min(max(index + delta, 0), all.count - 1)])
+    }
+
+    // MARK: Text
+
+    var rangeLabel: String? {
+        guard let page else { return nil }
+        return "blocks \(Format.integer(page.first)) to \(Format.integer(page.last))"
+    }
+
+    /// What the current load reads, in words.
+    var loadingText: String {
+        if headersRead > 0 { return "Read \(Format.integer(UInt64(headersRead))) headers" }
+        if let page, let request, request.context > loadedContext, request.endHeight == page.last {
+            return "Reading \(Format.integer(UInt64(request.context - 1))) earlier blocks"
+        }
+        return "Reading the range's block headers"
+    }
+
+    var coverageSentence: String {
+        guard let page else { return "" }
+        var parts = [
+            "\(Format.integer(UInt64(page.samples.count))) blocks shown",
+            "\(Format.integer(UInt64(page.headers))) headers read, with \(Format.integer(UInt64(page.context))) earlier blocks for averages and intervals",
+            "span \(span.title)",
+        ]
+        if page.limited {
+            parts.append("partial: the 20,000-header limit was reached")
+        } else if !page.complete && loading {
+            parts.append("loading")
+        } else if page.first == 0 && !page.complete {
+            parts.append("starts at genesis")
+        }
+        if page.stored > 0 {
+            parts.append("\(Format.integer(UInt64(page.stored))) headers from Carbide's cache")
+        }
+        if !page.status.isEmpty, page.status != "Loading" { parts.append(page.status) }
+        return parts.joined(separator: " · ") + "."
+    }
+
+    // MARK: Fee pool
+
+    /// Changes when the fee pool checkpoints must load again.
+    var feePoolKey: String {
+        guard metric == .feePool, let page, !loading else { return "idle" }
+        return "\(page.first)|\(page.last)|\(fee.detail)|\(fee.generation)"
+    }
+
+    func loadFeePool(_ explorer: Explorer) async {
+        guard let page, !page.samples.isEmpty else { return }
+        let samples = page.samples
+        fee.loading = true
+        fee.error = nil
+        defer { fee.loading = false }
+        if fee.current == nil {
+            do {
+                fee.current = try await explorer.feePoolCurrent()
+            } catch is CancellationError {
+                return
+            } catch {
+                fee.currentError = describe(error)
+            }
+        }
+        let selectedIndex = selected.flatMap { hash in samples.firstIndex { $0.hash == hash } }
+        let order = feePoolOrder(
+            count: UInt32(samples.count), selected: selectedIndex.map(UInt32.init), detail: fee.detail
+        ).map(Int.init)
+        fee.scheduled = Set(order.map { samples[$0].hash })
+        fee.requested = order.count
+        let missing = order.filter { fee.checkpoints[samples[$0].hash] == nil }
+        // The endpoints and the selected block first, one at a time, then larger groups.
+        var start = 0
+        while start < missing.count {
+            if Task.isCancelled { return }
+            let size = start < 4 ? (start < 2 ? 2 : 1) : (viaAPI ? 4 : 16)
+            let batch = missing[start..<min(start + size, missing.count)]
+            start += size
+            let blocks = batch.map { ChartBlock(height: samples[$0].height, hash: samples[$0].hash, time: samples[$0].time) }
+            do {
+                let found = try await explorer.feePoolCheckpoints(blocks: blocks)
+                if Task.isCancelled { return }
+                for checkpoint in found { fee.checkpoints[checkpoint.hash] = checkpoint }
+            } catch is CancellationError {
+                return
+            } catch {
+                fee.error = describe(error)
+                return
+            }
+        }
+    }
+
+    /// Reads the checkpoint at one sought block, so it is part of the sample set.
+    func includeCheckpoint(_ sample: ChartSample, explorer: Explorer) async {
+        guard fee.checkpoints[sample.hash] == nil else { return }
+        let block = ChartBlock(height: sample.height, hash: sample.hash, time: sample.time)
+        if let found = try? await explorer.feePoolCheckpoints(blocks: [block]).first {
+            fee.checkpoints[found.hash] = found
+            fee.scheduled.insert(found.hash)
+        }
+    }
+}
+
+/// The fee pool's checkpoints and display options.
+struct FeePoolState {
+    enum Currency: CaseIterable { case both, native, reserve }
+    enum Scale: CaseIterable { case zero, fit, log }
+
+    var current: FeePoolCurrent?
+    var currentError: String?
+    var checkpoints: [String: FeePoolCheckpoint] = [:]
+    var scheduled: Set<String> = []
+    var requested = 0
+    var loading = false
+    var error: String?
+    var currency = Currency.both
+    var scale = Scale.zero
+    var detail = false
+    /// Changed to load the checkpoints again.
+    var generation = 0
+
+    var hasReserve: Bool { current?.currencies.reserveId != nil }
+
+    mutating func cycleCurrency() {
+        guard hasReserve else { currency = .native; return }
+        let all = Currency.allCases
+        currency = all[((all.firstIndex(of: currency) ?? 0) + 1) % all.count]
+    }
+
+    mutating func cycleScale() {
+        let all = Scale.allCases
+        scale = all[((all.firstIndex(of: scale) ?? 0) + 1) % all.count]
+    }
+
+    mutating func reset(keepCheckpoints: Bool) {
+        current = nil
+        currentError = nil
+        if !keepCheckpoints { checkpoints = [:] }
+        generation += 1
+    }
+}
+
+// MARK: - Seek
+
+/// Go to a block height, Unix seconds, or a date and time, with a preview before submitting.
+private struct SeekCard: View {
+    @Bindable var state: ChartState
+    @Environment(AppModel.self) private var model
+    @State private var text = ""
+    @State private var now = Int64(Date.now.timeIntervalSince1970)
+    @State private var working = false
+    @State private var problem: String?
+    @State private var future = false
+    @State private var task: Task<Void, Never>?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        Card("Go to a block or a time") {
+            HStack {
+                TextField(
+                    "Target", text: $text,
+                    prompt: Text("Height, Unix seconds or date. Examples: 4000000, 2026-11-07 14:30, height:3000000"))
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focused)
+                    .onSubmit { submit(nil) }
+                    .onChange(of: text) { old, new in
+                        if old.isEmpty && !new.isEmpty { now = Int64(Date.now.timeIntervalSince1970) }
+                        problem = nil
+                        future = false
+                    }
+                if working {
+                    ProgressView().controlSize(.small)
+                    Button("Cancel") { cancel() }
+                } else {
+                    Button("Go") { submit(nil) }
+                        .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            Text(chartSeekPreview(input: text, now: now, tip: state.page?.tip ?? model.status?.blocks))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            if working {
+                Text("Locating the block. A date search reads up to 129 blocks around the best match.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if let problem {
+                Note(text: problem, warning: true)
+            }
+            if future {
+                Button("Show the latest block") { submit(.latest) }
+            }
+            Text("Dates are in UTC unless you give an offset. A date without a time means midnight. height: and unix: remove doubt about a number. A target in the loaded range is selected at once. Other targets load a range of the current span centred on them.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .onChange(of: state.focusSeek) { focused = true }
+    }
+
+    private func cancel() {
+        task?.cancel()
+        task = nil
+        working = false
+    }
+
+    private func submit(_ forced: SeekTarget?) {
+        problem = nil
+        future = false
+        let target: SeekTarget
+        if let forced {
+            target = forced
+        } else {
+            do {
+                target = try chartSeekParse(input: text, now: now)
+            } catch {
+                problem = describe(error)
+                return
+            }
+        }
+        if let (hash, note) = loadedMatch(target) {
+            state.select(hash: hash)
+            state.seekNote = note
+            if state.metric == .feePool, let sample = state.page?.samples.first(where: { $0.hash == hash }),
+                let explorer = try? model.requireExplorer()
+            {
+                Task { await state.includeCheckpoint(sample, explorer: explorer) }
+            }
+            return
+        }
+        guard let explorer = try? model.requireExplorer() else { return }
+        let span = state.span.seconds
+        working = true
+        task = Task {
+            do {
+                let outcome = try await explorer.chartSeek(target: target, spanSeconds: span)
+                guard !Task.isCancelled else { return }
+                working = false
+                if outcome.future {
+                    problem = outcome.note
+                    future = true
+                } else {
+                    state.show(outcome)
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                working = false
+                problem = describe(error)
+            }
+        }
+    }
+
+    /// A target inside the loaded range, selected without a request. Ported from Carbide's
+    /// `chart_ui::seek::loaded`.
+    private func loadedMatch(_ target: SeekTarget) -> (String, String)? {
+        guard let page = state.page, !page.samples.isEmpty else { return nil }
+        switch target {
+        case .number(let value) where value > page.tip:
+            return loadedMatch(.time(unix: Int64(clamping: value)))
+        case .number(let value), .height(let value):
+            guard let sample = page.samples.first(where: { $0.height == value }) else { return nil }
+            return (sample.hash, "Block \(Format.integer(sample.height)) is in the loaded range.")
+        case .time(let unix):
+            let times = page.samples.map { Int64($0.time) }
+            guard let low = times.min(), let high = times.max(), (low...high).contains(unix) else { return nil }
+            let best = page.samples.min { a, b in
+                let da = abs(Int64(a.time) - unix), db = abs(Int64(b.time) - unix)
+                return (da, a.time, a.height) < (db, b.time, b.height)
+            }
+            guard let best else { return nil }
+            let difference = Int64(best.time) - unix
+            return (
+                best.hash,
+                "Requested \(ChartFormat.iso(unix)). Matched block \(Format.integer(best.height)) at \(ChartFormat.iso(Int64(best.time))), a difference of \(difference >= 0 ? "+" : "")\(difference) s. This is the nearest of \(page.samples.count) loaded blocks."
+            )
+        case .latest:
+            return nil
+        }
+    }
+}
+
+// MARK: - Selected block
+
+/// The selected block's exact figures, with controls to move the selection and open it.
+private struct SelectedBlockCard: View {
+    let state: ChartState
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Card("Selected block") {
+            if let sample = state.selectedSample {
+                HStack {
+                    Button {
+                        state.move(-1)
+                    } label: {
+                        Label("Older", systemImage: "chevron.left")
+                    }
+                    Button {
+                        state.move(1)
+                    } label: {
+                        Label("Newer", systemImage: "chevron.right")
+                    }
+                    Button("Open block") { model.open(.block(id: sample.hash)) }
+                    Spacer()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                FieldRow(label: "Height", value: Format.integer(sample.height), route: .block(id: sample.hash))
+                FieldRow(label: "Hash", value: sample.hash, route: .block(id: sample.hash), monospaced: true)
+                FieldRow(label: "Time", value: "\(Format.date(sample.time)) (\(sample.time))")
+                FieldRow(label: "Produced by", value: ChartFormat.production(sample.production))
+                ForEach(rows(sample)) { row in
+                    FieldRow(label: row.label, value: row.value, monospaced: row.monospaced)
+                }
+                if !sample.linked {
+                    Note(text: "This block does not link to a loaded parent. Its interval and averages are not available.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else if state.loading {
+                Text("Loading.").foregroundStyle(.secondary)
+            } else {
+                Text("No applicable block in this range. A missing value is not zero.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private struct Row: Identifiable {
+        let label: String
+        let value: String
+        var monospaced = false
+        var id: String { label }
+    }
+
+    private func rows(_ sample: ChartSample) -> [Row] {
+        var rows: [Row] = []
+        rows.append(Row(label: "Interval", value: sample.interval.map { ChartFormat.signedSeconds($0) } ?? "Not available. The parent is not loaded or not linked."))
+        switch state.metric {
+        case .intervals:
+            break
+        case .mining:
+            rows.append(Row(label: "Mining difficulty", value: sample.mining.map(ChartFormat.exact) ?? "Not available for this block", monospaced: false))
+            rows.append(Row(label: "MA100", value: average(sample.miningAverage, kind: "mined"), monospaced: false))
+        case .staking:
+            rows.append(Row(label: "Staking difficulty", value: sample.staking.map(ChartFormat.exact) ?? "Not available for this block", monospaced: false))
+            rows.append(Row(label: "MA100", value: average(sample.stakingAverage, kind: "staked"), monospaced: false))
+            if let target = sample.posTarget { rows.append(Row(label: "PoS target", value: target, monospaced: true)) }
+            if let problem = sample.problem { rows.append(Row(label: "Problem", value: problem, monospaced: false)) }
+        case .ratio:
+            rows.append(Row(label: "100 blocks", value: ChartFormat.window(sample.window100, share: sample.share100), monospaced: false))
+            rows.append(Row(label: "1,000 blocks", value: ChartFormat.window(sample.window1000, share: sample.share1000), monospaced: false))
+        case .feePool:
+            break
+        }
+        return rows
+    }
+
+    private func average(_ value: ChartAverage?, kind: String) -> String {
+        guard let value else {
+            return "Not available. The trailing 100 heights are incomplete, or hold a block without a value."
+        }
+        return "\(ChartFormat.exact(value.value)) from \(value.samples) \(kind) blocks"
+    }
+}
+
+// MARK: - Table
+
+/// The same samples as a table, for exact reading and copying.
+private struct SampleTable: View {
+    let state: ChartState
+    @State private var expanded = false
+
+    var body: some View {
+        if let page = state.page, !page.samples.isEmpty, state.metric != .feePool {
+            Card("Samples as a table") {
+                DisclosureGroup(isExpanded: $expanded) {
+                    Table(Array(page.samples.reversed())) {
+                        TableColumn("Height") { Text(String($0.height)).monospacedDigit() }
+                            .width(min: 70, ideal: 80)
+                        TableColumn("Time") { Text(Format.date($0.time)).monospacedDigit() }
+                            .width(min: 150, ideal: 180)
+                        TableColumn("Produced") { Text(ChartFormat.production($0.production)) }
+                            .width(min: 60, ideal: 70)
+                        TableColumn("Interval") { Text($0.interval.map { ChartFormat.signedSeconds($0) } ?? "–").monospacedDigit() }
+                            .width(min: 60, ideal: 70)
+                        TableColumn(valueTitle) { Text(valueText($0)).monospacedDigit() }
+                        TableColumn(averageTitle) { Text(averageText($0)).monospacedDigit() }
+                    }
+                    .frame(height: 320)
+                } label: {
+                    Text(expanded ? "Hide" : "Show all \(page.samples.count) blocks of this range")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var valueTitle: String {
+        switch state.metric {
+        case .mining: "Mining difficulty"
+        case .staking: "Staking difficulty"
+        case .ratio: "Staked share, 100"
+        default: "Value"
+        }
+    }
+
+    private var averageTitle: String {
+        state.metric == .ratio ? "Staked share, 1,000" : "MA100"
+    }
+
+    private func valueText(_ sample: ChartSample) -> String {
+        switch state.metric {
+        case .mining: sample.mining.map(ChartFormat.exact) ?? "–"
+        case .staking: sample.staking.map(ChartFormat.exact) ?? "–"
+        case .ratio: sample.share100.map(Format.percent) ?? "–"
+        default: sample.interval.map { ChartFormat.signedSeconds($0) } ?? "–"
+        }
+    }
+
+    private func averageText(_ sample: ChartSample) -> String {
+        switch state.metric {
+        case .mining: sample.miningAverage.map { ChartFormat.exact($0.value) } ?? "–"
+        case .staking: sample.stakingAverage.map { ChartFormat.exact($0.value) } ?? "–"
+        case .ratio: sample.share1000.map(Format.percent) ?? "–"
+        default: "–"
+        }
+    }
+}
+
+extension ChartSample: Identifiable {
+    public var id: String { hash }
+}
+
+// MARK: - Formatting
+
+enum ChartFormat {
+    static func production(_ value: BlockProduction) -> String {
+        switch value {
+        case .mined: "Mined"
+        case .staked: "Staked"
+        case .unknown: "Unknown"
+        }
+    }
+
+    static func signedSeconds(_ value: Int64) -> String {
+        "\(value > 0 ? "+" : "")\(value) s"
+    }
+
+    /// A full-precision figure for the details, not a rounded axis label.
+    static func exact(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0...8)).grouping(.automatic))
+    }
+
+    static func window(_ counts: ProductionCounts, share: Double?) -> String {
+        let total = counts.mined + counts.staked + counts.unknown
+        var text = "\(counts.mined) mined, \(counts.staked) staked"
+        if total < counts.window {
+            text += ". Partial history: \(total) of \(counts.window) blocks. No trend."
+        } else if counts.unknown > 0 {
+            text += ", \(counts.unknown) unknown. No trend."
+        } else if let share {
+            text += ". \(share.formatted(.percent.precision(.fractionLength(1)))) staked."
+        }
+        return text
+    }
+
+    static func duration(_ seconds: Int64) -> String {
+        let seconds = max(seconds, 0)
+        let days = seconds / 86_400, hours = seconds % 86_400 / 3_600, minutes = seconds % 3_600 / 60
+        if days > 0 { return "\(days) d \(hours) h \(minutes) min" }
+        if hours > 0 { return "\(hours) h \(minutes) min" }
+        return "\(minutes) min \(seconds % 60) s"
+    }
+
+    static func iso(_ unix: Int64) -> String {
+        Date(timeIntervalSince1970: TimeInterval(unix)).formatted(.iso8601)
+    }
+
+    /// A short axis time that follows the UTC setting.
+    static func axisTime(_ unix: UInt64, span: UInt64) -> String {
+        let date = Date(timeIntervalSince1970: TimeInterval(unix))
+        var style = span > 2 * 86_400
+            ? Date.FormatStyle().month(.abbreviated).day().hour().minute()
+            : Date.FormatStyle().hour().minute()
+        if UserDefaults.standard.bool(forKey: SettingsKey.useUTC) { style.timeZone = .gmt }
+        return date.formatted(style)
     }
 }

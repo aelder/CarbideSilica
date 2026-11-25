@@ -45,6 +45,19 @@ macos/Sources/CarbideSilica    The SwiftUI app
   Some methods are refused there. Say so plainly in the result; do not hide the limit.
 - **Slow node requests.** `getchaintips` takes about 13 seconds on a full node and makes
   the node's other answers wait. Do not put a slow request on a timer.
+- **Which client.** `self.client` is for automatic requests. It never asks the person
+  anything. `self.primary` is only for the main object of a page or search that the
+  person opened. It can ask for permission to use a disabled API.
+- **Provenance.** Pass an object request through `self.observed(method, params, result)`
+  and put its `Provenance` on the record. The page shows it with `ProvenanceNote`. When
+  no source answers, `observed` serves the stored observation.
+- **Bulk reads are not recorded.** Each recorded block adds approximately 17 KB to the
+  cache, and Carbide does not prune block bodies. Use `self.unrecorded_client()` for a
+  request that reads many blocks, such as a chart.
+- **Other chains.** Use `client_for_system` for an object on another chain. Never send a
+  request to a disabled source.
+- **Requests from one page to another** go through `AppModel`: `showCharts(at:hash:)`,
+  `openTrace(txid:output:)` and `openCurrency(_:at:)`.
 
 ## Tests
 
@@ -60,6 +73,7 @@ CARBIDE_TEST_CONF="/Volumes/Extreme SSD/CarbideSilica-VRSC/VRSC.conf" \
 ```
 
 - Tests use their own cache folder. Do not point a test at the app's cache.
+- Session source states are global to the process. Restore each state that a test changes.
 - Do not print the contents of the `.conf` file. It holds the RPC password.
 
 ## Text
@@ -75,6 +89,7 @@ Write in the style of ASD-STE100 Simplified Technical English.
 | unconfirmed | waiting, pending (for a transaction) |
 | synchronize, synchronization | sync, syncing |
 | request | lookup, query, call |
+| stored | cached, retained (for data shown to the person) |
 | transaction | tx (in sentences) |
 
 - No contractions. Write "cannot", "does not", "did not".
@@ -101,6 +116,12 @@ Write in the style of ASD-STE100 Simplified Technical English.
   unknown.
 - Show a name before an ID. Call `model.resolveNames(ids)` and use `RouteLink` or
   `FieldRow`, which show the name when it is known. A currency name has no trailing "@".
+- Follow the display settings. `DisplayKey.showsNames` and `DisplayKey.showsDates` are in
+  `Display.swift`. `RouteLink`, `FieldRow` and `JSONSection` follow them. Use
+  `HeightDates.shared` for a height or a confirmation count.
+- One scroll view on a page. Do not put a scrolling list or table inside the page scroll.
+- A page that a menu command can act on publishes focused values (`ShellCommands.swift`):
+  `placeActions`, `adjacentObjects` and `investigations`.
 - Amounts always have a ticker. A hidden amount is shown as hidden, never as zero.
 - Every hash, address and ID that names an object is a link to that object.
 - A diagram has a caption that says what its marks mean, and a text or table form of the
@@ -122,5 +143,8 @@ Write in the style of ASD-STE100 Simplified Technical English.
 cd macos && ./build.sh          # bridge, bindings, app, bundle
 cargo test --manifest-path macos/bridge/Cargo.toml --lib ffi::
 ```
+
+`macos/.cargo/config.toml` keeps release proc-macro libraries unstripped. Without it, a
+clean build fails on recent macOS versions. Do not remove it.
 
 Do not stop or restart the Verus node. Do not download anything.

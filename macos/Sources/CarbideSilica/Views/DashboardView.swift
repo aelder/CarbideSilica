@@ -1,32 +1,48 @@
 import CarbideCore
 import SwiftUI
 
-/// Chain status and the most recent blocks, refreshed while the window is open.
+/// Chain status, recent blocks and recent confirmed transactions, refreshed while the
+/// window is open.
 struct DashboardView: View {
     @Environment(AppModel.self) private var model
-
-    private let refreshInterval: Duration = .seconds(15)
+    @State private var feed = DashboardFeed.shared
+    /// Keep the newest block selected and in view, as the terminal's "Stream Blocks" row.
+    @AppStorage("dashboardStreamsBlocks") private var streaming = true
+    @FocusState private var focus: DashboardList?
 
     var body: some View {
         Group {
             if let status = model.status {
-                Page {
+                PlacePage(key: "dashboard") { proxy in
+                    StatusLine(status: status)
+                    if status.provenance.retained {
+                        ProvenanceNote(provenance: status.provenance)
+                    }
                     if let fraction = model.syncFraction {
                         SyncBanner(fraction: fraction, tipTime: status.tipTime)
                     }
-                    StatusTiles(status: status)
                     if let error = model.statusError {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
+                        Note(text: error, warning: true)
                     }
                     if !model.blocks.isEmpty {
                         Card("Chain pulse", trailing: "blocks of the last 25 minutes") {
                             ChainPulse(
-                                blocks: model.blocks, live: model.syncFraction == nil,
-                                waiting: model.node?.mempoolCount)
+                                blocks: model.blocks,
+                                live: model.syncFraction == nil && !status.provenance.retained,
+                                waiting: status.provenance.retained ? nil : model.node?.mempoolCount,
+                                selected: feed.selectedBlock)
                         }
                     }
-                    RecentBlocks(blocks: model.blocks)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 24) {
+                            blockList(proxy).frame(minWidth: 430)
+                            transactionList(proxy).frame(minWidth: 430)
+                        }
+                        VStack(alignment: .leading, spacing: 20) {
+                            blockList(proxy)
+                            transactionList(proxy)
+                        }
+                    }
                 }
             } else if let error = model.statusError {
                 NotConnectedView(message: error)
@@ -36,11 +52,217 @@ struct DashboardView: View {
             }
         }
         .navigationTitle("Carbide Silica")
+        .focusedSceneValue(
+            \.placeActions,
+            PlaceActions(
+                refresh: { Task { await model.refresh() } },
+                streamBlocks: $streaming))
         .task(id: model.generation) {
             while !Task.isCancelled {
                 await model.refresh()
-                try? await Task.sleep(for: refreshInterval)
+                await feed.update(model)
+                try? await Task.sleep(for: Launch.refreshInterval)
             }
+        }
+        .onAppear {
+            if streaming { feed.selectedBlock = model.blocks.first?.hash }
+        }
+        .onChange(of: model.blocks.first?.hash) {
+            if streaming { feed.selectedBlock = model.blocks.first?.hash }
+        }
+        .onChange(of: streaming) {
+            if streaming { feed.selectedBlock = model.blocks.first?.hash }
+        }
+    }
+
+    private var blocks: [BlockRow] { model.blocks + feed.older }
+
+    private func blockList(_ proxy: ScrollViewProxy) -> some View {
+        @Bindable var feed = feed
+        return RecentBlocks(
+            blocks: blocks, selection: $feed.selectedBlock, streaming: $streaming,
+            loadingOlder: feed.loadingOlder, olderError: feed.olderError,
+            loadOlder: { Task { await feed.loadOlder(model) } }
+        )
+        .keyboardRows(blocks.map(\.hash), selection: $feed.selectedBlock, proxy: proxy) {
+            model.open(.block(id: $0))
+        }
+        .focused($focus, equals: .blocks)
+        .onKeyPress(.tab) { switchList() }
+    }
+
+    private func transactionList(_ proxy: ScrollViewProxy) -> some View {
+        @Bindable var feed = feed
+        return RecentTransactions(
+            rows: feed.transactions, loading: feed.loading, failure: feed.failure,
+            selection: $feed.selectedTransaction, shown: $feed.transactionsShown
+        )
+        .keyboardRows(
+            feed.transactions.prefix(feed.transactionsShown).map(\.txid),
+            selection: $feed.selectedTransaction, proxy: proxy
+        ) { model.open(.transaction(txid: $0)) }
+        .focused($focus, equals: .transactions)
+        .onKeyPress(.tab) { switchList() }
+    }
+
+    /// Tab and Shift-Tab switch between the two lists, as in the terminal.
+    private func switchList() -> KeyPress.Result {
+        focus = focus == .blocks ? .transactions : .blocks
+        return .handled
+    }
+}
+
+/// The dashboard's two lists, for keyboard focus.
+enum DashboardList: Hashable {
+    case blocks
+    case transactions
+}
+
+/// Recent confirmed transactions and older pages of blocks for the dashboard. It keeps what
+/// it loaded, so a refresh requests only the blocks that are new.
+@MainActor
+@Observable
+final class DashboardFeed {
+    static let shared = DashboardFeed()
+
+    /// Newest block first; within a block, last position first, as in the terminal.
+    private(set) var transactions: [RecentTransaction] = []
+    private(set) var loading = false
+    private(set) var failure: String?
+    /// Blocks older than the ones the app model keeps, loaded on request.
+    private(set) var older: [BlockRow] = []
+    private(set) var loadingOlder = false
+    private(set) var olderError: String?
+    /// The selections and the length of the transaction list, kept for the session.
+    var selectedBlock: String?
+    var selectedTransaction: String?
+    var transactionsShown = 30
+
+    private var loadedBlocks: Set<String> = []
+    private var generation = -1
+
+    private let blockWindow = 30
+    private let transactionLimit = 100
+
+    func update(_ model: AppModel) async {
+        guard let explorer = model.explorer else { return }
+        if generation != model.generation {
+            generation = model.generation
+            transactions = []
+            loadedBlocks = []
+            older = []
+            olderError = nil
+        }
+        let window = Array(model.blocks.prefix(blockWindow))
+        let current = Set(window.map(\.hash))
+        let new = window.filter { !loadedBlocks.contains($0.hash) }.map(\.hash)
+        guard !new.isEmpty, !loading else { return }
+        loading = true
+        defer { loading = false }
+        let generation = model.generation
+        do {
+            let fetched = try await explorer.recentTransactions(
+                blockHashes: new, limit: UInt32(transactionLimit))
+            guard generation == model.generation else { return }
+            var seen = Set<String>()
+            // Rows of blocks that left the active chain are dropped with them.
+            transactions = (fetched + transactions)
+                .filter { current.contains($0.blockHash) }
+                .sorted {
+                    ($0.blockHeight, $0.position) > ($1.blockHeight, $1.position)
+                }
+                .filter { seen.insert($0.txid).inserted }
+                .prefix(transactionLimit)
+                .map { $0 }
+            loadedBlocks.formUnion(new)
+            loadedBlocks.formIntersection(current)
+            failure = nil
+        } catch {
+            failure = describe(error)
+        }
+    }
+
+    /// The next 30 blocks below the oldest one shown, as the terminal loads older pages.
+    func loadOlder(_ model: AppModel) async {
+        guard let explorer = model.explorer, !loadingOlder,
+            let oldest = (older.last ?? model.blocks.last)?.height, oldest > 0
+        else { return }
+        loadingOlder = true
+        defer { loadingOlder = false }
+        do {
+            let page = try await explorer.recentBlocks(before: oldest - 1, count: 30)
+            let known = Set(model.blocks.map(\.hash) + older.map(\.hash))
+            older += page.filter { !known.contains($0.hash) }
+            olderError = nil
+        } catch {
+            olderError = describe(error)
+        }
+    }
+}
+
+/// The terminal's status line: tip against the longest chain, the age of the last block,
+/// the node and API state, and the peer count.
+private struct StatusLine: View {
+    let status: ChainStatus
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            VStack(alignment: .leading, spacing: 6) {
+            SourceLine(provenance: status.provenance)
+            HStack(spacing: 18) {
+                item("Height", value: Format.integer(status.blocks), detail: behind)
+                item(
+                    "Last block",
+                    value: status.tipTime.map { Format.age($0, now: context.date) } ?? "unknown",
+                    detail: nil)
+                state("Node", on: nodeOn)
+                state("Public API", on: model.connection?.apiEndpoint != nil, inUse: status.source == .publicApi)
+                item("Peers", value: status.connections.map { "\($0)" } ?? "unknown", detail: nil)
+                if let difficulty = status.difficulty {
+                    item("Difficulty", value: Format.difficulty(difficulty), detail: nil)
+                }
+                if let version = status.version {
+                    item("Version", value: version, detail: nil)
+                }
+                Spacer(minLength: 0)
+            }
+            }
+            .font(.callout)
+            .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var nodeOn: Bool {
+        status.source == .localDaemon && model.statusError == nil && !status.provenance.retained
+    }
+
+    /// "0 behind", as the terminal's Δ.
+    private var behind: String {
+        guard let longest = status.longestChain else { return "longest chain unknown" }
+        let delta = Int64(longest) - Int64(status.blocks)
+        return delta <= 0 ? "at the longest chain" : "\(Format.integer(UInt64(delta))) behind \(Format.integer(longest))"
+    }
+
+    private func item(_ label: String, value: String, detail: String?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text(label).foregroundStyle(.secondary)
+            Text(value).fontWeight(.semibold).monospacedDigit()
+            if let detail {
+                Text(detail).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// State is a shape, a colour and a word.
+    private func state(_ label: String, on: Bool, inUse: Bool = false) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: on ? "circle.fill" : "circle")
+                .font(.system(size: 8))
+                .foregroundStyle(on ? .green : .secondary)
+            Text(label).foregroundStyle(.secondary)
+            Text(on ? (inUse ? "in use" : "on") : "off").fontWeight(.semibold)
         }
     }
 }
@@ -76,154 +298,171 @@ private struct SyncBanner: View {
     }
 }
 
-private struct StatusTiles: View {
-    let status: ChainStatus
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 24) {
-            Tile(label: "Height", value: Format.integer(status.blocks), detail: syncDetail)
-            if let tip = status.tipTime {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Tile(
-                        label: "Last block",
-                        value: Format.age(tip, now: context.date),
-                        detail: Format.date(tip))
-                }
-            }
-            if let difficulty = status.difficulty {
-                Tile(label: "Difficulty", value: Format.difficulty(difficulty), detail: nil)
-            }
-            if let connections = status.connections {
-                Tile(label: "Peers", value: "\(connections)", detail: nil)
-            }
-            Tile(
-                label: "Source",
-                value: status.source == .publicApi ? "Public API" : "Local node",
-                detail: status.version.map { "Verus \($0)" })
-        }
-    }
-
-    private var syncDetail: String? {
-        guard let longest = status.longestChain, longest > status.blocks else { return nil }
-        return "\(Format.integer(longest - status.blocks)) behind"
-    }
-}
-
-private struct Tile: View {
-    let label: String
-    let value: String
-    let detail: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.weight(.semibold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(detail ?? " ")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
+/// Recent blocks, in the page's own scroll. Up and Down select, Return or a double-click
+/// opens, Tab moves to the transactions.
 private struct RecentBlocks: View {
     let blocks: [BlockRow]
+    @Binding var selection: String?
+    @Binding var streaming: Bool
+    let loadingOlder: Bool
+    let olderError: String?
+    let loadOlder: () -> Void
+
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        Card("Recent blocks") {
+        Card("Recent blocks", trailing: blocks.isEmpty ? nil : "\(blocks.count) blocks") {
+            Toggle("Stream blocks", isOn: $streaming)
+                .toggleStyle(.checkbox)
+                .help("When this is on, the app selects each new block.")
             if blocks.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-            } else {
-                VStack(spacing: 0) {
-                    BlockColumns(
-                        height: Text("Height"), age: Text("Age"), kind: Text("Type"),
-                        transactions: Text("Txs"), size: Text("Size"), hash: Text("Hash")
-                    )
-                    .font(.caption.weight(.medium))
+                Text("Waiting for data from the node.")
                     .foregroundStyle(.secondary)
-                    .padding(.bottom, 6)
-                    Divider()
-                    TimelineView(.periodic(from: .now, by: 5)) { context in
-                        VStack(spacing: 0) {
-                            ForEach(blocks, id: \.hash) { block in
-                                BlockRowView(block: block, now: context.date)
+                    .frame(maxWidth: .infinity, minHeight: 120)
+            } else {
+                TimelineView(.periodic(from: .now, by: 5)) { context in
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(blocks, id: \.hash) { block in
+                            SelectableRow(id: block.hash, selection: $selection, open: { open(block.hash) }) {
+                                BlockLine(block: block, now: context.date)
                             }
+                            Divider()
                         }
+                    }
+                }
+                .onChange(of: selection) {
+                    // Selecting an older block stops the stream, as moving off the
+                    // terminal's "Stream Blocks" row does.
+                    if selection != blocks.first?.hash, selection != nil { streaming = false }
+                }
+                HStack {
+                    if loadingOlder {
+                        ProgressView().controlSize(.small)
+                        Text("Loading older blocks…").foregroundStyle(.secondary)
+                    } else if blocks.last?.height == 0 {
+                        Text("The first block is reached.").foregroundStyle(.secondary)
+                    } else {
+                        Button("Load Older Blocks", action: loadOlder)
+                    }
+                    if let olderError {
+                        Text(olderError).foregroundStyle(.secondary).lineLimit(2)
                     }
                 }
             }
         }
     }
+
+    private func open(_ hash: String) { model.open(.block(id: hash)) }
 }
 
-/// One fixed column layout shared by the header and the rows.
-private struct BlockColumns<A: View, B: View, C: View, D: View, E: View, F: View>: View {
-    let height: A
-    let age: B
-    let kind: C
-    let transactions: D
-    let size: E
-    let hash: F
+/// Recent confirmed transactions with their tags, from the blocks in the other list. The list
+/// shows 30 rows at first and grows with the page.
+private struct RecentTransactions: View {
+    let rows: [RecentTransaction]
+    let loading: Bool
+    let failure: String?
+    @Binding var selection: String?
+    @Binding var shown: Int
+
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        HStack(spacing: 12) {
-            height.frame(width: 90, alignment: .leading)
-            age.frame(width: 100, alignment: .leading)
-            kind.frame(width: 80, alignment: .leading)
-            transactions.frame(width: 50, alignment: .trailing)
-            size.frame(width: 80, alignment: .trailing)
-            hash.frame(maxWidth: .infinity, alignment: .leading)
+        Card("Recent transactions", trailing: rows.isEmpty ? nil : "\(rows.count) confirmed") {
+            Text("The newest transactions in the recent blocks, newest block first.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            if let failure, rows.isEmpty {
+                Note(text: failure, warning: true)
+            } else if rows.isEmpty {
+                HStack {
+                    if loading { ProgressView().controlSize(.small) }
+                    Text(loading ? "Loading transactions…" : "No transactions in recent blocks.")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 120)
+            } else {
+                let visible = Array(rows.prefix(shown))
+                TimelineView(.periodic(from: .now, by: 5)) { context in
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(visible, id: \.txid) { row in
+                            SelectableRow(id: row.txid, selection: $selection, open: { open(row.txid) }) {
+                                TransactionLine(row: row, now: context.date)
+                            }
+                            Divider()
+                        }
+                    }
+                }
+                if rows.count > shown {
+                    Button("Show \(min(30, rows.count - shown)) More") { shown += 30 }
+                }
+            }
         }
-        .padding(.horizontal, 8)
+    }
+
+    private func open(_ txid: String) { model.open(.transaction(txid: txid)) }
+}
+
+private struct BlockLine: View {
+    let block: BlockRow
+    let now: Date
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(Format.integer(block.height)).fontWeight(.medium).monospacedDigit()
+                .frame(width: 84, alignment: .leading)
+            TagChip(text: block.staked ? "Staked" : "Mined", color: block.staked ? .purple : .orange)
+                .frame(width: 64, alignment: .leading)
+            Text(Format.age(block.time, now: now)).foregroundStyle(.secondary).monospacedDigit()
+                .frame(width: 76, alignment: .leading)
+            Text("\(block.transactionCount) tx").monospacedDigit()
+                .frame(width: 44, alignment: .trailing)
+            Button(Format.short(block.hash, head: 8, tail: 6)) { model.open(.block(id: block.hash)) }
+                .buttonStyle(.link)
+                .font(.callout.monospaced())
+                .help(block.hash)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 5)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Block \(block.height), \(block.staked ? "staked" : "mined"), \(block.transactionCount) transactions")
     }
 }
 
-private struct BlockRowView: View {
-    let block: BlockRow
+private struct TransactionLine: View {
+    let row: RecentTransaction
     let now: Date
-
     @Environment(AppModel.self) private var model
-    @State private var hovering = false
 
     var body: some View {
-        Button {
-            model.open(.block(id: block.hash))
-        } label: {
-            BlockColumns(
-                height: Text(Format.integer(block.height)).fontWeight(.medium).monospacedDigit(),
-                age: Text(Format.age(block.time, now: now))
-                    .foregroundStyle(.secondary).monospacedDigit(),
-                kind: TagChip(
-                    text: block.staked ? "Staked" : "Mined",
-                    color: block.staked ? .purple : .orange),
-                transactions: Text("\(block.transactionCount)").monospacedDigit(),
-                size: Text(block.size.map(Format.bytes) ?? "–")
-                    .foregroundStyle(.secondary).monospacedDigit(),
-                hash: Text(block.hash)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Button(Format.short(row.txid, head: 10, tail: 6)) { model.open(.transaction(txid: row.txid)) }
+                    .buttonStyle(.link)
                     .font(.callout.monospaced())
+                    .help(row.txid)
+                Spacer(minLength: 4)
+                Button("Block \(Format.integer(row.blockHeight))") { model.open(.block(id: row.blockHash)) }
+                    .buttonStyle(.link)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            )
-            .padding(.vertical, 7)
-            .background(
-                hovering ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear),
-                in: RoundedRectangle(cornerRadius: 6)
-            )
-            .contentShape(Rectangle())
+                Text(Format.age(row.blockTime, now: now)).foregroundStyle(.secondary).monospacedDigit()
+            }
+            HStack(spacing: 6) {
+                if row.loaded {
+                    ForEach(row.tags.prefix(4), id: \.self) { TagChip(text: $0) }
+                    Text("\(row.inputCount) in, \(row.outputCount) out").foregroundStyle(.secondary)
+                    if let sats = row.outputSats, sats > 0 {
+                        CoinAmount(sats: sats).foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("The details did not load.").foregroundStyle(.secondary)
+                }
+            }
+            .font(.callout)
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .accessibilityLabel("Block \(block.height)")
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -1,0 +1,8 @@
+# Read by `cargo` when it runs from `macos/`, as `build.sh` does.
+#
+# Rust strips debug information from release builds, including proc-macro libraries that
+# the compiler loads while it builds. On this macOS version the stripped libraries do not
+# load ("mis-aligned LINKEDIT string pool"), and the build fails. Keep them unstripped.
+# The app's own library is not affected.
+[profile.release.build-override]
+strip = false

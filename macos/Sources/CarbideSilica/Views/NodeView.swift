@@ -5,18 +5,40 @@ import SwiftUI
 /// What the local node is doing: how far it has validated, how fast, and who it is talking to.
 struct NodeView: View {
     @Environment(AppModel.self) private var model
+    @State private var feed = PeerFeed.shared
+    @State private var commands = PeerCommands()
+    @State private var detailPeer: Int64?
+    @AppStorage("peerMapShown") private var showsMap = true
 
     var body: some View {
         Group {
             if let node = model.node {
-                Page {
+                PlacePage(key: "node") { proxy in
+                    SourceLine(provenance: node.provenance).font(.callout)
+                    if node.provenance.retained {
+                        ProvenanceNote(provenance: node.provenance)
+                    }
                     SyncCard(node: node, speed: recentSpeed)
                     if isSyncing(node) {
                         SpeedCard(samples: model.speeds)
                     }
-                    PeersRadarCard(node: node)
-                    PeersCard(node: node)
-                    PeerControlsCard(node: node)
+                    if node.peersError == nil {
+                        PeersCard(node: node, feed: feed, proxy: proxy, open: { detailPeer = $0.id })
+                        if showsMap {
+                            PeerMapCard(peers: node.peers, feed: feed, open: { detailPeer = $0.id })
+                        }
+                        PeersRadarCard(node: node)
+                        PeerControlsCard(banned: feed.banned.count, commands: commands, reload: reload)
+                    } else {
+                        Card("Peers") {
+                            Text(
+                                node.source == .publicApi
+                                    ? "Only a local node supplies peer data. The public API does not."
+                                    : node.peersError ?? ""
+                            )
+                            .foregroundStyle(.secondary)
+                        }
+                    }
                     BranchesCard()
                 }
             } else if let error = model.nodeError ?? model.statusError {
@@ -30,13 +52,47 @@ struct NodeView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle("Node")
+        .navigationTitle("Node and Peers")
+        .modifier(PeerCommandDialogs(commands: commands, enabled: detailPeer == nil, reload: reload))
+        .sheet(
+            item: Binding(
+                get: { detailPeer.map(PeerID.init) }, set: { detailPeer = $0?.id })
+        ) { peer in
+            PeerDetailView(peerID: peer.id, commands: commands)
+                .environment(model)
+                .modifier(PeerCommandDialogs(commands: commands, reload: reload))
+        }
+        .focusedSceneValue(
+            \.placeActions,
+            PlaceActions(
+                refresh: { Task { await model.refreshNode(); await reload() } },
+                addNode: model.node?.peersError == nil ? { commands.startAddNode() } : nil,
+                pingAll: model.node?.peersError == nil
+                    ? {
+                        commands.run(
+                            .pingAll, done: "The node sends a ping to all connected peers.",
+                            model: model, after: reload)
+                    } : nil,
+                clearBans: feed.banned.isEmpty ? nil : { commands.confirmClearBans(count: feed.banned.count) },
+                showMap: $showsMap))
         .task(id: model.generation) {
+            // The traffic totals are a snapshot, read once per visit as in the terminal.
+            await feed.loadTotals(model)
             while !Task.isCancelled {
                 await model.refreshNode()
+                await feed.loadBans(model)
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+        .task(id: "\(model.generation)|\(peerAddresses.joined(separator: ","))") {
+            await feed.loadLocations(model, addresses: peerAddresses)
+        }
+    }
+
+    private var peerAddresses: [String] { (model.node?.peers ?? []).map(\.address).sorted() }
+
+    private func reload() async {
+        await feed.loadBans(model)
     }
 
     /// Average speed over roughly the last half minute.
@@ -222,81 +278,177 @@ private struct SpeedCard: View {
     }
 }
 
-/// Connected peers, fastest first, with response time drawn as a bar.
+/// Identifies the peer shown in the detail sheet.
+struct PeerID: Identifiable {
+    let id: Int64
+}
+
+/// One line of the peer list: a connected peer or an entry in the ban list.
+private struct PeerListItem: Identifiable {
+    let peer: PeerRow?
+    let banned: BannedPeer?
+    var id: String { peer.map { "peer-\($0.id)" } ?? "ban-\(banned?.address ?? "")" }
+}
+
+/// Connected peers, fastest first, and the node's ban list, in one list as in the terminal.
+/// The list grows with the page. Up and Down select, Return or a double-click opens a peer.
 private struct PeersCard: View {
     let node: NodeStatus
+    @Bindable var feed: PeerFeed
+    let proxy: ScrollViewProxy
+    let open: (PeerRow) -> Void
 
     var body: some View {
-        Card("Peers", trailing: node.peersError == nil ? "\(node.peers.count) connected" : nil) {
-            if let error = node.peersError {
-                Text(node.source == .publicApi ? "Only a local node supplies peer data." : error)
-                    .foregroundStyle(.secondary)
-            } else if node.peers.isEmpty {
-                Label("No peers are connected. The node cannot synchronize without a peer.",
-                      systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-            } else {
-                VStack(spacing: 0) {
+        Card("Peers", trailing: summary) {
+            if node.peers.isEmpty {
+                Note(text: "No peers are connected. The node cannot synchronize without a peer.", warning: true)
+            }
+            if !items.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
                     PeerColumns(
-                        address: Text("Address"), direction: Text("Direction"),
-                        response: Text("Response time"), height: Text("Peer height"),
-                        received: Text("Received"), sent: Text("Sent")
-                    )
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.bottom, 6)
+                        peer: Text("Peer"), address: Text("Address"), state: Text("Direction or ban"),
+                        location: Text("Location"), response: Text("Response time"),
+                        height: Text("Peer height"), connected: Text("Connected"),
+                        received: Text("Received"), sent: Text("Sent"))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 6)
                     Divider()
-                    ForEach(sorted, id: \.id) { peer in
-                        PeerColumns(
-                            address: Text(peer.address).font(.callout.monospaced())
-                                .textSelection(.enabled),
-                            direction: Text(peer.inbound ? "Incoming" : "Outgoing")
-                                .foregroundStyle(.secondary),
-                            response: ResponseBar(milliseconds: peer.pingMs),
-                            height: Text(peer.startingHeight.map { Format.integer(UInt64(max($0, 0))) } ?? "–")
-                                .monospacedDigit(),
-                            received: Text(Format.bytes(peer.bytesReceived)).monospacedDigit()
-                                .foregroundStyle(.secondary),
-                            sent: Text(Format.bytes(peer.bytesSent)).monospacedDigit()
-                                .foregroundStyle(.secondary)
-                        )
-                        .padding(.vertical, 7)
-                        Divider()
+                    TimelineView(.periodic(from: .now, by: 5)) { context in
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(items) { item in
+                                SelectableRow(id: item.id, selection: $feed.selection, open: { openItem(item.id) }) {
+                                    line(item, now: context.date).padding(.vertical, 5)
+                                }
+                                Divider()
+                            }
+                        }
                     }
                 }
-                Text(
-                    "\"Peer height\" is the chain height that the peer reported when it connected."
-                        + (isSyncing(node)
-                            ? " Response times are high during synchronization because the peers send many blocks."
-                            : ""))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .keyboardRows(items.map(\.id), selection: $feed.selection, proxy: proxy, open: openItem)
             }
+            if let error = feed.bannedError {
+                Text("The ban list is not available: \(error)").font(.callout).foregroundStyle(.secondary)
+            }
+            totals
+            Text(
+                "\"Peer height\" is the chain height that the peer reported when it connected."
+                    + (isSyncing(node)
+                        ? " Response times are high during synchronization because the peers send many blocks."
+                        : ""))
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
-    private var sorted: [PeerRow] {
+    private func openItem(_ id: String) {
+        if let peer = items.first(where: { $0.id == id })?.peer { open(peer) }
+    }
+
+    private func line(_ item: PeerListItem, now: Date) -> some View {
+        PeerColumns(
+            peer: Group {
+                if let peer = item.peer {
+                    Button("Peer \(peer.id)") { open(peer) }.buttonStyle(.link)
+                } else {
+                    Label("Banned", systemImage: "nosign").foregroundStyle(.red)
+                }
+            },
+            address: Text(item.peer?.address ?? item.banned?.address ?? "")
+                .font(.callout.monospaced())
+                .truncationMode(.middle)
+                .help(item.peer?.address ?? item.banned?.address ?? ""),
+            state: Text(item.peer.map { $0.inbound ? "Inbound" : "Outbound" } ?? item.banned.map(banText) ?? "")
+                .foregroundStyle(.secondary),
+            location: Text(item.peer.map(location) ?? "").foregroundStyle(.secondary),
+            response: Group { if let peer = item.peer { ResponseBar(milliseconds: peer.pingMs) } },
+            height: Text(item.peer?.startingHeight.map { Format.integer(UInt64(max($0, 0))) } ?? ""),
+            connected: Text(
+                item.peer?.connectedSince.map {
+                    Format.age($0, now: now).replacingOccurrences(of: " ago", with: "")
+                } ?? ""),
+            received: Text(item.peer.map { Format.bytes($0.bytesReceived) } ?? ""),
+            sent: Text(item.peer.map { Format.bytes($0.bytesSent) } ?? ""))
+            .monospacedDigit()
+    }
+
+    private var summary: String {
+        let bans = feed.bannedError == nil ? "\(feed.banned.count) banned" : "bans not available"
+        return "\(node.peers.count) connected · \(bans)"
+    }
+
+    private var items: [PeerListItem] {
         node.peers.sorted { ($0.pingMs ?? .infinity) < ($1.pingMs ?? .infinity) }
+            .map { PeerListItem(peer: $0, banned: nil) }
+            + feed.banned.map { PeerListItem(peer: nil, banned: $0) }
+    }
+
+    /// The terminal's traffic tile: totals read once when the page opened.
+    @ViewBuilder
+    private var totals: some View {
+        HStack(spacing: 18) {
+            Text("Network totals").fontWeight(.semibold)
+            if let totals = feed.totals {
+                Text("Received \(Format.bytes(totals.received))").monospacedDigit()
+                Text("Sent \(Format.bytes(totals.sent))").monospacedDigit()
+                Text("Read at \(Format.date(totals.timeMillis / 1000))").foregroundStyle(.secondary)
+            } else if feed.totalsError != nil {
+                Text("Not available.").foregroundStyle(.secondary)
+            } else {
+                Text("Reading…").foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.callout)
+        .help("The node's traffic since it started. The app reads it once each time this page opens.")
+    }
+
+    private func banText(_ banned: BannedPeer) -> String {
+        guard let until = banned.bannedUntil, until > 0 else { return banned.reason ?? "banned" }
+        return "until \(Format.date(UInt64(until)))"
+    }
+
+    private func location(_ peer: PeerRow) -> String {
+        guard let locations = feed.locations,
+            let location = locations.locations.first(where: { $0.address == peer.address })
+        else { return "" }
+        switch location.place {
+        case .located:
+            return [location.city, location.countryCode].compactMap { $0 }.joined(separator: ", ")
+        case .private: return "private or local"
+        case .unresolved:
+            return locations.state == .current || locations.state == .updateAvailable ? "not found" : "no location data"
+        }
     }
 }
 
-private struct PeerColumns<A: View, B: View, C: View, D: View, E: View, F: View>: View {
-    let address: A
-    let direction: B
-    let response: C
-    let height: D
-    let received: E
-    let sent: F
+/// One column layout for the peer list's heading and rows. Flexible columns share the
+/// page width, so every column fits without a horizontal scroll.
+private struct PeerColumns<A: View, B: View, C: View, D: View, E: View, F: View, G: View, H: View, I: View>: View {
+    let peer: A
+    let address: B
+    let state: C
+    let location: D
+    let response: E
+    let height: F
+    let connected: G
+    let received: H
+    let sent: I
 
     var body: some View {
-        HStack(spacing: 12) {
-            address.frame(width: 190, alignment: .leading)
-            direction.frame(width: 76, alignment: .leading)
-            response.frame(maxWidth: .infinity, alignment: .leading)
-            height.frame(width: 90, alignment: .trailing)
-            received.frame(width: 84, alignment: .trailing)
-            sent.frame(width: 84, alignment: .trailing)
+        HStack(spacing: 8) {
+            peer.frame(width: 64, alignment: .leading)
+            address.frame(minWidth: 110, maxWidth: 230, alignment: .leading)
+            state.frame(minWidth: 70, maxWidth: 140, alignment: .leading)
+            location.frame(minWidth: 60, maxWidth: 130, alignment: .leading)
+            response.frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
+            height.frame(width: 76, alignment: .trailing)
+            connected.frame(width: 64, alignment: .trailing)
+            received.frame(width: 64, alignment: .trailing)
+            sent.frame(width: 64, alignment: .trailing)
         }
+        .lineLimit(1)
     }
 }
 

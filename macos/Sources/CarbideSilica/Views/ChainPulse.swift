@@ -11,8 +11,10 @@ struct ChainPulse: View {
     let blocks: [BlockRow]
     /// True when the node is at the chain tip, so the right edge is the present moment.
     let live: Bool
-    /// Unconfirmed transactions waiting for the next block.
+    /// Unconfirmed transactions in the mempool.
     let waiting: UInt64?
+    /// The block selected in the dashboard's list, drawn like a hovered block.
+    var selected: String?
 
     @Environment(AppModel.self) private var model
     @State private var hovered: String?
@@ -160,7 +162,7 @@ struct ChainPulse: View {
             let bx = x(Double(block.time), width: size.width, now: now)
             if bx < -8 { continue }
             let color: Color = block.staked ? .purple : .orange
-            let selected = hovered == block.hash
+            let selected = hovered == block.hash || self.selected == block.hash
             let barHeight = 5 + CGFloat(min(block.transactionCount, 30)) * 3.4
             context.fill(
                 Path(CGRect(x: bx - 2.5, y: base - 8 - barHeight, width: 5, height: barHeight)),
@@ -194,7 +196,7 @@ struct ChainPulse: View {
                 context.fill(Path(ellipseIn: dot), with: .color(.accentColor))
             }
             context.draw(
-                Text("\(waiting) waiting").font(.caption2).foregroundStyle(.secondary),
+                Text("\(waiting) unconfirmed").font(.caption2).foregroundStyle(.secondary),
                 at: CGPoint(x: px, y: base + 14), anchor: .center)
         }
     }

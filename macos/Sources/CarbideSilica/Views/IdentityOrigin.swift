@@ -1,86 +1,126 @@
 import CarbideCore
 import SwiftUI
 
-/// Where an identity came from: who probably paid for its registration, and the payments
+/// Where an identity came from: who possibly paid for its registration, and the payments
 /// the registration made to other identities.
 ///
-/// Both are drawn dashed, because both are inferences from the registration transaction.
-/// The payer funded its inputs; payments to identities are usually referrals or the
-/// issuer's charge, but the chain does not label them.
+/// The payers are always candidates: they funded the inputs. The payments are drawn solid
+/// when Carbide verified them against the issuer's rules, and dashed when they are only
+/// inferred from the transaction.
 struct IdentityOriginCard: View {
-    let registration: IdentityVersion
+    let txid: String
+    let height: UInt64
+    let time: UInt64?
     let identityAddress: String?
 
     @Environment(AppModel.self) private var model
+    @AppStorage(DisplayKey.showsNames) private var showsNames = true
+    @AppStorage(DisplayKey.showsDates) private var showsDates = false
 
-    private struct Origin: Sendable {
+    fileprivate struct Payment: Sendable {
+        let recipient: String
+        let sats: Int64
+        let currency: String
+        /// Carbide's annotation, when the payment is verified.
+        let annotation: String?
+    }
+
+    fileprivate struct Origin: Sendable {
         let payers: [String]
-        let payments: [(String, Int64)]
+        let payments: [Payment]
+        let verified: Bool
         let spent: Int64?
     }
 
     var body: some View {
-        if let txid = registration.txid {
-            LoadView(key: "origin:\(txid)") { explorer in
+        Card("Origin") {
+            SectionLoader(key: "origin:\(txid)", loadingText: "Loading the registration…") {
+                explorer in
                 let transaction = try await explorer.transaction(txid: txid)
-                return Self.origin(of: transaction, identity: identityAddress)
+                let payments = try? await explorer.registrationPayments(txid: txid)
+                return Self.origin(of: transaction, payments: payments, identity: identityAddress)
             } content: { origin in
-                Card("Origin") {
-                    Canvas { context, size in
-                        draw(context, size, origin)
-                    }
-                    .frame(height: CGFloat(max(origin.payers.count, origin.payments.count, 1)) * 52 + 26)
-                    .accessibilityLabel(sentence(origin))
+                Canvas { context, size in
+                    draw(context, size, origin)
+                }
+                .frame(height: CGFloat(max(origin.payers.count, origin.payments.count, 1)) * 52 + 26)
+                .accessibilityLabel(sentence(origin))
 
-                    Text(sentence(origin)).font(.callout)
-                    HStack(spacing: 14) {
-                        ConfidenceMark(level: .verified, label: "Registration")
-                        ConfidenceMark(level: .candidate, label: "Payer and payments are not confirmed")
-                        Spacer()
-                        RouteLink(text: txid, route: .transaction(txid: txid))
+                Text(sentence(origin)).font(.callout)
+                HStack(spacing: 14) {
+                    ConfidenceMark(level: .verified, label: "Registration")
+                    ConfidenceMark(level: .candidate, label: "Payers are candidates")
+                    ConfidenceMark(
+                        level: origin.verified ? .verified : .candidate,
+                        label: origin.verified ? "Payments verified" : "Payments not verified")
+                    Spacer()
+                    RouteLink(text: txid, route: .transaction(txid: txid))
+                }
+                Text("Dashed boxes and lines are inferences. Solid lines are payments that Carbide verified against the issuer's rules.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .task(id: txid) {
+                        await model.resolveNames(
+                            origin.payers + origin.payments.flatMap { [$0.recipient, $0.currency] })
                     }
-                }
-                .task(id: txid) {
-                    await model.resolveNames(origin.payers + origin.payments.map(\.0))
-                }
             }
-            .frame(minHeight: 80)
         }
     }
 
-    private static func origin(of transaction: TransactionDetail, identity: String?) -> Origin {
+    private static func origin(
+        of transaction: TransactionDetail, payments: RegistrationPayments?, identity: String?
+    ) -> Origin {
         var payers: [String] = []
         for address in transaction.inputs.flatMap(\.addresses) where !payers.contains(address) {
             payers.append(address)
-        }
-        let isIdentity = { (address: String) in address.hasPrefix("i") && address.count == 34 }
-        var payments: [(String, Int64)] = []
-        for output in transaction.outputs {
-            guard let address = output.addresses.first, isIdentity(address), address != identity,
-                !payers.contains(address), let sats = output.valueSats, sats > 0
-            else { continue }
-            if let existing = payments.firstIndex(where: { $0.0 == address }) {
-                payments[existing].1 += sats
-            } else {
-                payments.append((address, sats))
-            }
         }
         let known = transaction.inputs.compactMap(\.valueSats)
         let change = transaction.outputs
             .filter { output in output.addresses.first.map(payers.contains) ?? false }
             .compactMap(\.valueSats).reduce(0, +)
         let spent = known.count == transaction.inputs.count && !known.isEmpty ? known.reduce(0, +) - change : nil
-        return Origin(payers: Array(payers.prefix(4)), payments: Array(payments.prefix(4)), spent: spent)
+
+        if let payments, payments.status == .verified {
+            var rows = payments.referrals.map {
+                Payment(recipient: $0.recipient, sats: $0.amountSats, currency: $0.currency, annotation: $0.annotation)
+            }
+            if let charge = payments.charge {
+                rows.insert(
+                    Payment(recipient: charge.recipient, sats: charge.amountSats, currency: charge.currency,
+                            annotation: charge.annotation), at: 0)
+            }
+            return Origin(payers: Array(payers.prefix(4)), payments: Array(rows.prefix(5)), verified: true, spent: spent)
+        }
+
+        let isIdentity = { (address: String) in address.hasPrefix("i") && address.count == 34 }
+        var inferred: [Payment] = []
+        for output in transaction.outputs {
+            guard let address = output.addresses.first, isIdentity(address), address != identity,
+                !payers.contains(address), let sats = output.valueSats, sats > 0
+            else { continue }
+            if let existing = inferred.firstIndex(where: { $0.recipient == address }) {
+                let old = inferred[existing]
+                inferred[existing] = Payment(recipient: address, sats: old.sats + sats, currency: old.currency, annotation: nil)
+            } else {
+                inferred.append(Payment(recipient: address, sats: sats, currency: "", annotation: nil))
+            }
+        }
+        return Origin(payers: Array(payers.prefix(4)), payments: Array(inferred.prefix(4)), verified: false, spent: spent)
     }
 
     private func display(_ address: String) -> String {
-        model.names[address] ?? Format.short(address, head: 8, tail: 6)
+        return model.displayID(address)
+    }
+
+    private func amount(_ payment: Payment) -> String {
+        payment.currency.isEmpty
+            ? "\(Format.coins(payment.sats)) \(model.coin)"
+            : model.amountText(payment.sats, currency: payment.currency)
     }
 
     private var when: String {
-        registration.time.map {
+        time.map {
             Date(timeIntervalSince1970: TimeInterval($0)).formatted(date: .abbreviated, time: .omitted)
-        } ?? "block \(Format.integer(registration.height))"
+        } ?? model.heightText(height)
     }
 
     private func sentence(_ origin: Origin) -> String {
@@ -94,8 +134,14 @@ struct IdentityOriginCard: View {
         }
         text += "."
         if !origin.payments.isEmpty {
-            let list = origin.payments.map { "\(Format.coins($0.1)) \(model.coin) to \(display($0.0))" }
-            text += " The registration paid \(list.joined(separator: ", ")). Such a payment is usually a referral or a charge from the issuer."
+            let list = origin.payments.map { payment in
+                let role = payment.annotation.map { " (\($0))" } ?? ""
+                return "\(amount(payment)) to \(display(payment.recipient))\(role)"
+            }
+            text += " The registration paid \(list.joined(separator: ", "))."
+            if !origin.verified {
+                text += " Such a payment is usually a referral or a charge from the issuer. Carbide did not verify it."
+            }
         }
         return text
     }
@@ -108,10 +154,11 @@ struct IdentityOriginCard: View {
             size.height * (CGFloat(index) + 0.5) / CGFloat(max(count, 1))
         }
         let dashed = StrokeStyle(lineWidth: 1.6, dash: [5, 4])
-        let box = { (frame: CGRect, title: String, subtitle: String) in
+        let solid = StrokeStyle(lineWidth: 2)
+        let box = { (frame: CGRect, title: String, subtitle: String, style: StrokeStyle, color: Color) in
             let shape = Path(roundedRect: frame, cornerRadius: 8)
             context.fill(shape, with: .color(Color(nsColor: .windowBackgroundColor)))
-            context.stroke(shape, with: .color(.secondary), style: dashed)
+            context.stroke(shape, with: .color(color), style: style)
             context.draw(
                 Text(title).font(.callout.weight(.semibold)),
                 at: CGPoint(x: frame.midX, y: frame.midY - 7), anchor: .center)
@@ -127,8 +174,10 @@ struct IdentityOriginCard: View {
                     path.move(to: CGPoint(x: frame.maxX, y: y))
                     path.addLine(to: CGPoint(x: centre.minX, y: midY))
                 }, with: .color(.secondary), style: dashed)
-            box(frame, display(payer), "possible payer")
+            box(frame, display(payer), "possible payer", dashed, .secondary)
         }
+        let style = origin.verified ? solid : dashed
+        let color: Color = origin.verified ? .green : .secondary
         for (index, payment) in origin.payments.enumerated() {
             let y = slot(index, origin.payments.count)
             let frame = CGRect(x: size.width - sideWidth, y: y - 20, width: sideWidth, height: 40)
@@ -136,8 +185,10 @@ struct IdentityOriginCard: View {
                 Path { path in
                     path.move(to: CGPoint(x: centre.maxX, y: midY))
                     path.addLine(to: CGPoint(x: frame.minX, y: y))
-                }, with: .color(.secondary), style: dashed)
-            box(frame, display(payment.0), "was paid \(Format.coins(payment.1)) \(model.coin)")
+                }, with: .color(color), style: style)
+            let subtitle = payment.annotation.map { "\($0): \(amount(payment))" }
+                ?? "was paid \(amount(payment))"
+            box(frame, display(payment.recipient), subtitle, style, color)
         }
         let shape = Path(roundedRect: centre, cornerRadius: 10)
         context.fill(shape, with: .color(.accentColor.opacity(0.14)))

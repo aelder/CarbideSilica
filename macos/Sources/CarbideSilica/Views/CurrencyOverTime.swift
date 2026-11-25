@@ -8,6 +8,8 @@ import SwiftUI
 /// remembering numbers. Each point is the currency's recorded state at a real block.
 struct CurrencyOverTimeCard: View {
     let currency: CurrencyDetail
+    /// Asks for the exact state at the block under the cursor.
+    var onChoose: ((UInt64) -> Void)?
 
     @Environment(AppModel.self) private var model
     @State private var span = Span.year
@@ -15,6 +17,7 @@ struct CurrencyOverTimeCard: View {
     @State private var index: Double = 0
     @State private var failure: String?
     @State private var loading = true
+    @AppStorage(DisplayKey.showsNames) private var showsNames = true
 
     enum Span: String, CaseIterable, Identifiable {
         case month = "30 days"
@@ -37,7 +40,8 @@ struct CurrencyOverTimeCard: View {
     private let samples: UInt32 = 90
 
     var body: some View {
-        Card("Over time") {
+        let _ = showsNames
+        Card("Over time", trailing: "\(samples) samples") {
             HStack {
                 Picker("Span", selection: $span) {
                     ForEach(Span.allCases) { Text($0.rawValue).tag($0) }
@@ -51,6 +55,10 @@ struct CurrencyOverTimeCard: View {
                         Text(dateLabel(point)).font(.headline)
                         Text("block \(Format.integer(point.height))")
                             .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let onChoose {
+                        Button("Show Exact State") { onChoose(point.height) }
+                            .help("Read the state at block \(Format.integer(point.height)) and check its imports and exports")
                     }
                 }
             }
@@ -107,10 +115,11 @@ struct CurrencyOverTimeCard: View {
     }
 
     private func reserveName(_ id: String) -> String {
-        // A currency's name is its identity's name without the trailing "@".
-        currency.reserves.first { $0.currencyId == id }?.name
-            ?? model.names[id].map { $0.hasSuffix("@") ? String($0.dropLast()) : $0 }
-            ?? Format.short(id, head: 6, tail: 4)
+        // A currency's name is its identity's name without the trailing "@". With names
+        // off in the View menu, the ID.
+        guard showsNames else { return Format.short(id, head: 6, tail: 4) }
+        return currency.reserves.first { $0.currencyId == id }?.name
+            ?? knownName(id, model: model)
     }
 
     private func dateLabel(_ point: CurrencyPoint) -> String {

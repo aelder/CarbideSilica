@@ -12,6 +12,8 @@ enum SettingsKey {
     static let cacheDir = "cacheDir"
     static let useUTC = "useUTC"
     static let apiURL = "apiURL"
+    /// Sources: show the activity of every source, not only the selected one.
+    static let allSourceActivity = "allSourceActivity"
 
     static let defaultAPI = "https://api.verus.services"
 }
@@ -25,6 +27,7 @@ enum SidebarItem: Hashable {
     case marketplace
     case bookmarks
     case node
+    case sources
 }
 
 /// One measurement of how fast the node is validating blocks.
@@ -47,6 +50,10 @@ final class AppModel {
     private(set) var names: [String: String] = [:]
     private var nameRequests: Set<String> = []
     private var openedStartObject = false
+    /// True until the person switches the chain: start-up arguments then stop applying.
+    private var usesLaunchArguments = true
+    /// Carbide's optional start-up bookmark population runs once for each launch.
+    private static var populatedBookmarks = false
 
     private(set) var bookmarks: [BookmarkRow] = []
     private(set) var bookmarkError: String?
@@ -73,6 +80,10 @@ final class AppModel {
     private(set) var isSearching = false
     var searchError: String?
 
+    /// Primary requests that wait for the person's decision about a public API, oldest first.
+    private(set) var permissionRequests: [PermissionRequest] = []
+    private var permissionListener: Task<Void, Never>?
+
     private let recentBlockCount: UInt32 = 30
     private let keptBlockCount = 60
 
@@ -92,13 +103,44 @@ final class AppModel {
         let chain = defaults.string(forKey: SettingsKey.chain) ?? "VRSC"
         let configFile = defaults.string(forKey: SettingsKey.configFile) ?? ""
         let apiURL = defaults.string(forKey: SettingsKey.apiURL) ?? SettingsKey.defaultAPI
-        let options = ConnectionOptions(
+        var options = ConnectionOptions(
             chain: chain,
             testnet: defaults.bool(forKey: SettingsKey.testnet),
             configFile: configFile.isEmpty ? nil : configFile,
             apiEndpoint: defaults.bool(forKey: SettingsKey.apiEnabled) ? apiURL : nil,
             cacheDir: defaults.string(forKey: SettingsKey.cacheDir)
         )
+        // Start-up arguments override the saved connection for this run. They are not saved,
+        // and they stop applying when the person switches the chain.
+        let launch = Launch.arguments
+        if usesLaunchArguments, launch.problem == nil {
+            if let named = launch.chain {
+                options.chain = named
+                // A chain named on the command line does not use another chain's saved file.
+                options.configFile = nil
+            }
+            if launch.testnet { options.testnet = true }
+            // With a data directory, Carbide looks for the file there, as the node does.
+            if launch.dataDir != nil { options.configFile = nil }
+            if let file = launch.configFile { options.configFile = file }
+            options.dataDir = launch.dataDir
+            options.rpcHost = launch.rpcHost
+            options.rpcPort = launch.rpcPort
+            options.rpcUser = launch.rpcUser
+            options.rpcPassword = launch.rpcPassword
+        }
+        // The API in Settings is always listed as a source, disabled unless it is allowed,
+        // so that the app can offer it when the node cannot answer.
+        let offered = apiURL.isEmpty ? [] : [apiURL]
+        // Requests of the previous connection must not wait for an answer that never comes.
+        if let previous = explorer {
+            for request in permissionRequests {
+                try? previous.answerPermission(id: request.id, answer: .cancel)
+            }
+        }
+        permissionRequests = []
+        permissionListener?.cancel()
+        permissionListener = nil
         explorer = nil
         names = [:]
         nameRequests = []
@@ -112,7 +154,7 @@ final class AppModel {
         generation += 1
         let attempt = generation
         Task.detached {
-            let result = Result { try Explorer(options: options) }
+            let result = Result { try Explorer.withSources(options: options, offeredApis: offered) }
             await self.finishConnecting(result, attempt: attempt)
         }
     }
@@ -123,6 +165,10 @@ final class AppModel {
         case .success(let explorer):
             self.explorer = explorer
             connection = explorer.connection()
+            listenForPermissionRequests(explorer)
+            // Reconciliation of the current chain, and of monitored nodes, as the terminal does.
+            Task { await explorer.startBackground() }
+            populateBookmarksOnce(explorer)
         case .failure(let error):
             connection = nil
             statusError = describe(error)
@@ -133,13 +179,26 @@ final class AppModel {
         openStartObject()
     }
 
+    /// Carbide's start-up population of uncached bookmarks, once per launch, in the
+    /// background. It does nothing unless Carbide's config.toml turns it on, and it never
+    /// asks for permission.
+    private func populateBookmarksOnce(_ explorer: Explorer) {
+        guard !Self.populatedBookmarks else { return }
+        Self.populatedBookmarks = true
+        Task { [weak self] in
+            _ = try? await explorer.populateBookmarks()
+            guard let self, self.explorer === explorer else { return }
+            self.reloadBookmarks()
+        }
+    }
+
     /// Opens the object named on the command line, once: `CarbideSilica -open vETH@`.
     /// This mirrors Carbide's `--open`.
     private func openStartObject() {
         guard !openedStartObject, explorer != nil else { return }
         openedStartObject = true
-        let arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
-        guard let query = arguments["open"] as? String, !query.isEmpty else { return }
+        // Every form Carbide accepts: -open=, --open, --object and a bare object.
+        guard let query = Launch.arguments.openObject, !query.isEmpty else { return }
         searchText = query
         Task { await search() }
     }
@@ -150,7 +209,7 @@ final class AppModel {
     }
 
     var currentChain: String {
-        UserDefaults.standard.string(forKey: SettingsKey.chain) ?? "VRSC"
+        connection?.chain ?? UserDefaults.standard.string(forKey: SettingsKey.chain) ?? "VRSC"
     }
 
     /// Switches to another configured chain. Each chain remembers the config file it was
@@ -158,13 +217,46 @@ final class AppModel {
     func switchChain(to chain: KnownChain) {
         let defaults = UserDefaults.standard
         var remembered = defaults.dictionary(forKey: SettingsKey.chainConfigs) as? [String: String] ?? [:]
-        remembered[currentChain] = defaults.string(forKey: SettingsKey.configFile) ?? ""
+        let saved = defaults.string(forKey: SettingsKey.chain) ?? "VRSC"
+        remembered[saved] = defaults.string(forKey: SettingsKey.configFile) ?? ""
         defaults.set(remembered, forKey: SettingsKey.chainConfigs)
         defaults.set(chain.chain, forKey: SettingsKey.chain)
         defaults.set(remembered[chain.chain] ?? chain.configFile, forKey: SettingsKey.configFile)
         path = []
         recent = []
+        usesLaunchArguments = false
         connect()
+    }
+
+    /// Makes the chain of a node in Sources the current chain.
+    func switchChain(to source: SourceRow) {
+        guard let file = source.configFile else { return }
+        switchChain(
+            to: KnownChain(
+                chain: source.chain, configFile: file,
+                testnet: UserDefaults.standard.bool(forKey: SettingsKey.testnet)))
+    }
+
+    /// Waits for primary requests that need permission to use a public API, and queues them
+    /// for the dialog. It stops when the connection changes.
+    private func listenForPermissionRequests(_ explorer: Explorer) {
+        permissionListener?.cancel()
+        permissionListener = Task { [weak self] in
+            while !Task.isCancelled {
+                let request = await explorer.nextPermissionRequest()
+                guard let self, self.explorer === explorer else { return }
+                if let request {
+                    self.permissionRequests.append(request)
+                }
+            }
+        }
+    }
+
+    /// Answers the oldest permission request.
+    func answerPermission(_ answer: PermissionAnswer) {
+        guard let explorer, !permissionRequests.isEmpty else { return }
+        let request = permissionRequests.removeFirst()
+        try? explorer.answerPermission(id: request.id, answer: answer)
     }
 
     /// Turns on the public API fallback. Only called from an explicit user action.
@@ -253,7 +345,7 @@ final class AppModel {
 
     /// Saves the object as a bookmark in Carbide's bookmark file.
     func addBookmark(_ route: Route, description: String) {
-        guard let explorer else { return }
+        guard let explorer, route.isBookmarkable else { return }
         let (kind, target): (String, String) =
             switch route {
             case .block(let id): ("block", id)
@@ -261,6 +353,7 @@ final class AppModel {
             case .identity(let name): ("identity", name)
             case .currency(let name): ("currency", name)
             case .address(let address): ("address", address)
+            case .currencies, .estimate: ("", "")
             }
         do {
             try explorer.addBookmark(kind: kind, target: target, description: description)
@@ -322,6 +415,51 @@ final class AppModel {
         path = []
     }
 
+    // MARK: Requests from one page to another
+
+    /// The block the Charts page opens at. Nil opens the latest range.
+    private(set) var chartAnchor: UInt64?
+    /// The hash of that block, when it is not on the active chain. The chart then follows
+    /// the side branch from it.
+    private(set) var chartAnchorHash: String?
+
+    /// Opens the Charts page with `height` in view. Pass `hash` for a block on a side branch.
+    func showCharts(at height: UInt64?, hash: String? = nil) {
+        chartAnchor = height
+        chartAnchorHash = hash
+        show(.charts)
+    }
+
+    /// A transfer trace that the transaction page starts when it opens.
+    struct TraceRequest: Equatable {
+        let txid: String
+        let output: UInt32
+    }
+
+    /// Set by `openTrace`. The transaction page reads it once, then sets it to nil.
+    var pendingTrace: TraceRequest?
+
+    /// Opens a transaction and starts the transfer trace at one of its outputs.
+    func openTrace(txid: String, output: UInt32) {
+        pendingTrace = TraceRequest(txid: txid, output: output)
+        open(.transaction(txid: txid))
+    }
+
+    /// A currency state that the currency page shows when it opens.
+    struct CurrencyStateRequest: Equatable {
+        let currency: String
+        let height: UInt64
+    }
+
+    /// Set by `openCurrency(_:at:)`. The currency page reads it once, then sets it to nil.
+    var pendingCurrencyState: CurrencyStateRequest?
+
+    /// Opens a currency with its state at `height` in the exact-state card.
+    func openCurrency(_ name: String, at height: UInt64) {
+        pendingCurrencyState = CurrencyStateRequest(currency: name, height: height)
+        open(.currency(name: name))
+    }
+
     private func remember(_ route: Route) {
         recent.removeAll { $0 == route }
         recent.insert(route, at: 0)
@@ -380,6 +518,9 @@ extension Route {
         case .identity(let name): return Format.short(name, head: 12, tail: 6)
         case .currency(let name): return Format.short(name, head: 12, tail: 6)
         case .address(let address): return Format.short(address, head: 8, tail: 6)
+        case .currencies: return "Currencies"
+        case .estimate(let query):
+            return query.hasPrefix("unix:") ? "Estimate for a date" : "Estimate for block \(query)"
         }
     }
 
@@ -390,6 +531,8 @@ extension Route {
         case .identity: return "person.crop.circle"
         case .currency: return "circle.hexagongrid"
         case .address: return "creditcard"
+        case .currencies: return "circle.hexagongrid"
+        case .estimate: return "calendar.badge.clock"
         }
     }
 

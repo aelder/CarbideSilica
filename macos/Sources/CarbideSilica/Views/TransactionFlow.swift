@@ -32,9 +32,13 @@ struct TransactionFlowModel {
         let amount = { (sats: Int64) in "\(Format.coins(sats)) \(coin)" }
         let coinbase = transaction.inputs.contains(where: \.coinbase)
         let inputAddresses = Set(transaction.inputs.flatMap(\.addresses))
-        let publicOut = transaction.outputs.compactMap(\.valueSats).reduce(0, +)
-        let knownInputs = transaction.inputs.filter { !$0.coinbase && $0.valueSats != nil }
-        let unknownInputs = transaction.inputs.filter { !$0.coinbase && $0.valueSats == nil }.count
+        let transparentInputs = transaction.inputs.filter { $0.shieldedPool == nil }
+        let transparentOutputs = transaction.outputs.filter { $0.shieldedPool == nil }
+        let publicOut = transparentOutputs.compactMap(\.valueSats).reduce(0, +)
+        let knownInputs = transparentInputs.filter { !$0.coinbase && $0.valueSats != nil }
+        let unknownInputs = transparentInputs.filter { !$0.coinbase && $0.valueSats == nil }.count
+        // The fee as Carbide accounts for it, including the net shielded flow.
+        let fee: Int64? = transaction.accounting.feeKind == .known ? transaction.accounting.feeSats : nil
         let publicIn = knownInputs.compactMap(\.valueSats).reduce(0, +)
         let shielded = transaction.privateInputs + transaction.privateOutputs > 0
         let staking = transaction.tags.contains("Stake")
@@ -56,11 +60,13 @@ struct TransactionFlowModel {
                         detail: amount(input.valueSats ?? 0), sats: input.valueSats ?? 0,
                         kind: .input))
             }
-            if transaction.privateInputs > 0, publicOut > publicIn {
+            let shieldedIn = publicOut + (fee ?? 0) - publicIn
+            if transaction.privateInputs > 0, shieldedIn > 0 {
                 inputs.append(
                     FlowItem(
                         id: 10_000, title: "Private address",
-                        detail: "amount hidden", sats: publicOut - publicIn, kind: .hidden))
+                        detail: fee == nil ? "amount hidden" : "\(amount(shieldedIn)) in total",
+                        sats: shieldedIn, kind: .hidden))
             }
         }
         if unknownInputs > 0 {
@@ -71,7 +77,7 @@ struct TransactionFlowModel {
 
         var outputs: [FlowItem] = []
         var valueless = 0
-        for output in transaction.outputs {
+        for output in transparentOutputs {
             guard let sats = output.valueSats, sats > 0 else {
                 valueless += 1
                 continue
@@ -102,21 +108,24 @@ struct TransactionFlowModel {
                     + "\(valueless == 1 ? "is" : "are") listed below.")
         }
 
-        var fee: Int64?
-        if !coinbase, unknownInputs == 0, publicIn > publicOut {
-            if transaction.privateOutputs > 0 {
+        if !coinbase, unknownInputs == 0 {
+            let shieldedOut = publicIn - publicOut - (fee ?? 0)
+            if transaction.privateOutputs > 0, shieldedOut > 0 {
                 outputs.append(
                     FlowItem(
                         id: 10_001, title: "Private address",
-                        detail: "hidden amount, includes the fee", sats: publicIn - publicOut,
-                        kind: .hidden))
-            } else if !shielded {
-                fee = publicIn - publicOut
-                outputs.append(
-                    FlowItem(
-                        id: 10_002, title: "Fee", detail: amount(publicIn - publicOut),
-                        sats: publicIn - publicOut, kind: .fee))
+                        detail: fee == nil ? "hidden amount, includes the fee" : "\(amount(shieldedOut)) in total",
+                        sats: shieldedOut, kind: .hidden))
             }
+            if let fee, fee > 0 {
+                outputs.append(
+                    FlowItem(id: 10_002, title: "Fee", detail: amount(fee), sats: fee, kind: .fee))
+            }
+        }
+        if transaction.accounting.feeKind == .protocolAccounting {
+            notes.append(
+                "Protocol outputs account for value elsewhere, so the fee is not known. "
+                    + "The picture shows the public native amounts only.")
         }
 
         self.inputs = Self.condense(inputs, label: "more inputs", coin: coin)

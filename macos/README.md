@@ -2,68 +2,123 @@
 
 A native macOS explorer for Verus, built in SwiftUI on the chain logic of
 [Carbide](https://github.com/alexenglish/VerusCarbide). It is a separate front
-end that lives beside the terminal app; it does not change or replace `vcarbide`.
+end beside the terminal app. It does not change or replace `vcarbide`.
 
-Like Carbide, it is read-only. It never creates or signs transactions.
+Like Carbide, it is read-only. It never creates or signs a transaction.
 
-## What it does today
+## What it does
 
-- Dashboard with chain status and recent blocks, refreshed every 15 seconds
-- Search by block height or hash, transaction ID, date, address, identity (`name@`)
-  or currency (`name@@`), using Carbide's own resolver
-- Block, transaction, identity, currency and address views, with links between
-  them and the daemon's raw JSON for each
-- Node view: sync progress across the chain's history, validation speed and peers
-- Chain pulse: recent blocks on a time axis, with slow gaps marked
-- Transaction flow: a plain-sentence summary and a picture of where the coins went
-- Identity control diagram and version history
-- Currency supply and reserve prices over time, with one cursor through all of them
-- Names shown in place of identity and currency IDs where they are known
-- Follow a transfer: Carbide's DeFi trail drawn as a route from sent to received, with
-  one verdict and the evidence behind it
-- Notarization lanes: two systems as parallel lanes with each notarization a tie between
-  them, showing confirmed, pending and stalled links
-- Mempool: waiting transactions as tiles sized by bytes and shaded by age
-- Marketplace: open offers plotted by time left and price
-- Peers by response time, and the side branches the node knows near the chain tip
-- Pool conversions: what the latest batch moved in and out of each reserve, with an
-  activity row marking when conversions happened
-- Identity origin: who probably paid for a registration and what it paid out
-- Charts of block intervals, mining difficulty, staking difficulty and staked share,
-  and an estimator for future blocks
-- Currency browser with filters for option flags and launch status
-- Bookmarks, kept in Carbide's own bookmark file so the terminal app shares them
-- Witnesses and protocol links on notarization transactions, using Carbide's own
-  investigation code
-- A hex and text view for unrecognised output data
-- Times in UTC or local, and cache size and clearing, in Settings
-- Fee pool chart, read from each block's coinbase checkpoint
-- Peer management: add node, ping, disconnect, ban and clear bans, each confirmed, and
-  the daemon's log lines for a peer
-- Shared keys and authorities: identities that used the same addresses in a past window
-- Tokenized control: follows an identity's control token to its current holder
-- Registration payments, and a transaction's block history across side branches
-- A chain menu on the connection badge, listing every daemon configured on this Mac
+The app can do what Carbide's terminal app does. `docs/reference.md` is the reference.
+The app shows the same data as pictures where a picture is clearer, and keeps the exact
+figures and the raw JSON one step away.
 
-`CarbideSilica -open <object>` opens a block, transaction, address, identity or
-currency at launch, like Carbide's `--open`.
+**Places**
 
-Known limits, where the app does less than Carbide:
+- Dashboard: a status line (height against the longest chain, age of the last block, node
+  and API state, peers), the chain pulse, recent blocks, and recent confirmed
+  transactions with their tags. Stream blocks keeps the newest block in view.
+- Mempool: unconfirmed transactions as tiles sized by bytes and shaded by age, or as a
+  list with arrival, fee, size, entry height, unconfirmed parents and tags.
+- Charts: block intervals, mining and staking difficulty with MA100 lines, the PoW ratio
+  over 100 and 1,000 blocks, and the fee pool. Spans are 2 hours, 6 hours, 1 day or 7 days
+  of header time. You can page to older and newer ranges, go to a block or a date, and
+  select a block to see its exact figures.
+- Future block estimates from Carbide's calibrated rate, with the calibration shown.
+- Currencies: Carbide's filters. Each option flag is Any, Show or Hide, and there are
+  launch-status filters. The default view is liquidity pools without failed launches.
+- Marketplace: open offers plotted by time left and price, and the same offers as a list
+  in Carbide's four sort orders, with links to each offer's identity, currencies, funding
+  transaction and addresses.
+- Bookmarks, in Carbide's own bookmark file, including notarization views with their
+  perspective, manual entry, and Carbide's optional start-up population.
+- Node and peers: synchronization progress, validation speed, peers and bans in one
+  list, network totals, a peer page with the node log and raw JSON, peers by response
+  time, a world map of peers, and side branches.
+- Sources: each node and public API with its state (Disabled, Enabled, Monitored), its
+  traffic and its recorded activity.
 
-- Tokenized control is followed from the token's definition transaction. A token minted
-  at launch isn't traced yet.
-- Registration payments and identity origin are inferred from the transaction. Carbide
-  verifies them against the issuer's fee rules.
-- Block history reads the side branches the daemon still holds. Carbide also keeps its
-  own record of what it observed.
-- One chain is shown at a time. Transfers are followed into other chains configured on
-  this Mac, but there is no side-by-side view.
+**Objects**
 
-Peer management is the only place the app changes anything on the daemon. It never
-creates or signs transactions.
+- Search by block height or hash, transaction ID, date, address, identity (`name@`) or
+  currency (`name@@`). Search also accepts `currencies`, and `estimate:` with a height or
+  a date. A future height or date opens an estimate.
+- Blocks: header, chain status, the tags of all transactions, stored child branches, and
+  a link to the active block when the block is on a side branch.
+- Transactions: Carbide's overview (status, totals, each fee variant, shielded and
+  registration lines), a flow picture, inputs and outputs with Carbide's annotations and
+  maturity badges, and a byte view for unrecognised output data.
+- Transfer trace: Carbide's DeFi trail drawn as a route from sent to received, with live
+  progress, leg budgets, execution rates, a comparison with the previous pool
+  notarization, and searches of other destination windows.
+- Witnesses and protocol references, forward and reverse, with Carbide's status for each.
+- Identities at each version: the control diagram, timelock, authorities and status
+  follow the viewed version. Registration evidence, funding candidates, the referral
+  chain, verified registration payments, tokenized control, and historical reverse
+  requests.
+- Currencies: definition, reserves, supply and prices over time, the state at an exact
+  block, imports and exports in 1,000-block windows, the conversion batch, and the
+  notarization browser with checks of each foreign proof root.
+- Addresses: balances, first and latest activity, the identities that use the address as
+  a primary address, and transactions as input and output tiles.
+- Raw JSON for each object as a tree with links, names, dates, copy and save.
 
-Following a transfer uses Carbide's SQLite cache, kept in
-`~/Library/Caches/verus-carbide`. It holds only what has been looked up.
+**Sources and stored data**
+
+- Each page shows the source of its data, and shows if the data is live or stored.
+- The app records the answers for the pages you open in Carbide's cache. When no source
+  answers, a page that you opened before shows the stored observation, marked as stored.
+- Charts read blocks without adding them to the cache. A chart load does not make the
+  cache grow.
+- When the node cannot answer a page or a search, the app asks before it sends the
+  request to a disabled public API. Automatic requests never ask.
+- Block history and the child branches of a block come from stored observations. A
+  background check keeps the stored chain current for the connected node and for each
+  monitored node.
+
+**Display and keyboard**
+
+- View > Show Names for IDs, Show Dates for Heights and Show Times in UTC. The same
+  settings are in Settings.
+- A menu command and a shortcut for each function. Help > Keyboard Shortcuts lists them
+  beside the terminal keys, with the cache location and size.
+- A path bar shows how you reached the open page. Back and Forward move through it.
+
+## Start-up arguments
+
+The arguments follow Carbide: `-chain=`, `-testnet`, `-conf=`, `-datadir=`,
+`-rpcconnect=`, `-rpcport=`, `-rpcuser=`, `-rpcpassword=`, `-pollinterval=` and `-open=`,
+or the same names with two dashes. They apply to one run and do not change the saved
+settings.
+
+## Known limits
+
+- One chain is shown at a time. A block or transaction on another chain is shown as text,
+  with a link to switch chain when that chain's node is configured.
+- Another chain's node that the app finds on this Mac starts Disabled, as in Carbide. A
+  transfer trace into that chain needs the node enabled in Sources.
+- Reverse references include only transactions in Carbide's cache or opened in this run.
+- A chart cannot read a newer range from a block on a side branch. The node does not
+  supply it.
+- Through a public API, charts load at approximately 10 blocks each second. Use the
+  2-hour span.
+- The local node needs the identity index (`-idindex=1`) for requests by address or
+  authority. Without it, the app says so.
+- The peer map needs location data (DB-IP City Lite and ASN Lite, CC BY 4.0). You install
+  it from the Node page. The app does not download it without your confirmation.
+- Not verified on live data, because no such data was available: a second PBaaS node for
+  the other notarization view, a block on a side branch, a tokenized identity, and a
+  mempool with transactions.
+
+Peer commands (add node, ping, disconnect, ban, clear bans) are the only requests that
+change the node. The app asks for confirmation before each one. It never creates or signs
+a transaction.
+
+## The cache
+
+Carbide's cache is an SQLite file. The default location is
+`~/Library/Caches/verus-carbide`. Settings shows its size, can clear it, and can move it
+to a folder on another disk. The cache has no total size limit. Carbide keeps each block
+and transaction that you open as evidence.
 
 ## Build and run
 
@@ -79,20 +134,22 @@ To work on the Swift code in Xcode, run `./build.sh bridge` once, then open
 
 ## Connecting
 
-The app reads the daemon's RPC settings from the standard macOS location,
-`~/Library/Application Support/Komodo/VRSC/VRSC.conf` (PBaaS chains under
-`~/Library/Application Support/Verus/pbaas`). Another file can be chosen in
-Settings.
+The app reads the node's RPC settings from the standard macOS location,
+`~/Library/Application Support/Komodo/VRSC/VRSC.conf` (PBaaS chains below
+`~/Library/Application Support/Verus/pbaas`). You can select a different file in Settings.
 
-If no daemon is running, Settings can allow a public JSON-RPC API as a fallback.
-This is off by default: when it is on, the things you look up are sent to that
-server.
+Sources lists each node and public API from Carbide's settings file
+(`~/Library/Application Support/verus-explorer-tui/config.toml`, which the terminal app
+also reads) and from the standard macOS locations. Save writes the states to that file.
+
+A Mac with no node can allow one public API without a question, in Settings. The
+operator of that API can then see the addresses and identities that you open.
 
 ## How it is put together
 
 ```
-src/desktop_bridge.rs      Crate root for the bridge: Carbide's modules minus the terminal UI
-macos/bridge/              Rust crate with the Swift-facing API (src/ffi.rs) and its tests
+src/desktop_bridge.rs      Crate root for the bridge: Carbide's modules without the terminal UI
+macos/bridge/              Rust crate with the Swift-facing API (src/ffi.rs, src/ffi_<area>.rs) and its tests
 macos/Sources/CarbideCore  Swift bindings generated by UniFFI (not checked in)
 macos/Sources/CarbideSilica  The SwiftUI app
 ```
@@ -115,8 +172,11 @@ Two things need attention when pulling from upstream:
 cargo test --manifest-path bridge/Cargo.toml --lib ffi::
 ```
 
-A live smoke test runs the lookups against a real JSON-RPC endpoint:
+The live tests send requests to a real node. They use their own cache folder.
 
 ```sh
-CARBIDE_TEST_API=https://api.verus.services cargo test --manifest-path bridge/Cargo.toml --lib live -- --ignored --nocapture
+CARBIDE_TEST_CONF=<path to the node's .conf> CARBIDE_TEST_API=https://api.verus.services \
+  cargo test --manifest-path bridge/Cargo.toml --lib ffi:: -- --ignored --test-threads=1
 ```
+
+`CONVENTIONS.md` has the rules for the architecture, the tests, the text and the layout.
