@@ -51,16 +51,25 @@ struct LoadView<Value: Sendable, Content: View>: View {
 
 /// A scrolling page with a consistent content width and spacing.
 struct Page<Content: View>: View {
+    /// False for a page that has its own keys, such as the charts.
+    var keys = true
     @ViewBuilder let content: Content
 
+    @State private var cursor = PageCursor()
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                content
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    content
+                }
+                .padding(24)
+                .frame(maxWidth: 1100, alignment: .leading)
+                .overlayPreferenceValue(StopMarksKey.self) { StopCollector(marks: $0, cursor: cursor) }
+                .frame(maxWidth: .infinity)
             }
-            .padding(24)
-            .frame(maxWidth: 1100, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .modifier(CursorHost(cursor: cursor, proxy: proxy))
+            .onAppear { cursor.enabled = keys }
         }
     }
 }
@@ -93,6 +102,7 @@ struct Card<Content: View>: View {
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .environment(\.stopGroup, title)
     }
 }
 
@@ -181,6 +191,7 @@ struct FieldRow: View {
                         .buttonStyle(.link)
                         .lineLimit(1)
                         .help(value)
+                        .cursorStop(token: "\(route)", copy: value) { model.open(route) }
                     Text(Format.short(value, head: 6, tail: 4))
                         .font(.caption.monospaced())
                         .foregroundStyle(.tertiary)
@@ -190,6 +201,7 @@ struct FieldRow: View {
                         .font(monospaced ? .body.monospaced() : .body)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .cursorStop(token: "\(route)", copy: value) { model.open(route) }
                 }
             } else {
                 Text(value)
@@ -258,20 +270,23 @@ struct RouteLink: View {
     }
 
     var body: some View {
-        if showsNames, let name = model.names[text] {
-            Button(isCurrency && name.hasSuffix("@") ? String(name.dropLast()) : name) {
-                model.open(route)
-            }
-            .buttonStyle(.link)
-            .lineLimit(1)
-            .help(text)
-        } else {
-            Button(shorten ? Format.short(text) : text) { model.open(route) }
+        Group {
+            if showsNames, let name = model.names[text] {
+                Button(isCurrency && name.hasSuffix("@") ? String(name.dropLast()) : name) {
+                    model.open(route)
+                }
                 .buttonStyle(.link)
-                .font(.body.monospaced())
                 .lineLimit(1)
                 .help(text)
+            } else {
+                Button(shorten ? Format.short(text) : text) { model.open(route) }
+                    .buttonStyle(.link)
+                    .font(.body.monospaced())
+                    .lineLimit(1)
+                    .help(text)
+            }
         }
+        .cursorStop(token: "\(route)", copy: text) { model.open(route) }
     }
 }
 

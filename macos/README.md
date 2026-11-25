@@ -122,6 +122,11 @@ figures and the raw JSON one step away.
 
 - View > Show Names for IDs, Show Dates for Heights and Show Times in UTC. The same
   settings are in Settings.
+- The keys of the terminal work in the main window when no text field is in use.
+  Each page has a cursor: j and k (or the arrow keys) move it through the rows and the
+  links of the page, Return opens, Esc goes back. One letter goes to a place (d m o c),
+  n and p step to the next and previous block in place, and F8 and F4 start on the
+  output under the cursor. `design/power-user-review.html` has the review behind this.
 - A menu command and a shortcut for each function. Help > Keyboard Shortcuts lists them
   beside the terminal keys, with the cache location and size.
 - A path bar shows how you reached the open page. Back and Forward move through it.

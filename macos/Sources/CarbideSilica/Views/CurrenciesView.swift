@@ -40,6 +40,14 @@ struct CurrenciesView: View {
                                     browser.selected = row.currencyId
                                     model.open(.currency(name: row.currencyId))
                                 }
+                                .modifier(
+                                    CursorStopModifier(
+                                        id: row.currencyId, token: row.currencyId, copy: row.currencyId, tags: false
+                                    ) {
+                                        browser.selected = row.currencyId
+                                        model.open(.currency(name: row.currencyId))
+                                    }
+                                )
                                 .id(row.currencyId)
                             }
                         }
@@ -61,6 +69,7 @@ struct CurrenciesView: View {
         }
         .navigationTitle("Currencies")
         .task(id: model.generation) { await load(force: false) }
+        .publishPlace(PlaceActions(refresh: { Task { await load(force: true) } }))
         .task(id: FilterKey(rows: browser.rows.count, filter: browser.filter)) { apply() }
     }
 

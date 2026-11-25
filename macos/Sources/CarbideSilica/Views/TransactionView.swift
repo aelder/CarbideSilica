@@ -14,6 +14,7 @@ struct TransactionView: View {
     @Environment(AppModel.self) private var model
     @AppStorage(DisplayKey.showsNames) private var showsNamesSetting = true
     @AppStorage(DisplayKey.showsDates) private var showsDatesSetting = false
+    @Environment(ShellState.self) private var shell
     @State private var reloads = 0
     /// Requests to start an investigation card, by card ID. Each request increments.
     @State private var starts: [String: Int] = [:]
@@ -38,7 +39,9 @@ struct TransactionView: View {
                         scrollTarget = nil
                     }
             }
-            .focusedSceneValue(\.investigations, investigations(transaction))
+            .publishInvestigations(investigations(transaction))
+            // The terminal's key for the block of a transaction.
+            .publishKeys(transaction.blockHash.map { hash in ["b": { model.open(.block(id: hash)) }] } ?? [:])
             .task(id: transaction.txid) {
                 marked = nil
                 consumePendingTrace(transaction)
@@ -48,7 +51,7 @@ struct TransactionView: View {
                 await loadPayments(transaction)
             }
         }
-        .focusedSceneValue(\.placeActions, PlaceActions(refresh: { reloads += 1 }))
+        .publishPlace(PlaceActions(refresh: { reloads += 1 }))
         .navigationTitle("Transaction")
     }
 
@@ -121,6 +124,7 @@ struct TransactionView: View {
                         OutputRow(
                             output: output, txid: transaction.txid,
                             paymentAnnotation: paymentAnnotations[output.index])
+                            .environment(\.stopContext, "output-\(output.index)")
                             .background(mark(marked?.outputs.contains(output.index) == true))
                             .id("output-\(output.index)")
                     }
@@ -144,15 +148,30 @@ struct TransactionView: View {
     /// The menu's investigation commands: each scrolls to its card and starts it.
     private func investigations(_ transaction: TransactionDetail) -> InvestigationActions {
         InvestigationActions(
-            followTransfer: transaction.traceRoots.first.map { root in
-                { start("trace-\(root.output)") }
+            // The output under the cursor, when it has the function. If not, the first that has.
+            followTransfer: transaction.traceRoots.first.map { first in
+                {
+                    let chosen = cursorOutput()
+                    let root = transaction.traceRoots.first { $0.output == chosen } ?? first
+                    start("trace-\(root.output)")
+                }
             },
-            witnesses: transaction.witnessRoots.first.map { root in
-                { start("witness-\(root.output)") }
+            witnesses: transaction.witnessRoots.first.map { first in
+                {
+                    let chosen = cursorOutput()
+                    let root = transaction.witnessRoots.first { $0.output == chosen } ?? first
+                    start("witness-\(root.output)")
+                }
             },
             protocolLinks: { scrollTarget = "links" },
             inclusions: transaction.height == nil ? nil : { scrollTarget = "inclusions" }
         )
+    }
+
+    /// The output that the cursor of the page is in.
+    private func cursorOutput() -> UInt32? {
+        guard let context = shell.cursor?.selected?.context, context.hasPrefix("output-") else { return nil }
+        return UInt32(context.dropFirst("output-".count))
     }
 
     private func start(_ card: String) {

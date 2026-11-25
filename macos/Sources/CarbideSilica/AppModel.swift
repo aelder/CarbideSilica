@@ -505,6 +505,16 @@ final class AppModel {
         remember(route)
     }
 
+    /// Replaces the open page with its neighbour, such as the next block. Back then goes
+    /// to the page before the first of them, as in the terminal.
+    func step(to route: Route) {
+        if path.isEmpty {
+            path.append(route)
+        } else {
+            path[path.count - 1] = route
+        }
+    }
+
     func requireExplorer() throws -> Explorer {
         guard let explorer else {
             throw CarbideError.Failed(message: statusError ?? "Not connected.")

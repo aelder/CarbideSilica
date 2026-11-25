@@ -22,7 +22,7 @@ struct ChartsView: View {
     }
 
     var body: some View {
-        Page {
+        Page(keys: false) {
             Card("Charts", trailing: state.rangeLabel) {
                 controls
                 if state.viaAPI {
@@ -52,7 +52,7 @@ struct ChartsView: View {
         .onChange(of: state.page != nil) { _, shown in
             if shown { plotFocused = true }
         }
-        .focusedSceneValue(\.placeActions, PlaceActions(refresh: { state.refresh() }))
+        .publishPlace(PlaceActions(refresh: { state.refresh() }))
         .onChange(of: model.generation) {
             state.reconnected(viaAPI: model.status?.source == .publicApi)
         }

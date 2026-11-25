@@ -46,6 +46,7 @@ struct SourcesView: View {
             }
         }
         .navigationTitle("Sources")
+        .publishPlace(PlaceActions(refresh: { reload() }))
         .task(id: model.generation) {
             // The rows hold the session's state, read in memory. Refresh them while visible.
             while !Task.isCancelled {
@@ -181,6 +182,7 @@ private struct SourceTable: View {
                 )
                 .contentShape(Rectangle())
                 .onTapGesture { selectedKey = row.key }
+                .cursorStop(token: row.key) { selectedKey = row.key }
             }
         }
     }

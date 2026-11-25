@@ -76,14 +76,44 @@ struct KeyboardReference: View {
             ]
         ),
         (
-            "Lists and pages",
+            "The cursor of a page",
             [
-                Entry(keys: "↑ ↓", action: "Select in a list", terminal: "j, k"),
-                Entry(keys: "Return", action: "Open the selection", terminal: "Enter, l, Right"),
-                Entry(keys: "Tab, ⇧Tab", action: "Dashboard: switch between recent blocks and recent transactions. Elsewhere: move between controls.", terminal: "Tab, Shift-Tab"),
-                Entry(keys: "Home, End", action: "Select the first or last row of a list", terminal: "Home, End"),
-                Entry(keys: "⌘C", action: "Copy the selection", terminal: "y"),
-                Entry(keys: "⌘/", action: "This window", terminal: "F1, ?"),
+                Entry(keys: "j k, ↑ ↓", action: "Move the cursor through the rows and the links of the page. No click is necessary first.", terminal: "j, k"),
+                Entry(keys: "Return, l, →", action: "Open the row or the link under the cursor", terminal: "Enter, l, Right"),
+                Entry(keys: "Esc", action: "Go back one page. At a place in the sidebar, go to the dashboard.", terminal: "Esc"),
+                Entry(keys: "h, ←, Delete", action: "Go back one page", terminal: "h, Left, Backspace"),
+                Entry(keys: "Tab, ⇧Tab", action: "Go to the first row or link of the next card, or of the card before", terminal: "Tab on the dashboard"),
+                Entry(keys: "Page Up, Page Down", action: "Move the cursor 10 places", terminal: "PgUp, PgDn"),
+                Entry(keys: "Home, End", action: "Go to the first or the last row or link of the page", terminal: "Home, End"),
+                Entry(keys: "y", action: "Copy the full value under the cursor", terminal: "y in JSON"),
+            ]
+        ),
+        (
+            "The keys of the terminal",
+            [
+                Entry(keys: "d m o c `", action: "Dashboard, mempool, marketplace, currencies, node and peers", terminal: "d m o c `"),
+                Entry(keys: "F2 F6 F9", action: "Sources, bookmarks, charts", terminal: "F2 F6 F9"),
+                Entry(keys: "/", action: "Search", terminal: "/"),
+                Entry(keys: "n or ], p or [", action: "Next or previous block or identity version, in place", terminal: "n ] p ["),
+                Entry(keys: "r, F5", action: "Read the page again", terminal: "r, F5"),
+                Entry(keys: "b", action: "Transaction: open its block", terminal: "b"),
+                Entry(keys: "a", action: "Block on a side branch: open the active block at that height", terminal: "a"),
+                Entry(keys: "g", action: "Currency: go to the state at a chosen block and type there", terminal: "g"),
+                Entry(keys: "n", action: "Currency: go to the notarizations", terminal: "n"),
+                Entry(keys: "v", action: "Identity: shared keys and authorities", terminal: "v"),
+                Entry(keys: "F8, F4", action: "Transaction: follow a transfer, or find the signers, for the output under the cursor", terminal: "F8, F4"),
+                Entry(keys: "F3, F7", action: "Transaction: protocol links, block history", terminal: "F3, F7"),
+                Entry(keys: "F10", action: "Estimate a future block or date", terminal: "F10"),
+                Entry(keys: "⇧B, ⇧I, ⇧D", action: "Bookmark this page, names or IDs, dates or heights", terminal: "Shift-B, Shift-I, Shift-D"),
+                Entry(keys: "?, F1", action: "This window", terminal: "?, F1"),
+            ]
+        ),
+        (
+            "Where the keys do not apply",
+            [
+                Entry(keys: "In a text field", action: "The keys type text. Esc leaves the search field.", terminal: "the same"),
+                Entry(keys: "In a dialog", action: "Return and Esc answer the dialog", terminal: "the same"),
+                Entry(keys: "Charts", action: "The charts have their own keys. The line below the charts lists them.", terminal: "the same keys"),
                 Entry(keys: "⌘Q", action: "Quit", terminal: "q"),
             ]
         ),

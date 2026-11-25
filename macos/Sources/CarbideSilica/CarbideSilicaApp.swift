@@ -47,6 +47,7 @@ struct RootView: View {
     @State private var estimating = false
     @State private var estimateText = ""
     @State private var showsArgumentProblem = Launch.arguments.problem != nil
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var model = model
@@ -77,6 +78,11 @@ struct RootView: View {
                         .safeAreaInset(edge: .top, spacing: 0) { Breadcrumb() }
                 }
             }
+        }
+        .background(MainWindowReader())
+        .onAppear {
+            KeyLayer.shared.install(model: model, shell: shell)
+            KeyLayer.shared.showKeys = { openWindow(id: KeyboardReference.windowID) }
         }
         .alert("Start-up arguments", isPresented: $showsArgumentProblem) {
             Button("OK", role: .cancel) {}

@@ -5,11 +5,13 @@ import SwiftUI
 struct EstimateView: View {
     /// An estimator target: a height, or `unix:` and seconds.
     let query: String
+    @State private var reloads = 0
 
     var body: some View {
         Page {
-            BlockEstimator(query: query).id(query)
+            BlockEstimator(query: query).id("\(query)|\(reloads)")
         }
         .navigationTitle("Estimate")
+        .publishPlace(PlaceActions(refresh: { reloads += 1 }))
     }
 }

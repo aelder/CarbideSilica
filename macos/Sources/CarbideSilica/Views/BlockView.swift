@@ -22,14 +22,17 @@ struct BlockView: View {
             try await explorer.block(id: id)
         } content: { block in
             page(block)
-                .focusedSceneValue(
-                    \.adjacentObjects,
-                    AdjacentObjects(
+                .publishKeys(
+                    // The terminal's key for the active block at this height.
+                    block.onActiveChain || block.activeHash == nil
+                        ? [:] : ["a": { if let active = block.activeHash { model.open(.block(id: active)) } }]
+                )
+                .publishAdjacent(AdjacentObjects(
                         noun: "Block",
-                        previous: block.previousHash.map { hash in { model.open(.block(id: hash)) } },
-                        next: block.nextHash.map { hash in { model.open(.block(id: hash)) } }))
+                        previous: block.previousHash.map { hash in { model.step(to: .block(id: hash)) } },
+                        next: block.nextHash.map { hash in { model.step(to: .block(id: hash)) } }))
         }
-        .focusedSceneValue(\.placeActions, PlaceActions(refresh: { reloads += 1 }))
+        .publishPlace(PlaceActions(refresh: { reloads += 1 }))
         .navigationTitle("Block")
     }
 
@@ -53,13 +56,13 @@ struct BlockView: View {
                     }
                     .help("Open Charts at this block.")
                     Button {
-                        if let hash = block.previousHash { model.open(.block(id: hash)) }
+                        if let hash = block.previousHash { model.step(to: .block(id: hash)) }
                     } label: {
                         Label("Previous", systemImage: "chevron.left")
                     }
                     .disabled(block.previousHash == nil)
                     Button {
-                        if let hash = block.nextHash { model.open(.block(id: hash)) }
+                        if let hash = block.nextHash { model.step(to: .block(id: hash)) }
                     } label: {
                         Label("Next", systemImage: "chevron.right")
                     }

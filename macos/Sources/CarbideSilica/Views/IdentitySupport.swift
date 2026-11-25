@@ -19,21 +19,24 @@ struct IDLink: View {
     }
 
     var body: some View {
-        if showsNames, let name = model.names[id] {
-            Button(isCurrency && name.hasSuffix("@") ? String(name.dropLast()) : name) {
-                model.open(route)
-            }
-            .buttonStyle(.link)
-            .lineLimit(1)
-            .help(id)
-        } else {
-            Button(shorten ? Format.short(id) : id) { model.open(route) }
+        Group {
+            if showsNames, let name = model.names[id] {
+                Button(isCurrency && name.hasSuffix("@") ? String(name.dropLast()) : name) {
+                    model.open(route)
+                }
                 .buttonStyle(.link)
-                .font(.body.monospaced())
                 .lineLimit(1)
-                .truncationMode(.middle)
                 .help(id)
+            } else {
+                Button(shorten ? Format.short(id) : id) { model.open(route) }
+                    .buttonStyle(.link)
+                    .font(.body.monospaced())
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(id)
+            }
         }
+        .cursorStop(token: "\(route)", copy: id) { model.open(route) }
     }
 }
 

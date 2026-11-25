@@ -31,6 +31,33 @@ final class ShellState {
 
     func clearForward() { forward.removeAll() }
 
+    /// The cursors of the pages that are open, the visible page last.
+    @ObservationIgnored private var cursors: [PageCursor] = []
+    var cursor: PageCursor? { cursors.last }
+
+    func appeared(_ cursor: PageCursor) {
+        cursors.removeAll { $0 === cursor }
+        cursors.append(cursor)
+    }
+
+    func disappeared(_ cursor: PageCursor) {
+        cursors.removeAll { $0 === cursor }
+    }
+
+    /// Goes back one page. At a place in the sidebar, goes to the dashboard, as Esc does
+    /// in the terminal. Returns false when there is no page to go back to.
+    @discardableResult
+    func goBack(_ model: AppModel) -> Bool {
+        if !model.path.isEmpty {
+            _ = model.path.popLast()
+        } else if model.sidebar != .dashboard {
+            model.show(.dashboard)
+        } else {
+            return false
+        }
+        return true
+    }
+
     func goForward(_ model: AppModel) {
         guard let next = forward.last else { return }
         model.path.append(next)
@@ -41,7 +68,7 @@ final class ShellState {
 
 /// The previous and next object of the same kind, such as the block before this block or the
 /// identity version before this one. A view publishes it with
-/// `.focusedSceneValue(\.adjacentObjects, AdjacentObjects(previous: …, next: …))`.
+/// `.publishAdjacent(AdjacentObjects(previous: …, next: …))`.
 struct AdjacentObjects {
     var noun: String
     var previous: (() -> Void)?
@@ -133,7 +160,7 @@ struct ShellCommands: Commands {
                     .keyboardShortcut(place.key, modifiers: .command)
             }
             Divider()
-            Button("Back") { goBack() }
+            Button("Back") { shell.goBack(model) }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(model.path.isEmpty && model.sidebar == .dashboard)
             Button("Forward") { shell.goForward(model) }
@@ -212,15 +239,6 @@ struct ShellCommands: Commands {
         if let adjacent { return (next ? adjacent.next : adjacent.previous) != nil }
         if case .block? = model.path.last { return true }
         return false
-    }
-
-    /// At a place in the sidebar, Back returns to the dashboard, as Esc does in the terminal.
-    private func goBack() {
-        if model.path.isEmpty {
-            model.show(.dashboard)
-        } else {
-            _ = model.path.popLast()
-        }
     }
 
     private func previous() {

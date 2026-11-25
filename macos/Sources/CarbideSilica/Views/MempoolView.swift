@@ -50,9 +50,7 @@ struct MempoolView: View {
             }
         }
         .navigationTitle("Mempool")
-        .focusedSceneValue(
-            \.placeActions,
-            PlaceActions(refresh: { Task { await feed.refresh(model) } }, mempoolAsList: $showsList))
+        .publishPlace(PlaceActions(refresh: { Task { await feed.refresh(model) } }, mempoolAsList: $showsList))
         .task(id: model.generation) {
             while !Task.isCancelled {
                 await feed.refresh(model)
@@ -358,7 +356,6 @@ private struct MempoolList: View {
                 }
             }
         }
-        .keyboardRows(rows.map(\.txid), selection: $feed.selection, proxy: proxy, open: open)
         Text("\"Unconfirmed parents\" is the number of mempool transactions that this transaction spends from. "
             + "\"Classification pending\" means that the app has not loaded the transaction yet.")
             .font(.caption)
@@ -600,6 +597,9 @@ private struct WaitingRoom: View {
                 }
                 .buttonStyle(.plain)
                 .help("Open this transaction.")
+                .cursorStop(token: row.entry.txid, copy: row.entry.txid) {
+                    model.open(.transaction(txid: row.entry.txid))
+                }
             }
         }
     }

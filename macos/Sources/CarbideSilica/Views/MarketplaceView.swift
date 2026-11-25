@@ -78,7 +78,7 @@ struct MarketplaceView: View {
             await load()
             await loadDetails(force: false)
         }
-        .focusedSceneValue(\.placeActions, PlaceActions(refresh: { Task { await load() } }))
+        .publishPlace(PlaceActions(refresh: { Task { await load() } }))
     }
 
     private struct ListKey: Equatable {
@@ -834,6 +834,7 @@ private struct OfferLine: View {
                     }
                     .buttonStyle(.plain)
                     .help(offer.subjectId ?? offer.txid)
+                    .cursorStop(token: offer.txid, copy: offer.subjectId ?? offer.txid) { open() }
                     if offer.kind != .identityForSale {
                         Text(item.kindLabel)
                             .font(.caption.weight(.semibold))

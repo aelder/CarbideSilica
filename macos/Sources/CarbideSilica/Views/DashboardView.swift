@@ -52,9 +52,7 @@ struct DashboardView: View {
             }
         }
         .navigationTitle("Carbide Silica")
-        .focusedSceneValue(
-            \.placeActions,
-            PlaceActions(
+        .publishPlace(PlaceActions(
                 refresh: { Task { await model.refresh() } },
                 streamBlocks: $streaming))
         .task(id: model.generation) {
@@ -84,11 +82,6 @@ struct DashboardView: View {
             loadingOlder: feed.loadingOlder, olderError: feed.olderError,
             loadOlder: { Task { await feed.loadOlder(model) } }
         )
-        .keyboardRows(blocks.map(\.hash), selection: $feed.selectedBlock, proxy: proxy) {
-            model.open(.block(id: $0))
-        }
-        .focused($focus, equals: .blocks)
-        .onKeyPress(.tab) { switchList() }
     }
 
     private func transactionList(_ proxy: ScrollViewProxy) -> some View {
@@ -97,12 +90,6 @@ struct DashboardView: View {
             rows: feed.transactions, loading: feed.loading, failure: feed.failure,
             selection: $feed.selectedTransaction, shown: $feed.transactionsShown
         )
-        .keyboardRows(
-            feed.transactions.prefix(feed.transactionsShown).map(\.txid),
-            selection: $feed.selectedTransaction, proxy: proxy
-        ) { model.open(.transaction(txid: $0)) }
-        .focused($focus, equals: .transactions)
-        .onKeyPress(.tab) { switchList() }
     }
 
     /// Tab and Shift-Tab switch between the two lists, as in the terminal.

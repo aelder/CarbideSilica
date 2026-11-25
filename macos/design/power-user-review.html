@@ -1,0 +1,150 @@
+<title>Power User Review</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column. What makes the terminal fast, then each goal in the terminal and in the app, then the changes. */
+:root {
+  --bg: #f5f7f8; --surface: #ffffff; --line: #d9e0e4; --fg: #15212b; --muted: #5b6b78;
+  --accent: #0d6b82; --accent-soft: #dcedf2;
+  --mined: #b4690f; --staked: #7448b0; --warn: #b3372f; --ok: #2f7d4f;
+  --display: "Space Grotesk", "Avenir Next", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10171d; --surface: #18222a; --line: #2b3944; --fg: #e6edf1; --muted: #93a4b0;
+  --accent: #5cc0d8; --accent-soft: #173640;
+  --mined: #e8a95a; --staked: #b99be8; --warn: #f08a80; --ok: #6fcf94; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 34px; letter-spacing: -0.01em; } h2 { font-size: 24px; } h3 { font-size: 16px; }
+p { margin: 0; max-width: 70ch; }
+a { color: var(--accent); }
+.lede { font-size: 17px; color: var(--muted); }
+.note { color: var(--muted); font-size: 13.5px; }
+.figures { display: flex; flex-wrap: wrap; gap: 14px 34px; font-variant-numeric: tabular-nums; }
+.figures div { display: flex; flex-direction: column; min-width: 0; }
+.figures b { font-family: var(--display); font-size: 26px; font-weight: 600; line-height: 1.15; }
+.figures span { font-size: 13px; color: var(--muted); max-width: 26ch; }
+figure { margin: 0; }
+.plot { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.plot .scroll { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 560px; height: auto; color: var(--fg); font-family: var(--body); }
+.plot figcaption { font-size: 13.5px; color: var(--muted); max-width: 86ch; }
+.plot .tag { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 36px; }
+.fields div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fields p { font-size: 14px; }
+.fields .take { color: var(--muted); }
+ol.steps, ul.plain { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; max-width: 74ch; }
+.src { font-size: 13.5px; columns: 2 320px; column-gap: 36px; padding-left: 18px; margin: 0; }
+.src li { break-inside: avoid; margin-bottom: 6px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 14px; min-width: 640px; width: 100%; }
+th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
+
+.v { display:inline-block; font-size:12px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid var(--line); }
+.v.b { color: var(--accent); border-color: var(--accent); }
+.v.s, .v.m { color: var(--warn); border-color: var(--warn); }
+.v.x { color: var(--bg); background: var(--warn); border-color: var(--warn); }
+.v.e { color: var(--muted); }
+tr.grp td { font-family: var(--head, inherit); font-weight:600; font-size:15px; padding-top:22px; border-bottom:2px solid var(--line); }
+.nt { font-size:12.5px; color: var(--muted); margin-top:3px; }
+td:nth-child(2) { font-family: var(--mono, ui-monospace, monospace); font-size:12.5px; }
+</style>
+<main>
+<section>
+  <h1>Power User Review</h1>
+  <p class="lede">What a person can do quickly in the VerusCarbide terminal interface, and how quickly the same person can do it in Carbide Silica today. Three reviews read the source of the two programs. The claims that the recommendation rests on were checked again in the code.</p>
+  <p>The short answer: the app has all but three of the functions, and it shows the results better. But a terminal user who sits down at the app loses the thing that made the terminal fast. In the terminal, each deep function is one key from the object, each list moves with j and k, and Esc goes back. In the app, most deep functions need the mouse and a scroll down a long page.</p>
+</section>
+<section>
+  <h2>The count</h2>
+  <div class="figures"><div><b>9</b><span>goals are better in the app</span></div><div><b>15</b><span>are the same</span></div><div><b>20</b><span>are slower in the app</span></div><div><b>11</b><span>need the mouse in the app</span></div><div><b>3</b><span>are not possible in the app</span></div></div>
+  <p>58 goals. The list has each goal that the reviews found, with functions that are near each other joined.</p>
+</section>
+<section>
+  <h2>What makes the terminal fast</h2>
+  <ul class="plain">
+    <li><b>One key for each place.</b> d, m, o, c, F9, F6, the backtick and F2. No key needs a modifier.</li>
+    <li><b>One key from an object to its deep function.</b> F8 follows a transfer, F4 finds signers, F7 shows branches, n opens notarizations, g asks for a past state, v asks for the historical window.</li>
+    <li><b>One way to move.</b> j and k select, Enter opens, in each list and on each object. The cursor is there when the screen opens.</li>
+    <li><b>Esc always goes out.</b> It closes the panel, stops the lookup, or goes back one level. It never quits.</li>
+    <li><b>Stepping is in place.</b> n and p go to the next and previous block or version, and Back still goes to the screen before.</li>
+    <li><b>Nothing is below the screen.</b> A deep function opens as a panel on top of the object. The user does not scroll to find it.</li>
+    <li><b>Raw data is one key away.</b> Tab shows the JSON of the object, y copies the value under the cursor, s saves the file with the name of the object.</li>
+    <li><b>A different chain is not a different session.</b> Enter on a link to vDEX opens the object on vDEX, and Esc comes back.</li>
+  </ul>
+</section>
+<section>
+  <h2>Each goal, in the terminal and in the app</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Goal</th><th>Terminal</th><th>App today</th><th>Result</th></tr></thead>
+    <tbody><tr class="grp"><td colspan="4">Go to a thing</td></tr><tr><td>Open a block, transaction, address, identity or currency by typing it</td><td>/ · text · Enter</td><td>⌘F · text · Return</td><td><span class="v e">Same</span></td></tr><tr><td>Find the block nearest a date or time</td><td>/ · date · Enter</td><td>⌘F · date · Return</td><td><span class="v e">Same</span></td></tr><tr><td>Go to a place: dashboard, mempool, marketplace, currencies, charts, bookmarks, peers, sources</td><td>one key: d m o c F9 F6 ` F2</td><td>⌘1 to ⌘8</td><td><span class="v e">Same</span></td></tr><tr><td>Estimate a future block or date</td><td>F10 · text · Enter</td><td>⇧⌘E · text · Return</td><td><span class="v e">Same</span></td></tr><tr><td>Go back one level<div class="nt">The key that each terminal user presses first does not work.</div></td><td>Esc, h, Left or Backspace</td><td>⌘[ only. Esc does nothing on a page.</td><td><span class="v s">Slower</span></td></tr><tr><td>Go forward again after going back</td><td>Not possible</td><td>⌘]</td><td><span class="v b">Better</span></td></tr><tr><td>Open something that was open earlier in the session</td><td>Not possible</td><td>Recent list in the sidebar, with the mouse</td><td><span class="v b">Better</span></td></tr><tr><td>Stop a lookup that is slow</td><td>Esc</td><td>Not possible. The search field is locked until the answer comes.</td><td><span class="v x">Missing</span></td></tr><tr><td>Repeat or correct the last search<div class="nt">Both are poor.</div></td><td>Type it again</td><td>Type it again. The field keeps no history.</td><td><span class="v e">Same</span></td></tr><tr class="grp"><td colspan="4">Move through lists and step</td></tr><tr><td>Select a row with the keys and open it<div class="nt">11 lists have no keys: currencies, marketplace, bookmarks, sources, block transactions, address and identity transactions, identity history, the default mempool view, branches, notarization rows, the JSON tree.</div></td><td>j/k and Enter in each list</td><td>Arrow keys and Return in 3 lists (dashboard, mempool list, peers), and only after a click on the list. Each other list needs the mouse.</td><td><span class="v s">Slower</span></td></tr><tr><td>Step to the next or previous block<div class="nt">After 20 steps, Back needs 20 presses.</div></td><td>n / p, in place</td><td>⌥⌘] / ⌥⌘[. Each step adds one entry to the trail and to Recent.</td><td><span class="v s">Slower</span></td></tr><tr><td>Step to the next or previous version of an identity</td><td>n / p</td><td>⌥⌘] / ⌥⌘[</td><td><span class="v e">Same</span></td></tr><tr><td>Walk the inputs and outputs of a transaction and follow one</td><td>j/k to the stop · Enter</td><td>A click on the link. No keys.</td><td><span class="v m">Mouse only</span></td></tr><tr><td>Go from a transaction to its block</td><td>b</td><td>A click on the block link</td><td><span class="v m">Mouse only</span></td></tr><tr><td>Go from an output to the transaction that spends it</td><td>Not possible in general</td><td>A click on &quot;spent by&quot;</td><td><span class="v b">Better</span></td></tr><tr><td>Go from a side-branch block to the active block at that height</td><td>a</td><td>A click on the link in the warning</td><td><span class="v m">Mouse only</span></td></tr><tr><td>Follow the tip as new blocks arrive</td><td>d, with the cursor on Stream Blocks</td><td>⌥⌘S on the dashboard</td><td><span class="v e">Same</span></td></tr><tr class="grp"><td colspan="4">Investigate a transaction</td></tr><tr><td>Follow a transfer to its receipt<div class="nt">The command ignores which output the user looks at.</div></td><td>Select the output · F8 · Enter</td><td>⌃⌘T, for the first transfer of the transaction only. For a different output: scroll and click Trace.</td><td><span class="v s">Slower</span></td></tr><tr><td>Search a different import window for the transfer</td><td>g · height · Enter, or [ ] or s</td><td>Buttons and a field in the trace card</td><td><span class="v m">Mouse only</span></td></tr><tr><td>Compare the pool before and after the import<div class="nt">The app shows the result better: receipt boxes and the rate of the batch.</div></td><td>v</td><td>A link in a leg of the trace</td><td><span class="v m">Mouse only</span></td></tr><tr><td>Find the signers of a notarization</td><td>F4 · Enter</td><td>⌃⌘W, for the first notarization output only</td><td><span class="v s">Slower</span></td></tr><tr><td>See what refers to this transaction<div class="nt">To follow a link needs the mouse.</div></td><td>F3</td><td>⌃⌘L goes to the card</td><td><span class="v e">Same</span></td></tr><tr><td>See each block that held this transaction, with side branches</td><td>F7</td><td>⌃⌘B goes to the card. &quot;Check Node&quot; is a separate click.</td><td><span class="v e">Same</span></td></tr><tr><td>See the child branches of a block</td><td>F7 on the block</td><td>The &quot;Next blocks&quot; card on the block page. No key.</td><td><span class="v m">Mouse only</span></td></tr><tr><td>Read the bytes of an OP_RETURN output</td><td>j to the link · Enter</td><td>A click on &quot;View N bytes&quot;</td><td><span class="v m">Mouse only</span></td></tr><tr><td>See what a transaction did, by party</td><td>Read each input and output</td><td>The statement at the top of the page</td><td><span class="v b">Better</span></td></tr><tr class="grp"><td colspan="4">Investigate an identity or a currency</td></tr><tr><td>Find identities that shared an authority or an address in a past window</td><td>v · edit the height · Enter</td><td>⌃⌘A runs it at the tip and does not show the result. The height field is at the bottom of a long card.</td><td><span class="v s">Slower</span></td></tr><tr><td>See who holds each power of an identity, and how that changed</td><td>Step through versions and read the text</td><td>The control card and the history lanes</td><td><span class="v b">Better</span></td></tr><tr><td>Find the holder of a tokenized identity</td><td>Select the row · Enter, again for each 16 hops</td><td>Starts without a command</td><td><span class="v b">Better</span></td></tr><tr><td>Go between an identity and its currency</td><td>c</td><td>A click on the link</td><td><span class="v m">Mouse only</span></td></tr><tr><td>Read the state of a currency at a past block or date<div class="nt">The currency page has no keys at all.</div></td><td>g · text · Enter</td><td>Scroll to &quot;State at a chosen block&quot;, click the field, type, Return</td><td><span class="v s">Slower</span></td></tr><tr><td>List imports and exports near a block</td><td>a, w, [ ]</td><td>Buttons that appear after a state is shown</td><td><span class="v s">Slower</span></td></tr><tr><td>Open the transfers inside one export and follow one</td><td>Select the row · F8 · select · Enter</td><td>Inspect Source Export · Follow Transfer, with the mouse, low on the page</td><td><span class="v s">Slower</span></td></tr><tr><td>Open the notarizations of a currency<div class="nt">The app shows the result better: state, rhythm and graph.</div></td><td>n</td><td>Scroll to the last card of the page</td><td><span class="v s">Slower</span></td></tr><tr><td>See the notarizations from the other chain&#x27;s side</td><td>Tab</td><td>A click on the perspective control</td><td><span class="v m">Mouse only</span></td></tr><tr><td>Open the block of a proof root on the other chain</td><td>b</td><td>Not possible. The hash is text, and the app offers a chain switch.</td><td><span class="v x">Missing</span></td></tr><tr><td>Open an object of a different chain and come back<div class="nt">This is the largest loss of function.</div></td><td>Enter on the link, then Esc. The current chain does not change.</td><td>Not possible in place. The app shows text and &quot;Switch Chain&quot;, which clears the trail.</td><td><span class="v x">Missing</span></td></tr><tr><td>Filter the currency list by text, flags or launch state</td><td>f · text, or Shift-F and keys</td><td>A click in the filter field, and buttons</td><td><span class="v s">Slower</span></td></tr><tr><td>Read the page again<div class="nt">A fault, not a design choice.</div></td><td>F5 or r</td><td>⌘R, but it does nothing on Currency, Currencies, Bookmarks, Sources and Estimate</td><td><span class="v s">Slower</span></td></tr><tr class="grp"><td colspan="4">Raw data and copy</td></tr><tr><td>See the raw JSON of the open object</td><td>Tab</td><td>Scroll to the bottom of the page and open the disclosure</td><td><span class="v s">Slower</span></td></tr><tr><td>Copy one value from the JSON</td><td>Move to it · y</td><td>Right-click the row · Copy Value</td><td><span class="v m">Mouse only</span></td></tr><tr><td>Copy a value that the page shows</td><td>A click on it</td><td>A copy button on each field row. Links (addresses, transaction IDs in lists) have none.</td><td><span class="v s">Slower</span></td></tr><tr><td>Save the JSON to a file</td><td>s · Enter. The name has the object in it.</td><td>Save… The name is always carbide.json.</td><td><span class="v s">Slower</span></td></tr><tr><td>Follow an ID inside the JSON</td><td>Enter on it, if it is in the cache</td><td>Right-click · Open</td><td><span class="v m">Mouse only</span></td></tr><tr><td>Show names or IDs, dates or heights, UTC or local time<div class="nt">⌥⌘D is also the system key that hides the Dock. Not tested.</div></td><td>Shift-I, Shift-D, F1 t</td><td>⇧⌘I, ⌥⌘D, ⌥⌘U</td><td><span class="v e">Same</span></td></tr><tr><td>Move in the charts: older, newer, span, seek, open the block<div class="nt">The keys stop after a click on a control, until a click on the plot.</div></td><td>j/k, -/+, [ ], g, Enter, and 1 to 5 for the chart</td><td>The same keys. All five charts show at one time.</td><td><span class="v b">Better</span></td></tr><tr class="grp"><td colspan="4">Manage</td></tr><tr><td>Bookmark the open object</td><td>Shift-B · Enter</td><td>⌘D · Return</td><td><span class="v e">Same</span></td></tr><tr><td>Open, edit or remove a bookmark</td><td>F6 · j/k · Enter, e or x</td><td>⌘6, then the mouse for each row</td><td><span class="v s">Slower</span></td></tr><tr><td>Bookmark a notarization view</td><td>F6 · n · type the target and the system ID</td><td>&quot;Bookmark This View&quot; in the notarization card</td><td><span class="v b">Better</span></td></tr><tr><td>Add a node</td><td>` · a · address · Enter</td><td>⌥⌘N · address · Return</td><td><span class="v b">Better</span></td></tr><tr><td>Ping all peers</td><td>` · p</td><td>⌥⌘P on the Node page</td><td><span class="v e">Same</span></td></tr><tr><td>Disconnect or ban a peer</td><td>` · j/k · Enter · x or b · y</td><td>Select the peer · Return · click the button · confirm</td><td><span class="v s">Slower</span></td></tr><tr><td>Clear the ban list</td><td>` · c · y</td><td>Peers menu or a button. No key.</td><td><span class="v s">Slower</span></td></tr><tr><td>Turn a source on or off, monitor it, save</td><td>F2 · j/k · e, m, s</td><td>⌘8, then the mouse</td><td><span class="v s">Slower</span></td></tr><tr><td>Change the current chain</td><td>F2 · j/k · Enter</td><td>The connection menu in the toolbar, with the mouse</td><td><span class="v s">Slower</span></td></tr><tr><td>See where sources did not agree</td><td>F2 · a</td><td>On the Sources page</td><td><span class="v e">Same</span></td></tr><tr><td>Answer a request to use a public API</td><td>Enter, r or Esc</td><td>Return or Esc, and one button</td><td><span class="v e">Same</span></td></tr><tr><td>Clear the cache</td><td>F1 · c · y</td><td>⌘, · Clear Cache… · confirm</td><td><span class="v e">Same</span></td></tr></tbody>
+  </table></div>
+</section>
+<section>
+  <h2>What the app does better, and must keep</h2>
+  <ul class="plain">
+    <li>The pictures: the statement by party, the trace as receipt boxes, the identity lanes, the basket in one unit, the state and graph of notarizations, the mempool record, the peer map.</li>
+    <li>Forward, the Recent list, the breadcrumb, and "spent by" on each output.</li>
+    <li>All five charts at one time, with the terminal's keys.</li>
+    <li>Add Node in one command, and the notarization bookmark in one click.</li>
+  </ul>
+</section>
+<section>
+  <h2>Recommendation</h2>
+  <p>Give the app the terminal's keyboard, not the terminal's screens. Each change below adds a fast way and removes none of the pictures.</p>
+  <ol class="steps">
+    <li><b>Esc goes back.</b> On a page with no field in use, Esc is Back. In a sheet or a field it does what it does now.</li>
+    <li><b>One cursor on each page.</b> When a page opens, the keys are live. j/k and the arrow keys move a cursor through the rows and the links of the page: the transactions of a block, the inputs and outputs of a transaction, the rows of each list. Return opens the thing under the cursor. No click is necessary first.</li>
+    <li><b>The terminal's letters, when no field is in use.</b> d m o c for places, / for search, n and p to step, b for the block, a for the active block, g for a past state or a seek, v for the historical window, r to read again, y to copy, s to save. The function keys F1 to F10 do what they do in the terminal. The ⌘ keys stay.</li>
+    <li><b>Deep functions act on the cursor.</b> Follow Transfer and Witnesses start on the output under the cursor, not on the first one. Each command goes to its card and shows the result.</li>
+    <li><b>Stepping is in place.</b> Next and previous block replace the open block. The same keys step through the transactions of a block and the rows of the notarizations.</li>
+    <li><b>A command list on ⌘K.</b> Each command of the app and each card of the open page, with its key next to it: "Outputs", "Raw JSON", "State at a chosen block", "Notarizations", "Ban this peer". Type some letters, Return. This removes the scroll, and it teaches the keys.</li>
+    <li><b>Raw JSON is a mode.</b> Tab changes the page between the overview and its JSON. In the JSON, the cursor moves through rows, y copies the value, Return follows an ID, s saves with the name of the object.</li>
+    <li><b>Copy from the keyboard.</b> ⌘C copies the main value of the row under the cursor. Each link has a copy command. The byte view copies its hex.</li>
+    <li><b>Manage from the keyboard.</b> In the peer list: x disconnects, b bans. In bookmarks: e edits, x removes, n adds. In sources: e, m and s as in the terminal, and Return makes the chain current. A chain switch is also in the command list.</li>
+    <li><b>Repair what is broken.</b> ⌘R reads each page again. Search keeps a history on the Up key and has a Cancel. The save name has the object in it. The shortcuts window says what is true, and Show Dates gets a key that the system does not use.</li>
+    <li><b>Open an object of a different chain in place.</b> This is the only item that needs new work in the bridge, and it needs its own study: the terminal keeps one session for each chain, and the app has one.</li>
+  </ol>
+</section>
+<section>
+  <h2>What the app must not copy</h2>
+  <ul class="plain">
+    <li><b>Panels on top of the object.</b> The terminal uses them because it has one screen of text. The app's cards on one page are better to read. The command list and the cursor give the same speed.</li>
+    <li><b>A key that changes its function.</b> In the terminal, c opens the currency list, or the currency of an identity, or the identity of a currency. In the app, c is the list, and the link has its own stop for the cursor.</li>
+    <li><b>A search field with no cursor and no history.</b></li>
+    <li><b>No way forward.</b></li>
+  </ul>
+</section>
+<section>
+  <h2>A possible order of work</h2>
+  <ol class="steps">
+    <li><b>The keyboard core.</b> Items 1 to 5 and the ⌘R repair. After this, the loop "open, look, follow, back" needs no mouse.</li>
+    <li><b>Reach and raw data.</b> Items 6 to 8 and the other repairs.</li>
+    <li><b>Manage.</b> Item 9.</li>
+    <li><b>Other chains in place.</b> Item 11, after a study.</li>
+  </ol>
+</section>
+<section>
+  <h2>Limits of this review</h2>
+  <ul class="plain">
+    <li>The reviews read the source. No person was timed, and the counts of keys are from the code.</li>
+    <li>Five claims about the app were checked a second time in the code: Esc, the focus of lists, the block step, the first-output rule, and ⌘R. The other rows are from one reading.</li>
+    <li>Three points were not tested in the running app: the ⌥⌘D key against the system, ⌘C on a selected row, and the system's Back button in the toolbar.</li>
+    <li>The terminal's keys inside the chart, witness and bookmark panels are from its reference document and its source, not from a run of the terminal.</li>
+    <li>The terminal cannot add a public API or set a ban time. The app cannot do these also. They are not in the list.</li>
+  </ul>
+</section>
+</main>

@@ -5,14 +5,16 @@ import SwiftUI
 struct CurrencyView: View {
     /// A currency name or ID.
     let name: String
+    @State private var reloads = 0
 
     var body: some View {
-        LoadView(key: "currency:\(name)") { explorer in
+        LoadView(key: "currency:\(name)|\(reloads)") { explorer in
             try await explorer.currency(name: name)
         } content: { currency in
             CurrencyPage(route: name, currency: currency)
         }
         .navigationTitle("Currency")
+        .publishPlace(PlaceActions(refresh: { reloads += 1 }))
     }
 }
 
@@ -25,6 +27,8 @@ private struct CurrencyPage: View {
     @State private var chosenHeight: UInt64?
     /// The reserve that prices and values are shown in. Nil selects the default.
     @State private var chosenUnit: String?
+    /// Incremented to put the keyboard in the field of the exact state card.
+    @State private var stateFocus = 0
     @AppStorage(DisplayKey.showsNames) private var showsNames = true
     @AppStorage(DisplayKey.showsDates) private var showsDates = false
 
@@ -36,6 +40,15 @@ private struct CurrencyPage: View {
                 .task(id: model.pendingCurrencyState) {
                     await takeRequest(proxy)
                 }
+                // The terminal's keys on a currency: g asks for a past state, n goes to
+                // the notarizations.
+                .publishKeys([
+                    "g": {
+                        stateFocus += 1
+                        withAnimation { proxy.scrollTo("exact-state", anchor: .top) }
+                    },
+                    "n": { withAnimation { proxy.scrollTo("notarizations", anchor: .top) } },
+                ])
         }
     }
 
@@ -214,10 +227,11 @@ private struct CurrencyPage: View {
                 chosenHeight = height
             }
 
-            CurrencyStateCard(currency: currency, chosenHeight: $chosenHeight)
+            CurrencyStateCard(currency: currency, chosenHeight: $chosenHeight, focusRequests: stateFocus)
                 .id("exact-state")
 
             NotarizationLanesCard(currency: currency, route: route)
+                .id("notarizations")
 
             JSONSection(json: currency.json)
         }

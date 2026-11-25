@@ -45,7 +45,7 @@ struct AddressView: View {
 
                 JSONSection(json: overview.json)
             }
-            .focusedSceneValue(\.placeActions, PlaceActions(refresh: { refreshes += 1 }))
+            .publishPlace(PlaceActions(refresh: { refreshes += 1 }))
             .task(id: overview.address) {
                 await model.resolveNames(overview.balances.map(\.currencyId))
             }

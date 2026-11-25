@@ -61,9 +61,7 @@ struct NodeView: View {
                 .environment(model)
                 .modifier(PeerCommandDialogs(commands: commands, reload: reload))
         }
-        .focusedSceneValue(
-            \.placeActions,
-            PlaceActions(
+        .publishPlace(PlaceActions(
                 refresh: { Task { await model.refreshNode(); await reload() } },
                 addNode: model.node?.peersError == nil ? { commands.startAddNode() } : nil,
                 pingAll: model.node?.peersError == nil
@@ -335,7 +333,6 @@ private struct PeersCard: View {
                         }
                     }
                 }
-                .keyboardRows(items.map(\.id), selection: $feed.selection, proxy: proxy, open: openItem)
             }
             if let error = feed.bannedError {
                 Text("The ban list is not available: \(error)").font(.callout).foregroundStyle(.secondary)

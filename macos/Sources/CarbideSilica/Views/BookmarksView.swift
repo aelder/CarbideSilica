@@ -63,6 +63,7 @@ struct BookmarksView: View {
             }
         }
         .navigationTitle("Bookmarks")
+        .publishPlace(PlaceActions(refresh: { Task { await reload() } }))
         .task(id: model.generation) {
             await reload()
             await BookmarkStartup.runOnce(model: model)
@@ -119,6 +120,7 @@ struct BookmarksView: View {
                     Text(entry.kind).font(.callout).foregroundStyle(.secondary)
                     Button(targetText(entry)) { open(entry) }
                         .buttonStyle(.link)
+                        .cursorStop(token: "\(entry.index)", copy: targetText(entry)) { open(entry) }
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .help(entry.target)

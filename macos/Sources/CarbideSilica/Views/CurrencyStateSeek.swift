@@ -11,6 +11,8 @@ import SwiftUI
 struct CurrencyStateCard: View {
     let currency: CurrencyDetail
     @Binding var chosenHeight: UInt64?
+    /// Incremented to put the keyboard in the field.
+    var focusRequests = 0
 
     @Environment(AppModel.self) private var model
     @State private var query = ""
@@ -22,6 +24,7 @@ struct CurrencyStateCard: View {
     @AppStorage(DisplayKey.showsDates) private var showsDates = false
 
     private var currencyKey: String { currency.currencyId ?? currency.name }
+    @FocusState private var fieldFocused: Bool
 
     var body: some View {
         let _ = (showsNames, showsDates)
@@ -36,6 +39,8 @@ struct CurrencyStateCard: View {
                 )
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 420)
+                .focused($fieldFocused)
+                .onChange(of: focusRequests) { fieldFocused = true }
                 .onSubmit { Task { await seek(query) } }
                 Button("Show State") { Task { await seek(query) } }
                     .disabled(loading || query.trimmingCharacters(in: .whitespaces).isEmpty)

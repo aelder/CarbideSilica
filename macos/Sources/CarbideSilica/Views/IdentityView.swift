@@ -96,15 +96,12 @@ private struct IdentityPage: View {
 
             JSONSection(json: state.json)
         }
-        .focusedSceneValue(
-            \.adjacentObjects,
-            AdjacentObjects(
+        .publishAdjacent(AdjacentObjects(
                 noun: "Version",
                 previous: viewed > 0 ? { viewed -= 1 } : nil,
                 next: isLatest ? nil : { viewed += 1 }))
-        .focusedSceneValue(
-            \.investigations, InvestigationActions(sharedAuthorities: { historicalRequests += 1 }))
-        .focusedSceneValue(\.placeActions, PlaceActions(refresh: refresh))
+        .publishInvestigations(InvestigationActions(sharedAuthorities: { historicalRequests += 1 }))
+        .publishPlace(PlaceActions(refresh: refresh))
         .task(id: "\(timeline.identityAddress)|\(model.generation)") {
             await load()
         }

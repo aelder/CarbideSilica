@@ -18,6 +18,7 @@ struct PlacePage<Content: View>: View {
 
     @State private var position = ScrollPosition(edge: .top)
     @State private var restored = false
+    @State private var cursor = PageCursor()
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -27,8 +28,10 @@ struct PlacePage<Content: View>: View {
                 }
                 .padding(24)
                 .frame(maxWidth: 1100, alignment: .leading)
+                .overlayPreferenceValue(StopMarksKey.self) { StopCollector(marks: $0, cursor: cursor) }
                 .frame(maxWidth: .infinity)
             }
+            .modifier(CursorHost(cursor: cursor, proxy: proxy))
             .scrollPosition($position)
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, offset in
                 // Until the saved position is restored, the first offsets are the top.
@@ -92,20 +95,22 @@ struct SelectableRow<Content: View>: View {
     let open: () -> Void
     @ViewBuilder let content: Content
 
+    @Environment(\.pageCursor) private var cursor
+
     var body: some View {
         content
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                selection == id ? AnyShapeStyle(Color.accentColor.opacity(0.18)) : AnyShapeStyle(.clear),
-                in: RoundedRectangle(cornerRadius: 5)
-            )
+            .modifier(CursorStopModifier(id: id, token: id, copy: id, tags: false, radius: 5, open: open))
             .contentShape(Rectangle())
             .onTapGesture(count: 2) {
-                selection = id
+                cursor?.select(id)
                 open()
             }
-            .onTapGesture { selection = id }
+            .onTapGesture { cursor?.select(id) }
+            .onChange(of: cursor?.selection) { _, now in
+                if now == id { selection = id }
+            }
             .id(id)
     }
 }
