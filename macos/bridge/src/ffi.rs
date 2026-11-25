@@ -324,9 +324,10 @@ pub struct CurrencyPoint {
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct CurrencyHistory {
     pub points: Vec<CurrencyPoint>,
-    /// For a currency of a different system: the last block of this chain that a
-    /// confirmed notarization of that system commits to. The range stops there.
-    pub limit: Option<u64>,
+    /// The seconds that the node took for one state, when a request was slow. The app
+    /// then asks for no more states, because the node answers no other request while
+    /// it finds one.
+    pub slow_seconds: Option<f64>,
     /// False when the node was slow and the app stopped before the end of the range.
     pub complete: bool,
 }
@@ -462,6 +463,8 @@ const MAX_HISTORY_SAMPLES: u32 = 200;
 /// The states of one request to the node.
 const HISTORY_CHUNK: u64 = 15;
 /// The app asks for no more states after this time.
+/// A request that takes longer than this for each state is slow.
+const HISTORY_SLOW_STATE: std::time::Duration = std::time::Duration::from_secs(2);
 const HISTORY_BUDGET: std::time::Duration = std::time::Duration::from_secs(20);
 const MAX_BLOCK_TX_BODIES: usize = 150;
 
@@ -647,28 +650,34 @@ impl Explorer {
         samples: u32,
     ) -> Outcome<CurrencyHistory> {
         let name = name.trim().trim_end_matches('@');
-        // The node finds a state after the last confirmed notarization of a different
-        // system from each block since then. That can take minutes for one state, and
-        // the node answers no other request during that time.
-        let limit = self.state_limit(name).await;
-        let to_height = limit.map_or(to_height, |limit| to_height.min(limit));
         if to_height <= from_height {
-            return match limit {
-                Some(_) => Ok(CurrencyHistory { points: Vec::new(), limit, complete: true }),
-                None => Err(fail("The range is empty.")),
-            };
+            return Err(fail("The range is empty."));
         }
         let samples = u64::from(samples.clamp(2, MAX_HISTORY_SAMPLES));
         let step = ((to_height - from_height) / (samples - 1)).max(1);
-        // Short requests in sequence: the node can answer other requests between them,
-        // and the app can stop when the node is slow.
+        // For a currency of a different system the node can take seconds for each state
+        // that it has not found before, and it answers no other request during that
+        // time. For such a currency the app asks for one state in each request. For a
+        // currency of this chain it asks for one state, then two, then four, and so on.
+        // It stops at the first request that is slow for each state. One fast answer
+        // does not show that the node is fast, because the node keeps the states that
+        // it has found.
+        let local = self.config.chain_cache_key();
+        let other_system = self
+            .settle(self.client.call_with_raw::<Value>("getcurrency", &[Value::from(name)]).await)
+            .ok()
+            .and_then(|output| output.result["systemid"].as_str().map(|system| system != local))
+            .unwrap_or(true);
         let started = std::time::Instant::now();
         let mut entries: Vec<Value> = Vec::new();
         let mut complete = true;
+        let mut slow_seconds = None;
         let mut first = from_height;
+        let mut count = 1;
         while first <= to_height {
-            let last = (first + (HISTORY_CHUNK - 1) * step).min(to_height);
+            let last = (first + (count - 1) * step).min(to_height);
             let range = format!("{first},{last},{step}");
+            let asked = std::time::Instant::now();
             let output = self.settle(
                 self.client
                     .call_with_raw::<Vec<Value>>(
@@ -677,8 +686,15 @@ impl Explorer {
                     )
                     .await,
             )?;
+            let states = ((last - first) / step + 1) as u32;
             entries.extend(output.result);
-            first += HISTORY_CHUNK * step;
+            first += count * step;
+            if asked.elapsed() > HISTORY_SLOW_STATE * states {
+                slow_seconds = Some(asked.elapsed().as_secs_f64() / f64::from(states));
+                complete = first > to_height;
+                break;
+            }
+            count = if other_system { 1 } else { (count * 2).min(HISTORY_CHUNK) };
             if first <= to_height && started.elapsed() > HISTORY_BUDGET {
                 complete = false;
                 break;
@@ -715,7 +731,7 @@ impl Explorer {
                 }
             })
             .collect();
-        Ok(CurrencyHistory { points, limit, complete })
+        Ok(CurrencyHistory { points, slow_seconds, complete })
     }
 
     /// Every chain tip the node knows, tallest first: the active chain and any side branches.

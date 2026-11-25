@@ -520,13 +520,6 @@ async fn live_marketplace() {
 }
 
 #[test]
-fn state_limit_is_the_observer_height_of_the_confirmed_notarization() {
-    assert_eq!(confirmed_local_height(&graph_sample(), OBSERVER), Some(10));
-    let none = json!({"notarizations": [], "lastconfirmed": -1});
-    assert_eq!(confirmed_local_height(&none, OBSERVER), None);
-}
-
-#[test]
 fn previous_notarization_is_named_or_is_a_spent_output() {
     let hash = |c: char| c.to_string().repeat(64);
     // This chain made the notarization: it names the one before it.
@@ -550,19 +543,17 @@ fn previous_notarization_is_named_or_is_a_spent_output() {
 
 #[tokio::test]
 #[ignore]
-async fn live_history_of_another_system_stops_at_its_confirmed_notarization() {
+async fn live_history_stops_after_one_slow_state() {
     let explorer = live();
     let tip = explorer.chain_status().await.unwrap().blocks;
-    assert_eq!(explorer.state_limit("Bridge.vETH").await, None);
-    let limit = explorer.state_limit("vDEX").await.unwrap();
     let started = std::time::Instant::now();
     let history = explorer.currency_history("vDEX".into(), tip - 525_600, tip, 90).await.unwrap();
-    println!("limit {limit}, {} points to {:?}, complete {}, {:?}", history.points.len(), history.points.last().map(|p| p.height), history.complete, started.elapsed());
-    assert_eq!(history.limit, Some(limit));
-    assert!(history.points.iter().all(|point| point.height <= limit));
-    assert!(started.elapsed().as_secs() < 30);
-    let late = explorer.currency_state_at("vDEX".into(), tip.to_string()).await;
-    assert!(late.is_err());
+    println!("{} points, slow {:?}, complete {}, {:?}", history.points.len(), history.slow_seconds, history.complete, started.elapsed());
+    assert!(started.elapsed().as_secs() < 25, "the app stops at the first slow state");
+    assert!(history.slow_seconds.is_some() && !history.complete);
+    let fast = explorer.currency_history("Bridge.vETH".into(), tip - 43_200, tip, 90).await.unwrap();
+    println!("{} points, slow {:?}, complete {}", fast.points.len(), fast.slow_seconds, fast.complete);
+    assert!(fast.points.len() >= 90 && fast.complete && fast.slow_seconds.is_none());
 }
 
 #[tokio::test]

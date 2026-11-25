@@ -20,8 +20,8 @@ struct CurrencyOverTimeCard: View {
     @Environment(AppModel.self) private var model
     @State private var span = Span.year
     @State private var points: [CurrencyPoint] = []
-    /// The last block that this chain has a confirmed state for, for a currency of a different system.
-    @State private var limit: UInt64?
+    /// The seconds that the node took for the first state, when that was slow.
+    @State private var slowSeconds: Double?
     /// False when the node was slow and the values stop before the end of the range.
     @State private var complete = true
     @State private var index: Double = 0
@@ -78,9 +78,11 @@ struct CurrencyOverTimeCard: View {
             } else if let failure {
                 Label(failure, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
-            } else if points.count < 2 {
+            } else if points.count < 2 || slowSeconds != nil {
                 limitNote
-                Text("The range contains no recorded data.").foregroundStyle(.secondary)
+                if slowSeconds == nil {
+                    Text("The range contains no recorded data.").foregroundStyle(.secondary)
+                }
             } else {
                 limitNote
                 Slider(
@@ -115,12 +117,12 @@ struct CurrencyOverTimeCard: View {
 
     @ViewBuilder
     private var limitNote: some View {
-        if let limit {
-            Text("This chain has no confirmed state of \(currency.name) after block \(Format.integer(limit)). The values stop at that block.")
-                .foregroundStyle(.secondary)
+        if let slowSeconds {
+            Note(
+                text: "The node took approximately \(Int(slowSeconds.rounded())) seconds for one state of \(currency.name), and it answers no other request during that time. The app did not ask for the other \(Int(samples) - points.count) states. \"State at a chosen block\" gives one state.",
+                warning: true)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-        if !complete, let last = points.last {
+        } else         if !complete, let last = points.last {
             Note(text: "The node was slow. The values stop at block \(Format.integer(last.height)), before the end of the range.", warning: true)
         }
     }
@@ -146,7 +148,7 @@ struct CurrencyOverTimeCard: View {
         guard let time = point.time else { return "Block \(Format.integer(point.height))" }
         let date = Date(timeIntervalSince1970: TimeInterval(time))
             .formatted(date: .abbreviated, time: .omitted)
-        return Int(index) == points.count - 1 && limit == nil && complete ? "\(date) · latest" : date
+        return Int(index) == points.count - 1 && complete ? "\(date) · latest" : date
     }
 
     /// Says so when nothing has changed for the latter part of the range, which a flat
@@ -370,14 +372,14 @@ struct CurrencyOverTimeCard: View {
                 name: currency.currencyId ?? currency.name, fromHeight: from, toHeight: tip,
                 samples: samples)
             points = loaded.points
-            limit = loaded.limit
+            slowSeconds = loaded.slowSeconds
             complete = loaded.complete
             index = Double(max(loaded.points.count - 1, 0))
         } catch is CancellationError {
             return
         } catch {
             points = []
-            limit = nil
+            slowSeconds = nil
             complete = true
             failure = describe(error)
         }

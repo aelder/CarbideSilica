@@ -1153,13 +1153,6 @@ fn decode_graph(value: &Value, observer: &str) -> Result<Graph> {
     })
 }
 
-/// The block of `observer` that the last confirmed notarization commits to.
-fn confirmed_local_height(data: &Value, observer: &str) -> Option<u64> {
-    let graph = decode_graph(data, observer).ok()?;
-    let row = graph.rows.get(graph.confirmed?)?;
-    row.roots.iter().find(|root| root.system == observer)?.height
-}
-
 /// The notarization of `currency` in a transaction: its output number and its data.
 fn notarization_output<'a>(raw: &'a Value, currency: &str) -> Option<(u32, &'a Value)> {
     raw["vout"].as_array()?.iter().find_map(|output| {
@@ -1673,13 +1666,6 @@ impl Explorer {
             }
             SeekTarget::Number(_) => unreachable!("settle_seek resolves bare numbers"),
         };
-        if let Some(limit) = self.state_limit(&currency).await
-            && height > limit
-        {
-            return Err(fail(&format!(
-                "This chain has no confirmed state of this currency after block {limit}. The node finds a later state from each block since then, and it answers no other request during that time. The app does not ask for it."
-            )));
-        }
         let response = self.settle(self.client.get_currency_state(&currency, height).await)?;
         let block = self.settle(fetch_block(&self.client, BlockId::Height(height)).await)?;
         let tip_after = self.settle(
@@ -2296,30 +2282,6 @@ impl Explorer {
             json: pretty(&without(&raw, "notarizations")),
             provenance: Some(provenance),
         })
-    }
-
-    /// For a currency of a different system: the last block of this chain that a
-    /// confirmed notarization of that system commits to. `None` for a currency of this
-    /// chain, and when the node gives no confirmed notarization.
-    pub(super) async fn state_limit(&self, currency: &str) -> Option<u64> {
-        let local = self.config.chain_cache_key();
-        let definition = self
-            .settle(self.client.call_with_raw::<Value>("getcurrency", &[json!(currency)]).await)
-            .ok()?
-            .result;
-        let system = definition["systemid"].as_str()?.to_owned();
-        if system == local {
-            return None;
-        }
-        let data = self
-            .settle(
-                self.client
-                    .call_with_raw::<Value>("getnotarizationdata", &[json!(system), json!(false), json!(false)])
-                    .await,
-            )
-            .ok()?
-            .result;
-        confirmed_local_height(&data, &local)
     }
 
     /// The notarizations of `subject` on this chain that lead to `txid`, from `txid`
