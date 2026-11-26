@@ -118,7 +118,7 @@ struct IdentityControlCard: View {
         switch identity.timelock {
         case .unlocked: "Funds can move at once."
         case .delay(let blocks):
-            "Funds cannot move until about \(Self.span(blocks: blocks)) after an unlock is requested."
+            "Funds cannot move until about \(Self.span(blocks: blocks)) after a request to unlock."
         case .unlocksAt: "Funds cannot move before that block."
         }
     }
@@ -130,7 +130,7 @@ struct IdentityControlCard: View {
                 : "\(required) of the \(keys.count) keys must sign to control \(name)."
         ]
         if selfRevoke, selfRecover {
-            parts.append("It is its own authority: no other identity can revoke or recover it.")
+            parts.append("It is its own authority. No other identity can revoke or recover it.")
         } else if !selfRevoke, !selfRecover, identity.revocationAuthority == identity.recoveryAuthority {
             parts.append("\(display(identity.revocationAuthority)) can revoke and recover it.")
         } else {
@@ -142,7 +142,7 @@ struct IdentityControlCard: View {
         case .unlocked: break
         case .delay(let blocks):
             parts.append(
-                "The funds are locked: an unlock takes \(Format.integer(blocks)) blocks, about \(Self.span(blocks: blocks)).")
+                "The funds are locked. An unlock takes \(Format.integer(blocks)) blocks, about \(Self.span(blocks: blocks)).")
         case .unlocksAt(let height):
             parts.append("The funds are locked until block \(Format.integer(height)).")
         }

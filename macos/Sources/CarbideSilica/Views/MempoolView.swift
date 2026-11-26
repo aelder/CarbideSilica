@@ -591,7 +591,7 @@ private struct WaitingRoom: View {
                 }.max() ?? 0
                 points.append(Point(
                     name: "Went into a block", value: MempoolText.count(passed.count, "transaction", "transactions"),
-                    note: "While this page was open. The longest wait was \(MempoolText.span(longest))."))
+                    note: "This is the count while this page was open. The longest wait was \(MempoolText.span(longest))."))
             }
             return points
         }
@@ -635,7 +635,7 @@ private struct WaitingRoom: View {
             if soon > 0 {
                 points.append(Point(
                     name: "Expire soon", value: MempoolText.count(soon, "transaction", "transactions"),
-                    note: "In 10 blocks or less. A transaction that expires leaves the mempool and does not go into a block."))
+                    note: "These expire in 10 blocks or less. A transaction that expires leaves the mempool and does not go into a block."))
             }
         }
         return points

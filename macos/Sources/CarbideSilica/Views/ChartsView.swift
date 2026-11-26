@@ -203,12 +203,12 @@ struct ChartsView: View {
         if let page = state.page {
             DisclosureGroup("What the marks mean") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("All panels share one time axis. One line shows the selected block in each panel. A grey band is one of the longest gaps of the range: the longest hundredth, and 12 at most.")
-                    Text("Block rate: each point is one period. The band is the mean with limits of 2.66 times the mean change between periods. The dashed line is the target. A red point is outside the limits.")
-                    Text("Difficulty: each dot is one block of that kind, or a bar from the lowest to the highest value where the dots would merge. The line is MA100, the mean over the trailing 100 chain heights, so it turns after the dots turn. A gap means that the trailing 100 heights are incomplete or hold a block of the kind without a value. The axes are fitted to the values and do not start at zero.")
-                    Text("Staking difficulty = fixed initial Verus LWMA posLimit / observed block PoS target. The target comes from the nonce and must equal postarget.")
-                    Text("Staked share: the violet line is the share over 100 blocks and the blue line is the share over 1,000 blocks. The band is three standard deviations of chance for 100 blocks. A share line needs a complete window of known blocks.")
-                    Text("Fee pool: a tick at the top is a block where the pool rose. This is a balance chart. It does not separate inflow from payout.")
+                    Text("All panels share one time axis. One line shows the selected block in each panel. A grey band is one of the longest gaps of the range. The chart marks the longest hundredth of the gaps, and 12 at most.")
+                    Text("In the block rate panel, each point is one period. The band is the mean with limits of 2.66 times the mean change between periods. The dashed line is the target. A red point is outside the limits.")
+                    Text("In the difficulty panels, each dot is one block of that kind, or a bar from the lowest to the highest value where the dots would merge. The line is MA100, the mean over the trailing 100 chain heights, so it turns after the dots turn. A gap means that the trailing 100 heights are incomplete or hold a block of the kind without a value. The axes are fitted to the values and do not start at zero.")
+                    Text("Staking difficulty is the fixed initial Verus LWMA posLimit divided by the observed PoS target of the block. The target comes from the nonce and must equal postarget.")
+                    Text("In the staked share panel, the violet line is the share over 100 blocks and the blue line is the share over 1,000 blocks. The band is three standard deviations of chance for 100 blocks. A share line needs a complete window of known blocks.")
+                    Text("In the fee pool panel, a tick at the top is a block where the pool rose. This is a balance chart. It does not separate inflow from payout.")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 4)
@@ -536,7 +536,7 @@ final class ChartState {
         guard let page else { return "" }
         var parts = ["\(Format.integer(UInt64(page.samples.count))) blocks"]
         if page.limited {
-            parts.append("partial: the 20,000-header limit was reached")
+            parts.append("partial, because the request reached the 20,000-header limit")
         } else if !page.complete && loading {
             parts.append("loading")
         } else if page.first == 0 && !page.complete {
@@ -554,7 +554,7 @@ final class ChartState {
             "span \(span.title)",
         ]
         if page.limited {
-            parts.append("partial: the 20,000-header limit was reached")
+            parts.append("partial, because the request reached the 20,000-header limit")
         } else if !page.complete && loading {
             parts.append("loading")
         } else if page.first == 0 && !page.complete {

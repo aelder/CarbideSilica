@@ -827,7 +827,7 @@ impl Walk {
         self.loader.status = if active == last.1 {
             "Observed active chain".into()
         } else if self.branch_seen {
-            "Side branch: this range follows parent hashes from a block that is not on the active chain".into()
+            "This range is on a side branch. It follows parent hashes from a block that is not on the active chain.".into()
         } else {
             "The newest block of this range left the active chain after loading. Load the range again.".into()
         };
@@ -1124,7 +1124,7 @@ impl Loader {
         if !self.done && self.headers.len() >= MAX_HEADERS {
             self.done = true;
             self.limited = true;
-            self.status = "Partial range: the 20,000-header limit was reached".into();
+            self.status = "Partial range. The request reached the 20,000-header limit.".into();
             self.stopped = Some(format!(
                 "The chart reached the {MAX_HEADERS}-header limit for one request. Choose a shorter span or page onward."
             ));
@@ -1436,7 +1436,7 @@ pub fn chart_seek_preview(input: String, now: i64, tip: Option<u64>) -> String {
         return "The clock is out of range.".into();
     };
     if input.trim().is_empty() {
-        return "Enter a block height, Unix seconds, or a date and time (UTC by default).".into();
+        return "Enter a block height, Unix seconds, or a date and time. A time is in UTC unless you give an offset.".into();
     }
     match parse_seek(&input, now) {
         Ok(SeekTarget::Height { value }) => format!("Block {value}"),

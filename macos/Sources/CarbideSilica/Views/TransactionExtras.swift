@@ -20,7 +20,7 @@ struct ProtocolLinksCard: View {
             let forwardLinks = links.filter { !$0.reverse }
             let reverseLinks = links.filter(\.reverse)
             if forwardLinks.isEmpty {
-                Text("No explicit references to other transactions are decoded from this transaction.")
+                Text("This transaction has no explicit reference to another transaction.")
                     .foregroundStyle(.secondary)
             } else {
                 LinkList(links: forwardLinks, checking: report == nil && failure == nil)

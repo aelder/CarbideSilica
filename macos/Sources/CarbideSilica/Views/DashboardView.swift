@@ -297,7 +297,7 @@ private struct SyncBanner: View {
                 .progressViewStyle(.circular)
                 .controlSize(.small)
             VStack(alignment: .leading, spacing: 2) {
-                Text("The node is not fully synchronized. \(fraction.formatted(.percent.precision(.fractionLength(1)))) of the chain is validated.")
+                Text("The node is not synchronized. It validated \(fraction.formatted(.percent.precision(.fractionLength(1)))) of the chain.")
                     .fontWeight(.semibold)
                 Text(detail).font(.callout).foregroundStyle(.secondary)
             }

@@ -254,16 +254,16 @@ struct FeePoolSection: View {
                         (FeePoolState.Currency.both, "Both"), (FeePoolState.Currency.native, labels.0),
                         (FeePoolState.Currency.reserve, labels.1),
                     ], selection: $state.fee.currency)
-                .help("Key v cycles the currencies. Each choice has its own vertical range.")
+                .help("Press v to go to the next currency. Each choice has its own vertical range.")
             }
             LampSegments(
                 options: [
                     (FeePoolState.Scale.zero, "Linear from zero"), (FeePoolState.Scale.fit, "Linear, fitted"),
                     (FeePoolState.Scale.log, "Log-like"),
                 ], selection: $state.fee.scale)
-            .help("Key z cycles the scales.")
+            .help("Press z to go to the next scale.")
             Toggle("Detail", isOn: $state.fee.detail)
-                .help("Up to 2,000 checkpoints instead of 100. Key t switches.")
+                .help("Read up to 2,000 checkpoints, not 100. Press t to change this.")
         }
         .controlSize(.small)
     }
@@ -280,10 +280,10 @@ struct FeePoolSection: View {
     private var legend: some View {
         ChartLegend(items: legendItems)
         if fee.scale == .log {
-            Text("Log-like scale: linear from 0 to 0.0001, then logarithmic, so that zero stays on the axis. Labels are whole-currency amounts at powers of ten.")
+            Text("The scale is linear from 0 to 0.0001 and logarithmic above that, so that zero stays on the axis. Labels are whole-currency amounts at powers of ten.")
                 .font(.caption).foregroundStyle(.secondary)
         } else if fee.scale == .fit {
-            Text("Fitted scale: the vertical axis does not start at zero. It shows small changes.")
+            Text("The vertical axis is fitted to the values and does not start at zero. It shows small changes.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -351,9 +351,9 @@ struct FeePoolSection: View {
                 FieldRow(label: labels.1, value: ChartFormat.sats(checkpoint.reserveSats) + " " + labels.1)
             }
         } else if let problem = checkpoint.problem {
-            Note(text: "The checkpoint could not be read: \(problem). No zero balance is assumed.", warning: true)
+            Note(text: "The app did not read the checkpoint: \(problem). The app does not assume a zero balance.", warning: true)
         } else {
-            Text("This block's coinbase has no fee pool checkpoint. Blocks before activation have none. No zero balance is assumed.")
+            Text("This block's coinbase has no fee pool checkpoint. Blocks before activation have none. The app does not assume a zero balance.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -368,7 +368,7 @@ struct FeePoolSection: View {
             Text("This balance is at the latest block when the app last read it, not at the end of the chart range.")
                 .font(.caption).foregroundStyle(.secondary)
         } else if let error = fee.currentError {
-            Note(text: "The current fee pool is not available: \(error). No zero balance is assumed.", warning: true)
+            Note(text: "The current fee pool is not available: \(error). The app does not assume a zero balance.", warning: true)
         } else {
             Text("Reading the latest block's checkpoint.").foregroundStyle(.secondary)
         }

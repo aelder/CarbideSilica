@@ -574,7 +574,7 @@ private struct PoolComparisonView: View {
             }
             .font(.callout.monospacedDigit())
             if comparison.moreReserves {
-                Text("The first 12 reserves are shown. Open the pool for the complete state.")
+                Text("The list shows the first 12 reserves. Open the pool for the complete state.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

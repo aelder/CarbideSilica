@@ -1213,7 +1213,7 @@ impl CheckFailure {
     fn label(self) -> &'static str {
         match self {
             Self::NoSourceConfigured => "No source configured for this chain",
-            Self::NoSourceEnabled => "No enabled source. Turn one on on the Sources screen",
+            Self::NoSourceEnabled => "No source is enabled. Turn one on in Sources.",
             Self::ChainQueryFailed => "Could not query chain status",
             Self::BlockLookupFailed => "Block header lookup failed",
             Self::InvalidHeader => "Source returned an invalid block header",
@@ -2055,7 +2055,7 @@ impl Explorer {
             Err(status) => {
                 let message = match status {
                     super::sources::ProofRootStatus::NoSourceEnabled => format!(
-                        "Each source for {} is off. Turn one on on the Sources screen to ask that chain about {}.",
+                        "Each source for {} is off. Turn one on in Sources to ask that chain about {}.",
                         perspective.observer_name, perspective.subject_name
                     ),
                     _ => format!(
@@ -2195,7 +2195,7 @@ impl Explorer {
                         let status = match status {
                             Some((RootCheck::NotChecked, _)) if check && limited => Some((
                                 RootCheck::NotChecked,
-                                "Not checked: the request limit was reached".into(),
+                                "Not checked. The app reached the request limit.".into(),
                             )),
                             Some((RootCheck::NotChecked, _)) if !check => {
                                 Some((RootCheck::NotChecked, "Not checked".into()))

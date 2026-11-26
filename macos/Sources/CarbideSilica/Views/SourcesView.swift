@@ -289,7 +289,7 @@ private struct SourceDetail: View {
                 ? "Enabled. The app sends requests for what you open, and keeps the chain's block history current."
                 : "Enabled. The app sends requests for what you open on this chain."
         case (_, .monitored):
-            "Monitored. Enabled, and the app also follows the tip and the mempool in the background."
+            "Monitored. The source is enabled, and the app also follows the tip and the mempool in the background."
         }
     }
 }

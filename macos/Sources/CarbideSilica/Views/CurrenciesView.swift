@@ -140,7 +140,7 @@ struct CurrenciesView: View {
                     .accessibilityValue(state == .show ? "Show" : state == .hide ? "Hide" : "Any")
                 }
             }
-            Text("Lit: the list shows only currencies with the option. Line through: the list hides them. Click to change.")
+            Text("A lit key shows only the currencies with the option. A key with a line through it hides them. Click a key to change it.")
                 .font(Tone.caption)
                 .foregroundStyle(Tone.label)
         }

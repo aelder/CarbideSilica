@@ -268,7 +268,7 @@ struct ChainPulse: View {
 
     private var caption: String {
         guard let hash = hovered, let index = blocks.firstIndex(where: { $0.hash == hash }) else {
-            return "Top: the blocks of the last 25 minutes. Bottom: the time between blocks in the last "
+            return "The top chart shows the blocks of the last 25 minutes. The bottom chart shows the time between blocks in the last "
                 + "\(recordSpan). One dot is 1 of each 100 blocks."
         }
         let block = blocks[index]

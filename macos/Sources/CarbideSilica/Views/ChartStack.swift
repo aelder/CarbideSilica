@@ -757,7 +757,7 @@ struct StackModel {
             } else if outside > 0 {
                 text += ". \(outside) period\(outside == 1 ? "" : "s") outside the limits."
             } else if run {
-                text += ". A run of 7 periods on one side of the mean."
+                text += ". 7 periods in sequence are on one side of the mean."
             } else {
                 text += ". In its usual range."
             }

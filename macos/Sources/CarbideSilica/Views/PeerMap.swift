@@ -156,7 +156,7 @@ struct PeerMapCard: View {
         if let installed = locations?.installedBytes, installed > 0 {
             text += "The data installed now uses \(Format.bytes(installed)). The new release replaces it. "
         }
-        text += "The size of the download is not known before it starts: Carbide does not request it. "
+        text += "Carbide does not request the size of the download before it starts. "
             + "The databases are large, and the download can take several minutes. "
         if locations?.defaultFolder ?? true {
             text += "This folder is in the default cache folder on the startup disk. "

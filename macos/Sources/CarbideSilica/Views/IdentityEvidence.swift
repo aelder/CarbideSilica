@@ -19,7 +19,7 @@ struct IdentityEvidenceCard: View {
             case .loading:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Registration and association evidence loading...").foregroundStyle(.secondary)
+                    Text("Loading the registration and association evidence…").foregroundStyle(.secondary)
                 }
             case .failed(let message):
                 Note(text: "Evidence unavailable: \(message)", warning: true)
@@ -158,10 +158,10 @@ private struct EvidenceBody: View {
             ForEach(Array(report.notes.enumerated()), id: \.offset) { _, note in
                 Text(note).font(.callout).foregroundStyle(.secondary)
             }
-            Text("Association is evidence, not ownership; private funding may be invisible")
+            Text("An association is evidence, not ownership. Private funding can be invisible.")
                 .font(.callout).foregroundStyle(.secondary)
             if !report.historyComplete {
-                Note(text: "Registration evidence awaits complete identity history", warning: true)
+                Note(text: "The registration evidence needs the complete identity history.", warning: true)
             }
         }
     }
@@ -335,7 +335,7 @@ private struct HistoricalLookup: View {
         VStack(alignment: .leading, spacing: 8) {
             NameText("Historical reverse request")
                 .onChange(of: requests) { Task { await run() } }
-            Text("Find identities that used a known authority or primary address of this identity in one window of 1,000 blocks. The request needs a source with the identity index. The links found are stored with this version and its block.")
+            Text("Find identities that used a known authority or primary address of this identity in one window of 1,000 blocks. The request needs a source with the identity index. The app stores the links with this version and its block.")
                 .font(.callout).foregroundStyle(.secondary)
             HStack {
                 NameText("Window ends at block")

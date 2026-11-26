@@ -35,9 +35,9 @@ enum LinkState {
 
     var rule: String {
         switch self {
-        case .current: "Current: the wait is not longer than the longest interval of the record."
-        case .late: "Late: the wait is longer than each interval of the record."
-        case .stopped: "Stopped: the wait is more than \(Self.stoppedFactor) times the longest interval of the record."
+        case .current: "Current means that the wait is not longer than the longest interval of the record."
+        case .late: "Late means that the wait is longer than each interval of the record."
+        case .stopped: "Stopped means that the wait is more than \(Self.stoppedFactor) times the longest interval of the record."
         }
     }
 

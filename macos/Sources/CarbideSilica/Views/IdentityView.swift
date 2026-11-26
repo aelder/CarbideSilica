@@ -273,7 +273,7 @@ private struct IdentityPage: View {
     }
 
     private var statusText: String {
-        if stale && isLatest { return "Stale after reorg. The page is refreshing." }
+        if stale && isLatest { return "This page is out of date after a reorganization. The page is refreshing." }
         return state.status
     }
 

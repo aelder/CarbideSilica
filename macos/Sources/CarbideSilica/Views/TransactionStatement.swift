@@ -976,7 +976,7 @@ private struct StatementFlow: View {
     private func caption(_ level: Int, _ scene: Scene) -> String {
         var text = level == 0 ? "Click a band to mark its inputs and outputs in the lists." : place(level)
         if scene.group != nil {
-            text += (text.isEmpty ? "" : " ") + "Click the band of the more addresses to go into that group."
+            text += (text.isEmpty ? "" : " ") + "Click the \"more addresses\" band to open that group."
         }
         return text
     }

@@ -548,7 +548,7 @@ private struct InputRow: View {
                     Plate("Coinbase", fill: Tone.mined)
                 } else if let pool = input.shieldedPool {
                     Text("Shielded pool · \(pool)").foregroundStyle(.secondary)
-                    Text("The address is unknown (shielded).").font(.callout).foregroundStyle(.secondary)
+                    Text("The address is shielded and not known.").font(.callout).foregroundStyle(.secondary)
                 }
                 ForEach(input.addresses, id: \.self) { address in
                     RouteLink(text: address, route: .holder(address), shorten: false)
@@ -652,7 +652,7 @@ private struct OutputRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let pool = output.shieldedPool {
                         Text("Shielded pool · \(pool)").foregroundStyle(.secondary)
-                        Text("The address is unknown (shielded).").font(.callout).foregroundStyle(.secondary)
+                        Text("The address is shielded and not known.").font(.callout).foregroundStyle(.secondary)
                     } else if output.addresses.isEmpty {
                         Text("Address unavailable").foregroundStyle(.secondary)
                     }

@@ -436,7 +436,7 @@ struct MarketplaceView: View {
             }
             Text(sortNote).font(Tone.caption).foregroundStyle(Tone.label)
             if ordered.isEmpty {
-                Text(items.isEmpty ? "No open offers were returned for this currency." : "No offer matches the filters.")
+                Text(items.isEmpty ? "The node returned no open offers for this currency." : "No offer matches the filters.")
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 12)
             }
@@ -466,7 +466,7 @@ struct MarketplaceView: View {
         switch sort {
         case .expiry: return descending ? "Latest expiry first." : "Soonest expiry first."
         case .name: return descending ? "Names Z to A." : "Names A to Z."
-        case .askAmount: return "Grouped by ask currency, \(descending ? "largest" : "smallest") first. Offers with no single ask last."
+        case .askAmount: return "Grouped by ask currency, \(descending ? "largest" : "smallest") first. Offers with no single ask are last."
         case .listingAge:
             let order = descending ? "Oldest listing first." : "Newest listing first."
             return detailed < items.count ? "\(order) Listing dates: \(detailed) of \(items.count) read." : order

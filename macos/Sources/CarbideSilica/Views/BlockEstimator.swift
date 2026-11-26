@@ -30,7 +30,7 @@ struct BlockEstimator: View {
                 Button("Estimate") { Task { await run() } }
                     .disabled(running || text.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            Text("A bare number is a block height. Use unix: or time: for Unix seconds. Relative dates are fixed when you submit them.")
+            Text("A bare number is a block height. Use unix: or time: for Unix seconds. The app fixes a relative date when you submit it.")
                 .font(.caption).foregroundStyle(.secondary)
             if running {
                 ProgressView("Calibrating from the node's blocks…").controlSize(.small)

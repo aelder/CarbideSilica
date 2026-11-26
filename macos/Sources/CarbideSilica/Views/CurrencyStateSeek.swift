@@ -176,7 +176,7 @@ struct CurrencyStateCard: View {
         if coverage.wholeChain {
             return "\(gap) This is the nearest block."
         }
-        return "\(gap) This is the nearest of the checked blocks. Block times are not in order, so a block outside the checked range can possibly be nearer."
+        return "\(gap) This is the nearest of the checked blocks. Block times are not in order, so a block outside the checked range can be nearer."
     }
 
     private func seek(_ text: String) async {
@@ -272,7 +272,7 @@ struct CurrencyActivitySection: View {
             Note(text: "The window holds more records than Carbide keeps. The app shows the newest 80.", warning: true)
         }
         if page.records.isEmpty {
-            Text("No imports or exports were found in this window. This does not prove that none exist outside it.")
+            Text("The app found no imports or exports in this window. This does not prove that none exist outside it.")
                 .foregroundStyle(.secondary)
         } else {
             DisplayPanel {
@@ -290,7 +290,7 @@ struct CurrencyActivitySection: View {
                     }
                     .frame(height: 64)
                     PanelRule()
-                    Text("Each mark is an import (above the line, filled) or an export (below the line, open) at its block. Click a mark to select it.")
+                    Text("A filled mark above the line is an import. An open mark below the line is an export. Each mark is at its block. Click a mark to select it.")
                         .font(Tone.caption).foregroundStyle(Tone.label)
                         .fixedSize(horizontal: false, vertical: true)
                 }

@@ -111,7 +111,7 @@ struct AddressActivityList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if stale {
-                Note(text: "Stale after reorg. A block of these transactions left the active chain. The list is refreshing.", warning: true)
+                Note(text: "This list is out of date. A block of these transactions left the active chain. The list is refreshing.", warning: true)
             }
             if let total {
                 Text(heading(total)).foregroundStyle(.secondary)

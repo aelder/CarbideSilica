@@ -761,7 +761,7 @@ async fn a_side_branch_anchor_follows_parent_hashes_to_the_active_chain() {
     assert_eq!(at(1_450).hash, hash(1_450), "the branch joins the active chain");
     assert!(page.samples.iter().all(|s| s.linked));
     assert!(walk.branch_seen && !walk.branch);
-    assert!(walk.loader.status.starts_with("Side branch"));
+    assert!(walk.loader.status.starts_with("This range is on a side branch"));
     // Only the active part was read by height.
     assert!(samples.heights_read > 0);
 

@@ -35,7 +35,7 @@ struct KeyboardReference: View {
         (
             "Search and history",
             [
-                Entry(keys: "⌘K", action: "The command list: each command and each card of the open page. Type some letters, then Return.", terminal: "none"),
+                Entry(keys: "⌘K", action: "The command list has each command and each card of the open page. Type some letters, then press Return.", terminal: "none"),
                 Entry(keys: "⌘F", action: "Search. In the field, Up and Down go through the earlier searches, and Esc stops a search that runs.", terminal: "/"),
                 Entry(keys: "⌘[", action: "Back. At a place in the sidebar, go to the dashboard.", terminal: "h, Left, Backspace, Esc"),
                 Entry(keys: "⌘]", action: "Forward", terminal: "none"),
@@ -84,7 +84,7 @@ struct KeyboardReference: View {
                 Entry(keys: "Esc", action: "Go back one page. At a place in the sidebar, go to the dashboard.", terminal: "Esc"),
                 Entry(keys: "h, ←, Delete", action: "Go back one page", terminal: "h, Left, Backspace"),
                 Entry(keys: "Tab", action: "Show the raw JSON of the page and go to it. Tab again hides it. In the JSON, the cursor moves through its lines, Return follows an ID or opens a node, and s saves the file.", terminal: "Tab, s"),
-                Entry(keys: "Tab, ⇧Tab", action: "On a page with no JSON: go to the next card, or to the card before", terminal: "Tab on the dashboard"),
+                Entry(keys: "Tab, ⇧Tab", action: "On a page with no JSON, go to the next card or to the card before", terminal: "Tab on the dashboard"),
                 Entry(keys: "Page Up, Page Down", action: "Move the cursor 10 places", terminal: "PgUp, PgDn"),
                 Entry(keys: "Home, End", action: "Go to the first or the last row or link of the page", terminal: "Home, End"),
                 Entry(keys: "y, ⌘C", action: "Copy the full value under the cursor. ⌘C copies selected text when text is selected.", terminal: "y in JSON"),
@@ -98,13 +98,13 @@ struct KeyboardReference: View {
                 Entry(keys: "/", action: "Search", terminal: "/"),
                 Entry(keys: "n or ], p or [", action: "Next or previous block, identity version, or transaction of the same block, in place", terminal: "n ] p ["),
                 Entry(keys: "r, F5", action: "Read the page again", terminal: "r, F5"),
-                Entry(keys: "b", action: "Transaction: open its block", terminal: "b"),
-                Entry(keys: "a", action: "Block on a side branch: open the active block at that height", terminal: "a"),
-                Entry(keys: "g", action: "Currency: go to the state at a chosen block and type there", terminal: "g"),
-                Entry(keys: "n", action: "Currency: go to the notarizations", terminal: "n"),
-                Entry(keys: "v", action: "Identity: shared keys and authorities", terminal: "v"),
-                Entry(keys: "F8, F4", action: "Transaction: follow a transfer, or find the signers, for the output under the cursor", terminal: "F8, F4"),
-                Entry(keys: "F3, F7", action: "Transaction: protocol links, block history", terminal: "F3, F7"),
+                Entry(keys: "b", action: "On a transaction, open its block", terminal: "b"),
+                Entry(keys: "a", action: "On a block of a side branch, open the active block at that height", terminal: "a"),
+                Entry(keys: "g", action: "On a currency, go to the state at a chosen block and type there", terminal: "g"),
+                Entry(keys: "n", action: "On a currency, go to the notarizations", terminal: "n"),
+                Entry(keys: "v", action: "On an identity, show the shared keys and authorities", terminal: "v"),
+                Entry(keys: "F8, F4", action: "On a transaction, follow a transfer or find the signers for the output under the cursor", terminal: "F8, F4"),
+                Entry(keys: "F3, F7", action: "On a transaction, show the protocol links or the block history", terminal: "F3, F7"),
                 Entry(keys: "F10", action: "Estimate a future block or date", terminal: "F10"),
                 Entry(keys: "⇧B, ⇧I, ⇧D", action: "Bookmark this page, names or IDs, dates or heights", terminal: "Shift-B, Shift-I, Shift-D"),
                 Entry(keys: "?, F1", action: "This window", terminal: "?, F1"),
@@ -154,7 +154,7 @@ struct KeyboardReference: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Self.heading("Search")
                     Text(
-                        "Enter a block height, a block hash, a transaction ID, an address, an identity (name@ or an i-address) or a currency (name@@). "
+                        "Enter a block height, a block hash, a transaction ID, an address, an identity such as name@ or an i-address, or a currency such as name@@. "
                             + "Enter currencies to open the currency browser."
                     )
                     Text(
