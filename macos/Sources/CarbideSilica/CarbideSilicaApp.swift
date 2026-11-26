@@ -8,6 +8,7 @@ struct CarbideSilicaApp: App {
     @State private var shell = ShellState()
 
     init() {
+        WindowPicture.arm()
         // Lets the app take focus when run outside a bundle (`swift run`).
         NSApplication.shared.setActivationPolicy(.regular)
     }
