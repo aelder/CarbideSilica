@@ -20,6 +20,7 @@ use crate::settings::{self, key};
 use crate::shell::dialogs;
 use crate::theme::draw;
 use crate::theme::{tone, Color};
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display::{self, PlateFill};
 use crate::widgets::{lamp, loader};
@@ -94,64 +95,15 @@ fn traffic_color(traffic: api::SourceTraffic) -> Color {
 fn traffic_mark(traffic: api::SourceTraffic) -> gtk::Box {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 5);
     let color = traffic_color(traffic);
-    let mark = Canvas::new(13, 13, move |_, snapshot, w, h| {
-        let (cx, cy, r) = (w / 2.0, h / 2.0, w.min(h) * 0.42);
-        let circle = || {
-            let b = gtk::gsk::PathBuilder::new();
-            b.add_circle(&draw::point(cx, cy), r);
-            b.to_path()
-        };
-        match traffic {
-            api::SourceTraffic::Off => {
-                draw::stroke(snapshot, &circle(), color, 1.2);
-                draw::rule(snapshot, cx - r * 0.5, cy, cx + r * 0.5, cy, color, 1.4, &[]);
-            }
-            api::SourceTraffic::NotUsed => draw::stroke(snapshot, &circle(), color, 1.2),
-            api::SourceTraffic::Working => {
-                for (start, end) in [(200.0f32, 340.0f32), (20.0, 160.0)] {
-                    let b = gtk::gsk::PathBuilder::new();
-                    let steps = 12;
-                    for i in 0..=steps {
-                        let a = (start + (end - start) * i as f32 / steps as f32).to_radians();
-                        let (x, y) = (cx + r * a.cos(), cy + r * a.sin());
-                        if i == 0 { b.move_to(x, y) } else { b.line_to(x, y) }
-                    }
-                    draw::stroke(snapshot, &b.to_path(), color, 1.3);
-                    let a = end.to_radians();
-                    let (x, y) = (cx + r * a.cos(), cy + r * a.sin());
-                    let (tx, ty) = (-a.sin(), a.cos());
-                    let head = gtk::gsk::PathBuilder::new();
-                    head.move_to(x + tx * 2.5 + a.cos() * 2.0, y + ty * 2.5 + a.sin() * 2.0);
-                    head.line_to(x + tx * 2.5 - a.cos() * 2.0, y + ty * 2.5 - a.sin() * 2.0);
-                    head.line_to(x - tx * 1.0, y - ty * 1.0);
-                    head.close();
-                    draw::fill(snapshot, &head.to_path(), color);
-                }
-            }
-            api::SourceTraffic::Responding => {
-                draw::fill(snapshot, &circle(), color);
-                let b = gtk::gsk::PathBuilder::new();
-                b.move_to(cx - r * 0.45, cy + r * 0.02);
-                b.line_to(cx - r * 0.1, cy + r * 0.38);
-                b.line_to(cx + r * 0.5, cy - r * 0.35);
-                draw::stroke(snapshot, &b.to_path(), tone::SCREEN, 1.4);
-            }
-            api::SourceTraffic::Idle => draw::fill(snapshot, &circle(), color),
-            api::SourceTraffic::Unavailable => {
-                let b = gtk::gsk::PathBuilder::new();
-                for i in 0..8 {
-                    let a = (22.5f32 + i as f32 * 45.0).to_radians();
-                    let (x, y) = (cx + r * 1.05 * a.cos(), cy + r * 1.05 * a.sin());
-                    if i == 0 { b.move_to(x, y) } else { b.line_to(x, y) }
-                }
-                b.close();
-                draw::fill(snapshot, &b.to_path(), color);
-                let d = r * 0.42;
-                draw::rule(snapshot, cx - d, cy - d, cx + d, cy + d, tone::SCREEN, 1.4, &[]);
-                draw::rule(snapshot, cx - d, cy + d, cx + d, cy - d, tone::SCREEN, 1.4, &[]);
-            }
-        }
-    });
+    let kind = match traffic {
+        api::SourceTraffic::Off => Icon::MinusCircle,
+        api::SourceTraffic::NotUsed => Icon::Ring,
+        api::SourceTraffic::Working => Icon::Circlepath,
+        api::SourceTraffic::Responding => Icon::CheckCircleFill,
+        api::SourceTraffic::Idle => Icon::Dot,
+        api::SourceTraffic::Unavailable => Icon::CrossOctagonFill,
+    };
+    let mark = icons::icon(kind, 13, color);
     mark.set_valign(gtk::Align::Center);
     row.append(&mark);
     let word = page::text(traffic_word(traffic), &[]);

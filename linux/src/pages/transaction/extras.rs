@@ -6,7 +6,6 @@ use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use gtk::glib;
-use gtk::gsk;
 use gtk::prelude::*;
 
 use crate::bridge::{self, api, api::Confidence, api::Route};
@@ -14,8 +13,7 @@ use crate::format;
 use crate::shared::json_tree::json_tree;
 use crate::page::{self, load::clear, Card, Page};
 use crate::shared::confidence::confidence_mark;
-use crate::theme::{self, draw, font, tone, Color};
-use crate::widgets::canvas::Canvas;
+use crate::theme::{self, font, tone, Color};
 use crate::widgets::display;
 use crate::widgets::icons::{self, Icon};
 use crate::widgets::{lamp, link, loader};
@@ -24,45 +22,8 @@ use super::overview::callout;
 use super::Ctx;
 
 /// A small arrow to the left or to the right (`arrow.left`, `arrow.right`).
-pub fn arrow(left: bool, color: Color) -> Canvas {
-    let mark = Canvas::new(11, 9, move |_, snapshot, w, h| {
-        let mid = h / 2.0;
-        let (tip, tail) = if left { (0.5, w - 0.5) } else { (w - 0.5, 0.5) };
-        draw::rule(snapshot, tail, mid, tip, mid, color, 1.2, &[]);
-        let head = gsk::PathBuilder::new();
-        let back = if left { tip + 3.5 } else { tip - 3.5 };
-        head.move_to(back, mid - 3.5);
-        head.line_to(tip, mid);
-        head.line_to(back, mid + 3.5);
-        draw::stroke(snapshot, &head.to_path(), color, 1.2);
-    });
-    mark.set_valign(gtk::Align::Center);
-    mark.set_can_target(false);
-    mark
-}
-
-/// A filled circle with a check or a cross (`checkmark.circle.fill`, `xmark.circle.fill`).
-fn sealed(check: bool, color: Color) -> Canvas {
-    let mark = Canvas::new(13, 13, move |_, snapshot, w, h| {
-        let (cx, cy, r) = (w / 2.0, h / 2.0, w.min(h) / 2.0 - 0.5);
-        let circle = gsk::PathBuilder::new();
-        circle.add_circle(&draw::point(cx, cy), r);
-        draw::fill(snapshot, &circle.to_path(), color);
-        let line = gsk::PathBuilder::new();
-        if check {
-            line.move_to(cx - r * 0.45, cy);
-            line.line_to(cx - r * 0.1, cy + r * 0.35);
-            line.line_to(cx + r * 0.5, cy - r * 0.35);
-        } else {
-            line.move_to(cx - r * 0.38, cy - r * 0.38);
-            line.line_to(cx + r * 0.38, cy + r * 0.38);
-            line.move_to(cx + r * 0.38, cy - r * 0.38);
-            line.line_to(cx - r * 0.38, cy + r * 0.38);
-        }
-        draw::stroke(snapshot, &line.to_path(), tone::SCREEN, 1.6);
-    });
-    mark.set_valign(gtk::Align::Center);
-    mark
+pub fn arrow(left: bool, color: Color) -> crate::widgets::canvas::Canvas {
+    icons::icon(if left { Icon::ArrowLeft } else { Icon::ArrowRight }, 11, color)
 }
 
 /// An ID on another system: shortened, monospaced and selectable, the whole ID in the help.
@@ -427,7 +388,7 @@ fn signature_group(ctx: &Rc<Ctx>, page: &Page, signature: &api::WitnessSignature
     let verdict = gtk::Box::new(gtk::Orientation::Horizontal, 5);
     verdict.set_size_request(110, -1);
     let color = if signature.confirms { tone::GOOD } else { tone::ALERT };
-    verdict.append(&sealed(signature.confirms, color));
+    verdict.append(&icons::icon(if signature.confirms { Icon::CheckCircleFill } else { Icon::CrossCircleFill }, 13, color));
     verdict.append(&page::text(
         if signature.confirms { "Confirming" } else { "Rejecting" },
         &[if signature.confirms { "good" } else { "alert" }],

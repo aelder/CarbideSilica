@@ -23,6 +23,7 @@ use crate::bridge::api;
 use crate::format;
 use crate::page::{self, load::clear, Card, Page};
 use crate::theme::{draw, tone};
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display;
 use crate::widgets::link;
@@ -171,20 +172,6 @@ fn ban_text(banned: &api::BannedPeer) -> String {
 /// A line of text in the callout size, in the secondary colour.
 fn callout(text: &str) -> gtk::Label {
     page::text(text, &["callout", "secondary"])
-}
-
-/// The mark of a ban: a circle with a line through it (`nosign`).
-fn ban_mark() -> Canvas {
-    let mark = Canvas::new(13, 13, |_, snapshot, w, h| {
-        let builder = gtk::gsk::PathBuilder::new();
-        let r = w.min(h) * 0.4;
-        builder.add_circle(&draw::point(w / 2.0, h / 2.0), r);
-        draw::stroke(snapshot, &builder.to_path(), tone::ALERT, 1.3);
-        let d = r * std::f32::consts::FRAC_1_SQRT_2;
-        draw::rule(snapshot, w / 2.0 - d, h / 2.0 - d, w / 2.0 + d, h / 2.0 + d, tone::ALERT, 1.3, &[]);
-    });
-    mark.set_valign(gtk::Align::Center);
-    mark
 }
 
 /// One line of the list: a connected peer or an entry in the ban list.
@@ -482,7 +469,7 @@ impl PeersCard {
             Item::Banned(banned) => {
                 let peer_column = gtk::Box::new(gtk::Orientation::Vertical, 2);
                 let label = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-                label.append(&ban_mark());
+                label.append(&icons::icon(Icon::NoSign, 13, tone::ALERT));
                 label.append(&page::text("Banned", &["alert"]));
                 peer_column.append(&label);
                 let line = callout(&format!("{} · {}", banned.address, ban_text(banned)));

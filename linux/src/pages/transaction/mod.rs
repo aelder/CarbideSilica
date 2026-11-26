@@ -14,7 +14,6 @@ pub mod layout;
 mod lists;
 mod overview;
 mod statement;
-mod style;
 mod trace;
 mod trace_route;
 
@@ -32,8 +31,7 @@ use crate::shared::registration_payments::RegistrationPaymentsCard;
 use crate::shared::statement_words::Namer;
 use crate::page::{self, Adjacent, Investigations, LoadView, Page};
 use crate::shared::{inclusion, json_tree};
-use crate::theme::{self, draw, font, tone};
-use crate::widgets::canvas::Canvas;
+use crate::widgets::icons::Icon;
 use crate::widgets::display;
 use crate::widgets::lamp;
 
@@ -173,7 +171,6 @@ fn has_cursor(widget: &gtk::Widget) -> bool {
 
 /// The page. Its signature is fixed by `pages/mod.rs`.
 pub fn build(model: &Rc<AppModel>, txid: &str) -> Rc<Page> {
-    style::install();
     let page = Page::scrolling(model);
     let txid = txid.to_string();
     let page_weak = Rc::downgrade(&page);
@@ -294,29 +291,11 @@ fn show(page: &Rc<Page>, model: &Rc<AppModel>, holder: &gtk::Box, transaction: a
 /// The key "Open in Charts", with the mark of a chart.
 fn charts_key(model: &Rc<AppModel>, height: u64) -> gtk::Button {
     let weak = Rc::downgrade(model);
-    let key = lamp::button("Open in Charts", move || {
+    let key = lamp::button_with("Open in Charts", Some(Icon::Chart), move || {
         if let Some(model) = weak.upgrade() {
             model.show_charts(Some(height), None);
         }
     });
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 7);
-    let mark = Canvas::new(13, 11, |_, snapshot, w, h| {
-        // `chart.xyaxis.line`: two axes and a line that rises.
-        let color = tone::VALUE.opacity(0.85);
-        draw::rule(snapshot, 0.5, 0.0, 0.5, h - 0.5, color, 1.0, &[]);
-        draw::rule(snapshot, 0.5, h - 0.5, w, h - 0.5, color, 1.0, &[]);
-        let line = gtk::gsk::PathBuilder::new();
-        line.move_to(2.5, h - 3.0);
-        line.line_to(w * 0.42, h * 0.45);
-        line.line_to(w * 0.62, h * 0.62);
-        line.line_to(w - 0.5, 1.5);
-        draw::stroke(snapshot, &line.to_path(), color, 1.0);
-    });
-    mark.set_valign(gtk::Align::Center);
-    mark.set_can_target(false);
-    row.append(&mark);
-    row.append(&theme::label(font::KEY, "Open in Charts", ""));
-    key.set_child(Some(&row));
     key.set_tooltip_text(Some("Open Charts at the block that holds this transaction."));
     key
 }

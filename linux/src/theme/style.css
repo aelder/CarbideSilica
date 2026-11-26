@@ -273,3 +273,79 @@ tooltip, tooltip.background {
 .chain-badge > button:hover, button.chain-badge:hover { background-color: alpha(@present, 0.06); }
 button.chain-badge { background: none; box-shadow: none; border: none; }
 checkbutton check:checked { background-image: none; }
+
+/* ---------------------------------------------------------------- shared parts */
+
+/* A plate on a field of the present's colour. */
+.plate.fill-present { background-color: @present; border-color: @present; color: @screen; }
+
+/* A key with no frame of its own: SwiftUI's `.buttonStyle(.plain)`. */
+button.plain-key { background: none; border: none; box-shadow: none; padding: 0; min-height: 0; min-width: 0; outline: none; }
+
+/* A key that opens a menu and has no frame of its own, such as the links key of an offer. */
+menubutton.frameless-menu > button { background: none; border: none; box-shadow: none; padding: 2px 4px; min-height: 0; min-width: 0; }
+menubutton.frameless-menu > button:hover { background-color: alpha(@present, 0.06); }
+
+/* The key that opens a lamp::Menu has one frame: the lamp's. */
+menubutton.lamp > button { background: none; border: none; box-shadow: none; padding: 0; min-height: 0; min-width: 0; color: inherit; outline: none; }
+
+/* Links in the tones of the text around them. Under the pointer they light as links do. */
+.display-link.value-link { color: @value; }
+.display-link.label-link { color: @label; }
+.display-link.value-link:hover, .display-link.label-link:hover { color: rgb(214, 242, 235); }
+
+/* A row of a table that can be selected: a faint field under the pointer, the present's
+   light and a line at its left edge when selected. */
+.table-row { background-color: transparent; }
+.table-row:hover { background-color: @grid; }
+.table-row.selected { background-color: alpha(@present, 0.1); box-shadow: inset 2px 0 0 @present; }
+
+/* Text at 85% of the value tone. */
+.value-soft { color: alpha(@value, 0.85); }
+
+/* A facet key of a filter: a lamp key whose legend and count follow its light. */
+.lamp.facet { padding: 0; min-height: 0; color: @value; }
+.lamp.facet .count { color: @label; }
+.lamp.facet:hover, .lamp.facet.chosen, .lamp.facet.pressed { color: @legend; }
+.lamp.facet:hover .count, .lamp.facet.chosen .count, .lamp.facet.pressed .count { color: @legend; }
+.lamp.facet:disabled { color: @value; opacity: 0.5; }
+.lamp.facet:disabled .count { color: @label; }
+.lamp.small.compact { padding: 3px 8px; }
+
+/* The lines of a JSON tree. The selected line has a faint light of the present. */
+.json-row { padding: 1px 0; }
+.json-row.json-selected { background-color: alpha(@present, 0.1); }
+.json-chevron { background: none; border: none; box-shadow: none; padding: 0; min-height: 0; min-width: 12px; }
+
+/* The transaction tile of an address: a thin rule around it, square. */
+.address-tile { border: 1px solid @rule; padding: 12px; }
+.address-columns, .address-columns > flowboxchild { padding: 0; margin: 0; background: none; }
+
+/* ---------------------------------------------------------------- pages */
+
+/* Currencies: a row of the table. */
+.currencies-tile { padding: 9px 8px; }
+
+/* Marketplace: an offer, and the name of an offer as a link. */
+.market-offer { padding: 7px 8px; }
+.display-link.market-title label { font-size: 15px; font-weight: 500; }
+
+/* Transaction: the marked row of the statement, the frames of a leg, an output's JSON and
+   the bytes, the boxes of the receipt, the sentence and the keys with no frame. */
+.tx-marked { background-color: alpha(@present, 0.08); }
+.tx-chosen-line {
+    background-color: alpha(@present, 0.08);
+    box-shadow: inset 2px 0 0 @present, inset 5px 0 3px -2px alpha(@present, 0.6);
+}
+.tx-frame { background-color: @screen; border: 1px solid @rule; padding: 12px; }
+.tx-json { background-color: @screen; border: 1px solid @rule; padding: 10px; }
+.tx-bytes { background-color: @screen; border: 1px solid @rule; border-radius: 4px; padding: 14px; }
+.tx-bytes:focus-visible, .tx-bytes:focus { outline: none; }
+.tx-box { border: 1px solid @axis; padding: 7px 10px; }
+.tx-box.strong-good { border-color: @good; background-color: alpha(@good, 0.08); }
+.tx-box.strong-present { border-color: @present; background-color: alpha(@present, 0.08); }
+.tx-box.open { border-style: dashed; }
+.tx-plate-key { background: none; border: none; box-shadow: none; padding: 0; min-height: 0; min-width: 0; }
+.tx-plate-key:hover .plate { border-color: @value; color: @value; }
+.tx-plate-key:hover .plate.fill-record, .tx-plate-key:hover .plate.fill-mined { color: @screen; }
+.tx-icon-key { background: none; border: none; box-shadow: none; padding: 0 2px; min-height: 0; min-width: 16px; }

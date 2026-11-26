@@ -383,7 +383,7 @@ impl Flow {
             });
             let run = choose.clone();
             let key = link::link(&node.row.title, false, move || run());
-            key.add_css_class(if node.row.style == RowStyle::Rest { "tx-tone-label" } else { "tx-tone-value" });
+            key.add_css_class(if node.row.style == RowStyle::Rest { "label-link" } else { "value-link" });
             if let Some(label) = link::label_of(&key) {
                 label.set_ellipsize(gtk::pango::EllipsizeMode::End);
             }

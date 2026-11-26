@@ -13,8 +13,8 @@ use crate::format;
 use crate::model::{AppModel, Topic};
 use crate::page::{self, Adjacent, LoadView, Page};
 use crate::shared::{confidence::confidence_mark, inclusion, json_tree};
-use crate::theme::{draw, tone, Color};
-use crate::widgets::canvas::Canvas;
+use crate::theme::tone;
+use crate::widgets::icons::Icon;
 use crate::widgets::display::PlateFill;
 use crate::widgets::{lamp, link};
 
@@ -97,7 +97,7 @@ fn show(page: &Rc<Page>, holder: &gtk::Box, block: api::BlockDetail) {
     let charts = {
         let (model, height) = (Rc::downgrade(&model), block.row.height);
         let hash = (!block.on_active_chain).then(|| block.row.hash.clone());
-        icon_key(Glyph::Chart, "Open in Charts", move || {
+        lamp::button_with("Open in Charts", Some(Icon::Chart), move || {
             if let Some(model) = model.upgrade() {
                 model.show_charts(Some(height), hash.clone());
             }
@@ -106,11 +106,11 @@ fn show(page: &Rc<Page>, holder: &gtk::Box, block: api::BlockDetail) {
     charts.set_tooltip_text(Some("Open Charts at this block."));
     keys.append(&charts);
     for (glyph, title, hash) in
-        [(Glyph::Left, "Previous", block.previous_hash.clone()), (Glyph::Right, "Next", block.next_hash.clone())]
+        [(Icon::ChevronLeft, "Previous", block.previous_hash.clone()), (Icon::ChevronRight, "Next", block.next_hash.clone())]
     {
         let model = Rc::downgrade(&model);
         let enabled = hash.is_some();
-        let key = icon_key(glyph, title, move || {
+        let key = lamp::button_with(title, Some(glyph), move || {
             if let (Some(model), Some(hash)) = (model.upgrade(), hash.clone()) {
                 model.step(Route::Block { id: hash });
             }
@@ -303,69 +303,6 @@ fn transaction_row(page: &Rc<Page>, transaction: &api::TransactionRow) -> gtk::B
         row.append(&amount);
     }
     row
-}
-
-// MARK: - Keys with a mark
-
-#[derive(Clone, Copy)]
-enum Glyph {
-    /// `chart.xyaxis.line`
-    Chart,
-    /// `chevron.left`
-    Left,
-    /// `chevron.right`
-    Right,
-}
-
-/// A key of the display with a mark before its legend (`Label(title, systemImage:)` in a
-/// lamp key). The mark takes the colour of the legend, so it follows the light.
-fn icon_key(glyph: Glyph, title: &str, action: impl Fn() + 'static) -> gtk::Button {
-    let key = lamp::button(title, action);
-    let legend = key.child();
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    let mark = Canvas::new(11, 11, move |canvas, snapshot, w, h| {
-        let c = canvas.color();
-        paint(snapshot, glyph, w, h, Color { r: c.red(), g: c.green(), b: c.blue(), a: c.alpha() });
-    });
-    mark.set_valign(gtk::Align::Center);
-    row.append(&mark);
-    key.set_child(Some(&row));
-    if let Some(legend) = legend {
-        row.append(&legend);
-    }
-    key
-}
-
-fn paint(snapshot: &gtk::Snapshot, glyph: Glyph, w: f32, h: f32, color: Color) {
-    let line = (w / 9.0).max(1.1);
-    let path = gtk::gsk::PathBuilder::new();
-    match glyph {
-        Glyph::Chart => {
-            // Two axes and a line that rises.
-            path.move_to(w * 0.08, h * 0.04);
-            path.line_to(w * 0.08, h * 0.92);
-            path.line_to(w * 0.96, h * 0.92);
-            draw::stroke(snapshot, &path.to_path(), color, line);
-            let trace = gtk::gsk::PathBuilder::new();
-            trace.move_to(w * 0.22, h * 0.72);
-            trace.line_to(w * 0.44, h * 0.42);
-            trace.line_to(w * 0.64, h * 0.6);
-            trace.line_to(w * 0.92, h * 0.18);
-            draw::stroke(snapshot, &trace.to_path(), color, line);
-        }
-        Glyph::Left => {
-            path.move_to(w * 0.64, h * 0.12);
-            path.line_to(w * 0.3, h * 0.5);
-            path.line_to(w * 0.64, h * 0.88);
-            draw::stroke(snapshot, &path.to_path(), color, line * 1.2);
-        }
-        Glyph::Right => {
-            path.move_to(w * 0.36, h * 0.12);
-            path.line_to(w * 0.7, h * 0.5);
-            path.line_to(w * 0.36, h * 0.88);
-            draw::stroke(snapshot, &path.to_path(), color, line * 1.2);
-        }
-    }
 }
 
 #[cfg(test)]

@@ -16,8 +16,8 @@ use crate::format;
 use crate::model::{AppModel, Topic};
 use crate::page::{self, Page};
 use crate::shared::identity_support;
-use crate::theme::{self, draw, font, tone, Color};
-use crate::widgets::canvas::Canvas;
+use crate::theme::{self, font, tone};
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::display::PlateFill;
 use crate::widgets::{lamp, loader};
 
@@ -74,7 +74,6 @@ pub struct ActivityList {
 impl ActivityList {
     /// The list's root widget. The list lives as long as the widget.
     pub fn new(page: &Rc<Page>, address: &str, on_stale: Option<Rc<dyn Fn()>>) -> gtk::Box {
-        install_style();
         let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
         let (top, tiles, missing, footer) = (
             gtk::Box::new(gtk::Orientation::Vertical, 12),
@@ -274,21 +273,6 @@ impl ActivityList {
     }
 }
 
-fn install_style() {
-    thread_local!(static DONE: Cell<bool> = const { Cell::new(false) });
-    if DONE.with(|done| done.replace(true)) {
-        return;
-    }
-    let Some(display) = gtk::gdk::Display::default() else { return };
-    let provider = gtk::CssProvider::new();
-    // A tile: a thin rule around it, square, as `Rectangle().strokeBorder(Tone.rule)`.
-    provider.load_from_string(
-        ".address-tile { border: 1px solid @rule; padding: 12px; }\n\
-         .address-columns, .address-columns > flowboxchild { padding: 0; margin: 0; background: none; }\n",
-    );
-    gtk::style_context_add_provider_for_display(&display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
-}
-
 /// One transaction: inputs on the left and outputs on the right, or one above the other
 /// when the window is narrow (`AddressTileView`).
 struct Tile;
@@ -443,67 +427,17 @@ fn baseline(label: gtk::Label) -> gtk::Label {
 }
 
 /// The mark of an output: unspent, spent, not known, or private.
-fn status_mark(flow: &api::AddressFlow) -> (Canvas, &'static str) {
-    let (kind, help) = if flow.private {
-        (Status::Private, "Private")
+fn status_mark(flow: &api::AddressFlow) -> (crate::widgets::canvas::Canvas, &'static str) {
+    let (kind, color, help) = if flow.private {
+        (Icon::Diamond, tone::LABEL, "Private")
     } else {
         match flow.status {
-            api::FlowStatus::Unspent => (Status::Unspent, "Unspent"),
-            api::FlowStatus::Spent => (Status::Spent, "Spent"),
-            api::FlowStatus::Unknown => (Status::Unknown, "Not known if spent"),
+            api::FlowStatus::Unspent => (Icon::Dot, tone::GOOD, "Unspent"),
+            api::FlowStatus::Spent => (Icon::Cross, tone::ALERT, "Spent"),
+            api::FlowStatus::Unknown => (Icon::QuestionCircle, tone::LABEL, "Not known if spent"),
         }
     };
-    let mark = Canvas::new(11, 11, move |_, snapshot, w, h| paint_status(snapshot, kind, w, h));
-    mark.set_valign(gtk::Align::Center);
-    (mark, help)
-}
-
-#[derive(Clone, Copy)]
-enum Status {
-    /// `diamond.fill`
-    Private,
-    /// `circle.fill`
-    Unspent,
-    /// `xmark`
-    Spent,
-    /// `questionmark.circle`
-    Unknown,
-}
-
-fn paint_status(snapshot: &gtk::Snapshot, kind: Status, w: f32, h: f32) {
-    let (cx, cy, r) = (w / 2.0, h / 2.0, w.min(h) / 2.0 - 0.5);
-    let path = gtk::gsk::PathBuilder::new();
-    match kind {
-        Status::Private => {
-            path.move_to(cx, cy - r);
-            path.line_to(cx + r * 0.8, cy);
-            path.line_to(cx, cy + r);
-            path.line_to(cx - r * 0.8, cy);
-            path.close();
-            draw::fill(snapshot, &path.to_path(), tone::LABEL);
-        }
-        Status::Unspent => {
-            path.add_circle(&draw::point(cx, cy), r * 0.85);
-            draw::fill(snapshot, &path.to_path(), tone::GOOD);
-        }
-        Status::Spent => {
-            let d = r * 0.62;
-            draw::rule(snapshot, cx - d, cy - d, cx + d, cy + d, tone::ALERT, 1.5, &[]);
-            draw::rule(snapshot, cx - d, cy + d, cx + d, cy - d, tone::ALERT, 1.5, &[]);
-        }
-        Status::Unknown => {
-            let c: Color = tone::LABEL;
-            path.add_circle(&draw::point(cx, cy), r * 0.9);
-            draw::stroke(snapshot, &path.to_path(), c, 1.1);
-            let q = gtk::gsk::PathBuilder::new();
-            q.move_to(cx - r * 0.32, cy - r * 0.22);
-            q.quad_to(cx - r * 0.28, cy - r * 0.55, cx, cy - r * 0.55);
-            q.quad_to(cx + r * 0.36, cy - r * 0.5, cx + r * 0.32, cy - r * 0.18);
-            q.quad_to(cx + r * 0.28, cy, cx, cy + r * 0.14);
-            draw::stroke(snapshot, &q.to_path(), c, 1.1);
-            draw::fill_rect(snapshot, cx - 0.65, cy + r * 0.36, 1.3, 1.3, c);
-        }
-    }
+    (icons::icon(kind, 11, color), help)
 }
 
 #[cfg(test)]

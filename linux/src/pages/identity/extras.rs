@@ -16,11 +16,11 @@ use crate::page::{self, load::clear, Card, Page};
 use crate::shared::confidence::confidence_mark;
 use crate::shared::identity_support::{self as support, small_progress};
 use crate::theme::{self, font, tone, Color};
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display;
 use crate::widgets::lamp;
 
-use super::marks::{self, Mark};
 
 pub fn hop_text(hops: u32) -> String {
     format!("{hops} transfer{}", if hops == 1 { "" } else { "s" })
@@ -253,7 +253,7 @@ fn trail(result: &TokenControl) -> gtk::Overlay {
         more.set_valign(gtk::Align::Center);
         line.append(&more);
     }
-    line.append(&marks::mark(Mark::ArrowRight, 13, tone::AXIS));
+    line.append(&icons::icon(Icon::ArrowRight, 13, tone::AXIS));
     let end = gtk::Label::new(None);
     end.set_markup(&super::role_markup(font::SMALL, end_word(&result.state), end_color(&result.state)));
     end.set_valign(gtk::Align::Center);

@@ -15,7 +15,6 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use super::graph::{self, Graph, GraphData};
-use super::marks::{self, Mark};
 use super::picture::{self, LinkState, NotarizationMark};
 use super::state_seek::other_chain;
 use crate::bridge::{self, api, api::Route};
@@ -24,6 +23,7 @@ use crate::model::{AppModel, Topic};
 use crate::page::{self, load::clear, Card, Page};
 use crate::shared::currency_stores::{height_text, known_name, observation_source, take_notarization_request};
 use crate::theme::{tone, Color};
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display::{self, PlateFill};
 use crate::widgets::{lamp, loader};
@@ -663,11 +663,11 @@ fn row_view(page: &Rc<Page>, model: &Rc<AppModel>, row: &api::BrowserNotarizatio
     // Status, transaction and output.
     let first = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     let status = if row.synthetic {
-        marks::label(Mark::Dotted, "Synthetic proof root", tone::LABEL, &[])
+        icons::label(Icon::RingDotted, "Synthetic proof root", tone::LABEL, &[])
     } else if row.confirmed {
-        marks::label(Mark::Seal, "Confirmed", tone::GOOD, &[])
+        icons::label(Icon::Seal, "Confirmed", tone::GOOD, &[])
     } else {
-        marks::label(Mark::Dashed, "Unconfirmed", tone::MINED, &[])
+        icons::label(Icon::RingDashed, "Unconfirmed", tone::MINED, &[])
     };
     status.set_size_request(150, -1);
     first.append(&status);
@@ -686,7 +686,7 @@ fn row_view(page: &Rc<Page>, model: &Rc<AppModel>, row: &api::BrowserNotarizatio
     spacer.set_hexpand(true);
     first.append(&spacer);
     if !row.on_best_chain {
-        first.append(&marks::label(Mark::Branch, "On a side branch", tone::MINED, &["callout"]));
+        first.append(&icons::label(Icon::Branch, "On a side branch", tone::MINED, &["callout"]));
     }
     column.append(&first);
     // Committed heights by system.
@@ -736,8 +736,8 @@ fn row_view(page: &Rc<Page>, model: &Rc<AppModel>, row: &api::BrowserNotarizatio
         let id = page::text(&format!("{}:{}", format::short(&previous.output.txid, 10, 8), previous.output.output), &["mono", "callout"]);
         id.set_selectable(true);
         line.append(&id);
-        line.append(&marks::label(
-            if previous.found { Mark::Check } else { Mark::Question },
+        line.append(&icons::label(
+            if previous.found { Icon::CheckCircle } else { Icon::QuestionCircle },
             &previous.status,
             if previous.found { tone::GOOD } else { tone::MINED },
             &[],
@@ -774,17 +774,17 @@ fn heights_text(model: &Rc<AppModel>, row: &api::BrowserNotarization, perspectiv
         .join(" · ")
 }
 
-pub fn check_mark(check: &api::RootCheck) -> Mark {
+pub fn check_mark(check: &api::RootCheck) -> Icon {
     use api::RootCheck::*;
     match check {
-        Active => Mark::CheckFill,
-        KnownOffChain | NotFound => Mark::WarningFill,
-        HeightMismatch { .. } => Mark::Exclamation,
-        PresentMembershipUnknown => Mark::HalfFilled,
-        SourceBehind { .. } => Mark::Clock,
-        NoSourceConfigured | NoSourceEnabled => Mark::Slash,
-        ChainQueryFailed | BlockLookupFailed | InvalidHeader => Mark::Cross,
-        MissingHash | NotChecked => Mark::Question,
+        Active => Icon::CheckCircleFill,
+        KnownOffChain | NotFound => Icon::WarningFill,
+        HeightMismatch { .. } => Icon::ExclamationCircle,
+        PresentMembershipUnknown => Icon::HalfFilled,
+        SourceBehind { .. } => Icon::Clock,
+        NoSourceConfigured | NoSourceEnabled => Icon::SlashCircle,
+        ChainQueryFailed | BlockLookupFailed | InvalidHeader => Icon::CrossCircle,
+        MissingHash | NotChecked => Icon::QuestionCircle,
     }
 }
 
@@ -803,7 +803,7 @@ fn root_line(page: &Rc<Page>, model: &Rc<AppModel>, root: &api::ProofRootRow, ch
     let line = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     line.append(&row_name(&format!("{system} root")));
     match (root.check.as_ref(), root.status.as_ref()) {
-        (Some(check), Some(text)) => line.append(&marks::label(check_mark(check), text, check_color(check), &[])),
+        (Some(check), Some(text)) => line.append(&icons::label(check_mark(check), text, check_color(check), &[])),
         _ => line.append(&page::text("Not checked. A Verus node cannot check an Ethereum block.", &["secondary"])),
     }
     if let Some(hash) = root.block_hash.as_ref() {
@@ -833,8 +833,8 @@ mod tests {
 
     #[test]
     fn checks_have_marks_and_colours() {
-        assert_eq!(check_mark(&api::RootCheck::Active), Mark::CheckFill);
-        assert_eq!(check_mark(&api::RootCheck::SourceBehind { tip: 3 }), Mark::Clock);
+        assert_eq!(check_mark(&api::RootCheck::Active), Icon::CheckCircleFill);
+        assert_eq!(check_mark(&api::RootCheck::SourceBehind { tip: 3 }), Icon::Clock);
         assert_eq!(check_color(&api::RootCheck::HeightMismatch { found: 1 }), tone::ALERT);
         assert_eq!(check_color(&api::RootCheck::NoSourceEnabled), tone::LABEL);
         assert_eq!(check_color(&api::RootCheck::PresentMembershipUnknown), tone::MINED);

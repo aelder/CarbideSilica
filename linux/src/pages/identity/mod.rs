@@ -12,7 +12,6 @@ mod control;
 mod evidence;
 mod extras;
 mod lanes;
-mod marks;
 mod origin;
 
 use std::cell::{Cell, RefCell};
@@ -38,7 +37,6 @@ use crate::widgets::{lamp, link};
 use evidence::{EvidenceCard, EvidenceState};
 use extras::TokenControlCard;
 use lanes::VersionStrip;
-use marks::Mark;
 use crate::shared::registration_payments::RegistrationPaymentsCard;
 
 /// Pango markup for a text in a type role and a colour.
@@ -514,7 +512,7 @@ impl IdentityView {
         let good = !stale && state.status.to_lowercase() == "active";
         let chip = gtk::Box::new(gtk::Orientation::Horizontal, 5);
         let mark = if good {
-            marks::mark(Mark::CheckCircle, 12, tone::GOOD)
+            icons::icon(Icon::CheckCircle, 12, tone::GOOD)
         } else {
             icons::icon(Icon::Warning, 12, tone::ALERT)
         };
@@ -534,7 +532,7 @@ impl IdentityView {
                 theme::set_role(&label, font::Role { weight: 500, ..font::TEXT_CAPTION });
                 currency.set_child(None::<&gtk::Widget>);
                 let content = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-                content.append(&marks::text_mark(Mark::HexagonGrid, 12));
+                content.append(&icons::text_icon(Icon::HexagonGrid, 12));
                 content.append(&label);
                 currency.set_child(Some(&content));
             }
@@ -565,23 +563,17 @@ impl IdentityView {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
         let viewed = self.viewed.get();
         let count = self.timeline.versions.len();
-        let key = |title: &str, mark: Mark, target: usize, help: &str| {
+        let key = |title: &str, mark: Icon, target: usize, help: &str| {
             let weak = Rc::downgrade(self);
-            let button = lamp::button(title, move || {
+            let button = lamp::button_with(title, Some(mark), move || {
                 if let Some(view) = weak.upgrade() {
                     view.select(target);
                 }
             });
-            let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-            let label = theme::label(font::KEY, title, "");
-            let icon = marks::text_mark(mark, 10);
-            content.append(&icon);
-            content.append(&label);
-            button.set_child(Some(&content));
             button.set_tooltip_text(Some(help));
             button
         };
-        let previous = key("Previous version", Mark::ChevronLeft, viewed.saturating_sub(1), "Previous version (Ctrl+Alt+[)");
+        let previous = key("Previous version", Icon::ChevronLeft, viewed.saturating_sub(1), "Previous version (Ctrl+Alt+[)");
         previous.set_sensitive(viewed > 0);
         row.append(&previous);
         let version = page::text(&format!("Version {} of {count}", viewed + 1), &["semibold", "tabular", "value"]);
@@ -593,7 +585,7 @@ impl IdentityView {
         );
         when.set_valign(gtk::Align::Center);
         row.append(&when);
-        let next = key("Next version", Mark::ChevronRight, (viewed + 1).min(self.latest_index()), "Next version (Ctrl+Alt+])");
+        let next = key("Next version", Icon::ChevronRight, (viewed + 1).min(self.latest_index()), "Next version (Ctrl+Alt+])");
         next.set_sensitive(!self.is_latest());
         row.append(&next);
         if !self.is_latest() {

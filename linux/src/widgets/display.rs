@@ -43,6 +43,24 @@ pub fn panel(child: &impl IsA<gtk::Widget>, padding: i32) -> gtk::Overlay {
     overlay
 }
 
+/// A child in a thin square outline of `color`, `horizontal` and `vertical` inside it: the
+/// Swift app's `.padding().overlay(Rectangle().strokeBorder(color, lineWidth: 1))`.
+pub fn outlined(child: &impl IsA<gtk::Widget>, color: Color, horizontal: i32, vertical: i32) -> gtk::Overlay {
+    let child = child.as_ref();
+    child.set_margin_start(horizontal);
+    child.set_margin_end(horizontal);
+    child.set_margin_top(vertical);
+    child.set_margin_bottom(vertical);
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(child));
+    let frame = Canvas::new(0, 0, move |_, snapshot, w, h| {
+        draw::stroke(snapshot, &draw::rect_path(0.5, 0.5, w - 1.0, h - 1.0), color, 1.0);
+    });
+    frame.set_can_target(false);
+    overlay.add_overlay(&frame);
+    overlay
+}
+
 /// A thin rule across a panel, between its parts.
 pub fn rule() -> gtk::Box {
     let rule = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -110,6 +128,8 @@ pub enum PlateFill {
     Record,
     Good,
     Alert,
+    /// The present's colour: a chosen kind.
+    Present,
 }
 
 impl PlateFill {
@@ -121,6 +141,7 @@ impl PlateFill {
             PlateFill::Record => Some(tone::RECORD),
             PlateFill::Good => Some(tone::GOOD),
             PlateFill::Alert => Some(tone::ALERT),
+            PlateFill::Present => Some(tone::PRESENT),
         }
     }
 }
@@ -139,6 +160,7 @@ pub fn plate(text: &str, fill: PlateFill) -> gtk::Label {
         PlateFill::Record => "fill-record",
         PlateFill::Good => "fill-good",
         PlateFill::Alert => "fill-alert",
+        PlateFill::Present => "fill-present",
     };
     label.add_css_class(class);
     label

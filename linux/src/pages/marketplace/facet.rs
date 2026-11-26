@@ -16,7 +16,7 @@ pub fn facet_option(label: &str, count: usize, share: f64, on: bool, action: imp
     let usable = count > 0 || on;
     let button = gtk::Button::new();
     button.add_css_class("lamp");
-    button.add_css_class("market-facet");
+    button.add_css_class("facet");
     lamp::set_chosen(&button, on);
 
     let hovering = Rc::new(Cell::new(false));

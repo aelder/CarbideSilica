@@ -12,7 +12,6 @@ use crate::format;
 use crate::model::AppModel;
 use crate::page::{self, load::clear, Page};
 use crate::theme::tone;
-use crate::widgets::canvas::Canvas;
 use crate::widgets::display;
 use crate::widgets::icons::{self, Icon};
 use crate::widgets::link;
@@ -121,20 +120,13 @@ impl MempoolList {
             content.append(&name);
             if sort == column {
                 let down = descending;
-                let chevron = Canvas::new(8, 8, move |_, snapshot, w, h| {
-                    if !down {
-                        // chevron.up: the mark of chevron.down, turned.
-                        snapshot.translate(&gtk::graphene::Point::new(w, h));
-                        snapshot.rotate(180.0);
-                    }
-                    icons::paint(snapshot, Icon::Down, w, h, tone::PRESENT);
-                });
+                let chevron = icons::icon(if down { Icon::Down } else { Icon::ChevronUp }, 8, tone::PRESENT);
                 chevron.set_valign(gtk::Align::Center);
                 chevron.update_property(&[gtk::accessible::Property::Label(if down { "descending" } else { "ascending" })]);
                 content.append(&chevron);
             }
             let button = gtk::Button::new();
-            button.add_css_class("mempool-plain");
+            button.add_css_class("plain-key");
             button.set_child(Some(&content));
             button.set_tooltip_text(Some(&format!("Sort by {}", column.title().to_lowercase())));
             let weak = Rc::downgrade(self);

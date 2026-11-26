@@ -26,7 +26,7 @@ use crate::model::{AppModel, Topic};
 use crate::page::load::clear;
 use crate::page::{self, Card, Page, SourceLine};
 use crate::shared::currency_stores::known_name;
-use crate::theme::{self, draw, font, lamp as lamp_tone, tone};
+use crate::theme::{self, draw, font, tone};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display::{self, Readout};
 use crate::widgets::{lamp, loader};
@@ -79,7 +79,6 @@ struct State {
 
 /// The page. Its signature is fixed by `pages/mod.rs`.
 pub fn build(model: &Rc<AppModel>) -> Rc<Page> {
-    install_css();
     let page = Page::scrolling(model);
     let view = View::new(&page);
     view.render();
@@ -663,7 +662,7 @@ impl View {
                         format::integer(state.detailed as u64),
                         format::integer(state.items.len() as u64)
                     ),
-                    &["market-caption", "secondary", "tabular"],
+                    &["caption-small", "secondary", "tabular"],
                 );
                 text.set_valign(gtk::Align::Center);
                 progress.append(&text);
@@ -672,7 +671,7 @@ impl View {
                     problem
                         .as_deref()
                         .unwrap_or("The sellers and the listing dates are not read. They need two requests for each offer."),
-                    &["market-caption", "secondary"],
+                    &["caption-small", "secondary"],
                 );
                 text.set_wrap(true);
                 text.set_valign(gtk::Align::Center);
@@ -683,7 +682,7 @@ impl View {
                         glib::spawn_future_local(async move { view.load_details(true).await });
                     }
                 });
-                read.add_css_class("market-small-key");
+                read.add_css_class("compact");
                 progress.append(&read);
             }
             panel.append(&progress);
@@ -809,7 +808,7 @@ impl View {
             self.facets.append(&group);
         }
         if state.detailed < state.items.len() && !with_store(|s| s.loading) {
-            let note = page::paragraph("The Seller and Offered filters appear when the sellers and dates are read.", &["market-caption", "secondary"]);
+            let note = page::paragraph("The Seller and Offered filters appear when the sellers and dates are read.", &["caption-small", "secondary"]);
             self.facets.append(&note);
         }
     }
@@ -906,39 +905,3 @@ fn drop_then<T>(state: std::cell::Ref<'_, State>, f: impl FnOnce() -> T) -> T {
     f()
 }
 
-/// The styles of this page that `style.css` does not have: the filter keys, the caption
-/// size of macOS, the names of the offers and the links key.
-fn install_css() {
-    thread_local! {
-        static INSTALLED: Cell<bool> = const { Cell::new(false) };
-    }
-    if INSTALLED.with(|done| done.replace(true)) {
-        return;
-    }
-    let Some(display) = gtk::gdk::Display::default() else { return };
-    let css = format!(
-        ".lamp.market-facet {{ padding: 0; min-height: 0; color: {value}; }}\n\
-         .lamp.market-facet .count {{ color: {label}; }}\n\
-         .lamp.market-facet:hover, .lamp.market-facet.chosen, .lamp.market-facet.pressed {{ color: {legend}; }}\n\
-         .lamp.market-facet:hover .count, .lamp.market-facet.chosen .count, .lamp.market-facet.pressed .count {{ color: {legend}; }}\n\
-         .lamp.market-facet:disabled {{ color: {value}; opacity: 0.5; }}\n\
-         .lamp.market-facet:disabled .count {{ color: {label}; }}\n\
-         .lamp.small.market-small-key {{ padding: 3px 8px; }}\n\
-         .market-caption {{ font-size: 10px; }}\n\
-         .display-link.market-title {{ color: {value}; }}\n\
-         .display-link.market-title label {{ font-size: 15px; font-weight: 500; }}\n\
-         .display-link.market-title:hover {{ color: rgb(214, 242, 235); }}\n\
-         .display-link.market-label-link {{ color: {label}; }}\n\
-         .display-link.market-label-link:hover {{ color: rgb(214, 242, 235); }}\n\
-         .market-offer {{ padding: 7px 8px; }}\n\
-         menubutton.market-links > button {{ background: none; border: none; box-shadow: none; padding: 2px 4px; min-height: 0; min-width: 0; }}\n\
-         menubutton.market-links > button:hover {{ background-color: {hover}; }}\n",
-        value = tone::VALUE.css(),
-        label = tone::LABEL.css(),
-        legend = lamp_tone::LEGEND.css(),
-        hover = tone::PRESENT.opacity(0.06).css(),
-    );
-    let provider = gtk::CssProvider::new();
-    provider.load_from_string(&css);
-    gtk::style_context_add_provider_for_display(&display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
-}

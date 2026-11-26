@@ -27,8 +27,8 @@ use crate::page::load::clear;
 use crate::page::{self, Card, Page, PlaceActions, SourceLine, Toggle};
 use crate::settings;
 use crate::shared::branches;
-use crate::theme::{draw, tone};
-use crate::widgets::canvas::Canvas;
+use crate::theme::tone;
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::loader;
 use commands::{window_of, ControlsCard, PeerCommands};
 use feed::PeerFeed;
@@ -52,20 +52,6 @@ fn recent_speed(model: &AppModel) -> Option<f64> {
     (!recent.is_empty()).then(|| recent.iter().sum::<f64>() / recent.len() as f64)
 }
 
-/// The mark of a server (`server.rack`), for the state of no connection.
-fn server_mark() -> Canvas {
-    let mark = Canvas::new(34, 34, |_, snapshot, w, h| {
-        for row in 0..3 {
-            let y = h * 0.14 + row as f32 * h * 0.26;
-            draw::stroke(snapshot, &draw::rect_path(w * 0.12, y, w * 0.76, h * 0.2), tone::LABEL, 1.4);
-            draw::fill(snapshot, &draw::ellipse_path(w * 0.22, y + h * 0.07, h * 0.06, h * 0.06), tone::LABEL);
-            draw::rule(snapshot, w * 0.5, y + h * 0.1, w * 0.78, y + h * 0.1, tone::LABEL, 1.2, &[]);
-        }
-    });
-    mark.set_halign(gtk::Align::Center);
-    mark
-}
-
 /// The page. Its signature is fixed by `pages/mod.rs`.
 pub fn build(model: &Rc<AppModel>) -> Rc<Page> {
     let page = Page::scrolling(model);
@@ -76,7 +62,9 @@ pub fn build(model: &Rc<AppModel>) -> Rc<Page> {
     let unavailable = gtk::Box::new(gtk::Orientation::Vertical, 10);
     unavailable.set_halign(gtk::Align::Center);
     unavailable.set_valign(gtk::Align::Center);
-    unavailable.append(&server_mark());
+    let server = icons::icon(Icon::ServerRack, 34, tone::LABEL);
+    server.set_halign(gtk::Align::Center);
+    unavailable.append(&server);
     let title = gtk::Label::new(Some("No connection to the node"));
     title.add_css_class("dialog-title");
     unavailable.append(&title);

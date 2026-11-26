@@ -23,7 +23,8 @@ use crate::model::{AppModel, Topic};
 use crate::page::load::clear;
 use crate::page::{self, Card, Page, SourceLine};
 use crate::shared::currency_stores::{height_text, known_name};
-use crate::theme::{self, draw, font, tone};
+use crate::theme::tone;
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::clamp::Clamp;
 use crate::widgets::display::{self, PlateFill, Readout};
@@ -38,7 +39,6 @@ const START_WIDTH: i32 = 86;
 
 /// The page. Its signature is fixed by `pages/mod.rs`.
 pub fn build(model: &Rc<AppModel>) -> Rc<Page> {
-    install_css();
     let page = Page::scrolling(model);
     let view = View::new(&page);
     view.apply();
@@ -450,18 +450,7 @@ impl View {
             arrow.set_visible(active);
             let descending = state.descending;
             arrow.set_draw(move |_, snapshot, w, h| {
-                let builder = gtk::gsk::PathBuilder::new();
-                if descending {
-                    builder.move_to(0.0, 0.0);
-                    builder.line_to(w, 0.0);
-                    builder.line_to(w / 2.0, h);
-                } else {
-                    builder.move_to(0.0, h);
-                    builder.line_to(w, h);
-                    builder.line_to(w / 2.0, 0.0);
-                }
-                builder.close();
-                draw::fill(snapshot, &builder.to_path(), tone::PRESENT);
+                icons::paint(snapshot, if descending { Icon::TriangleDown } else { Icon::TriangleUp }, w, h, tone::PRESENT);
             });
         }
 
@@ -589,6 +578,7 @@ fn heading(column: CurrencySort, store: Rc<Store>) -> (gtk::Box, Canvas) {
 fn currency_tile(page: &Rc<Page>, model: &Rc<AppModel>, store: &Rc<Store>, row: &CurrencyListing) -> gtk::Box {
     let tile = gtk::Box::new(gtk::Orientation::Horizontal, 16);
     tile.add_css_class("currencies-tile");
+    tile.add_css_class("table-row");
     tile.set_tooltip_text(Some(&format!("Open {}", row.name)));
 
     let left = gtk::Box::new(gtk::Orientation::Vertical, 5);
@@ -599,7 +589,7 @@ fn currency_tile(page: &Rc<Page>, model: &Rc<AppModel>, store: &Rc<Store>, row: 
     name.set_valign(gtk::Align::Baseline);
     name.set_single_line_mode(true);
     names.append(&name);
-    let id = page::text(&row.currency_id, &["currencies-id"]);
+    let id = page::text(&row.currency_id, &["mono-caption", "label"]);
     id.set_valign(gtk::Align::Baseline);
     id.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
     id.set_hexpand(true);
@@ -618,9 +608,10 @@ fn currency_tile(page: &Rc<Page>, model: &Rc<AppModel>, store: &Rc<Store>, row: 
     tile.append(&left);
 
     let reserves = logic::reserves_text(row, |id, fallback| known_name(id, model, fallback));
-    let reserves = page::text(&reserves, &["callout", "currencies-reserves"]);
+    let reserves = page::text(&reserves, &["callout", "value-soft"]);
     if row.reserve_ids.is_empty() {
-        reserves.add_css_class("empty");
+        reserves.remove_css_class("value-soft");
+        reserves.add_css_class("label");
     }
     reserves.set_wrap(true);
     reserves.set_wrap_mode(gtk::pango::WrapMode::WordChar);
@@ -700,11 +691,7 @@ fn fit(label: &gtk::Label, width: i32) {
 /// Lights a key made by `lamp::toggle`, and puts a line through its legend or takes it off.
 fn set_toggle(key: &gtk::Button, title: &str, lit: bool, struck: bool) {
     lamp::set_chosen(key, lit);
-    set_class(key, "struck", struck);
-    if let Some(label) = key.child().and_downcast::<gtk::Label>() {
-        let markup = theme::markup(font::KEY, title);
-        label.set_markup(&if struck { format!("<s>{markup}</s>") } else { markup });
-    }
+    lamp::set_toggle(key, title, struck);
 }
 
 fn set_class(widget: &impl IsA<gtk::Widget>, class: &str, on: bool) {
@@ -715,30 +702,3 @@ fn set_class(widget: &impl IsA<gtk::Widget>, class: &str, on: bool) {
     }
 }
 
-/// The styles of this page that `style.css` does not have: the light of a row under the
-/// pointer and of the selected row, the ID and the reserves.
-fn install_css() {
-    thread_local! {
-        static INSTALLED: Cell<bool> = const { Cell::new(false) };
-    }
-    if INSTALLED.with(|done| done.replace(true)) {
-        return;
-    }
-    let Some(display) = gtk::gdk::Display::default() else { return };
-    let css = format!(
-        ".currencies-tile {{ padding: 9px 8px; background-color: transparent; }}\n\
-         .currencies-tile:hover {{ background-color: {grid}; }}\n\
-         .currencies-tile.selected {{ background-color: {selected}; box-shadow: inset 2px 0 0 {present}; }}\n\
-         .currencies-id {{ font-family: \"IBM Plex Mono\"; font-size: 10px; color: {label}; }}\n\
-         .currencies-reserves {{ color: {reserves}; }}\n\
-         .currencies-reserves.empty {{ color: {label}; }}\n",
-        grid = tone::GRID.css(),
-        selected = tone::PRESENT.opacity(0.1).css(),
-        present = tone::PRESENT.css(),
-        label = tone::LABEL.css(),
-        reserves = tone::VALUE.opacity(0.85).css(),
-    );
-    let provider = gtk::CssProvider::new();
-    provider.load_from_string(&css);
-    gtk::style_context_add_provider_for_display(&display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
-}

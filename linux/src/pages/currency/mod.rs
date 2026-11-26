@@ -6,7 +6,6 @@
 
 mod basket;
 mod graph;
-mod marks;
 mod notarizations;
 mod over_time;
 mod picture;

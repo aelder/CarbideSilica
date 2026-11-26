@@ -13,6 +13,7 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use super::canvas::Canvas;
+use super::icons::{self, Icon};
 use crate::theme::{self, draw, font, lamp, sound, tone};
 
 /// Gives a widget the sounds of a key: the pointer on it, the press and the release. While
@@ -131,12 +132,26 @@ impl LampKey {
 /// The style of a button of the display: a small square key with a lamp, its legend in
 /// spaced capitals.
 pub fn button(title: &str, action: impl Fn() + 'static) -> gtk::Button {
+    button_with(title, None, action)
+}
+
+/// A key of [`button`] with a mark before its legend (`Label(title, systemImage:)` in a
+/// lamp key). The mark takes the colour of the legend, so it follows the light.
+pub fn button_with(title: &str, icon: Option<Icon>, action: impl Fn() + 'static) -> gtk::Button {
     let button = gtk::Button::new();
     button.add_css_class("lamp");
     button.add_css_class("small");
     let label = theme::label(font::KEY, title, "");
     label.set_xalign(0.5);
-    button.set_child(Some(&label));
+    match icon {
+        Some(icon) => {
+            let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            row.append(&icons::text_icon(icon, 10));
+            row.append(&label);
+            button.set_child(Some(&row));
+        }
+        None => button.set_child(Some(&label)),
+    }
     button.set_halign(gtk::Align::Start);
     button.set_valign(gtk::Align::Center);
     button.connect_clicked(move |_| action());
@@ -144,9 +159,18 @@ pub fn button(title: &str, action: impl Fn() + 'static) -> gtk::Button {
     button
 }
 
-/// Sets the legend of a key made by [`button`].
+/// The legend of a key made by [`button`] or [`button_with`].
+fn legend(button: &gtk::Button) -> Option<gtk::Label> {
+    let child = button.child()?;
+    match child.downcast::<gtk::Label>() {
+        Ok(label) => Some(label),
+        Err(child) => child.last_child().and_downcast::<gtk::Label>(),
+    }
+}
+
+/// Sets the legend of a key made by [`button`] or [`button_with`].
 pub fn set_button_title(button: &gtk::Button, title: &str) {
-    if let Some(label) = button.child().and_downcast::<gtk::Label>() {
+    if let Some(label) = legend(button) {
         theme::set_label(&label, font::KEY, title);
     }
 }
@@ -231,6 +255,18 @@ fn set_toggle_title(label: &gtk::Label, title: &str, struck: bool) {
     label.set_markup(&if struck { format!("<s>{markup}</s>") } else { markup });
 }
 
+/// Changes the legend of a key made by [`toggle`], and whether it has a line through it.
+pub fn set_toggle(key: &gtk::Button, title: &str, struck: bool) {
+    if let Some(label) = key.child().and_downcast::<gtk::Label>() {
+        set_toggle_title(&label, title, struck);
+    }
+    if struck {
+        key.add_css_class("struck");
+    } else {
+        key.remove_css_class("struck");
+    }
+}
+
 /// A key that opens a list of choices and shows the chosen one.
 pub struct Menu {
     pub button: gtk::MenuButton,
@@ -246,14 +282,7 @@ impl Menu {
         button.add_css_class("menu-key");
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let label = gtk::Label::new(None);
-        let mark = Canvas::new(7, 6, |_, snapshot, w, h| {
-            let builder = gtk::gsk::PathBuilder::new();
-            builder.move_to(0.0, 0.0);
-            builder.line_to(w, 0.0);
-            builder.line_to(w / 2.0, h);
-            builder.close();
-            draw::fill(snapshot, &builder.to_path(), tone::VALUE.opacity(0.9));
-        });
+        let mark = icons::text_icon(Icon::TriangleDown, 6);
         mark.set_valign(gtk::Align::Center);
         row.append(&label);
         row.append(&mark);
@@ -421,18 +450,7 @@ impl Disclosure {
         let state = Rc::new(Cell::new(expanded));
         let s = state.clone();
         let mark = Canvas::new(7, 7, move |_, snapshot, w, h| {
-            let builder = gtk::gsk::PathBuilder::new();
-            if s.get() {
-                builder.move_to(0.0, 1.0);
-                builder.line_to(w, 1.0);
-                builder.line_to(w / 2.0, h);
-            } else {
-                builder.move_to(1.0, 0.0);
-                builder.line_to(w, h / 2.0);
-                builder.line_to(1.0, h);
-            }
-            builder.close();
-            draw::fill(snapshot, &builder.to_path(), tone::PRESENT);
+            icons::paint(snapshot, if s.get() { Icon::TriangleDown } else { Icon::TriangleRight }, w, h, tone::PRESENT);
         });
         mark.set_valign(gtk::Align::Center);
         header.append(&mark);

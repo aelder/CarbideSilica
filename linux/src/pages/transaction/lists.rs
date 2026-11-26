@@ -14,8 +14,8 @@ use crate::model::{AppModel, Topic};
 use crate::shared::json_tree::json_tree;
 use crate::page::{self, load::clear, Page};
 use crate::route as routes;
-use crate::theme::{draw, tone};
-use crate::widgets::canvas::Canvas;
+use crate::theme::tone;
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::display::{self, PlateFill};
 use crate::widgets::{lamp, link};
 
@@ -204,32 +204,6 @@ fn index_label(index: u32) -> gtk::Label {
     label
 }
 
-/// The hourglass of a maturity badge.
-fn hourglass(color: crate::theme::Color) -> Canvas {
-    let mark = Canvas::new(9, 11, move |_, snapshot, w, h| {
-        draw::rule(snapshot, 0.5, 0.5, w - 0.5, 0.5, color, 1.0, &[]);
-        draw::rule(snapshot, 0.5, h - 0.5, w - 0.5, h - 0.5, color, 1.0, &[]);
-        let glass = gtk::gsk::PathBuilder::new();
-        glass.move_to(1.5, 1.0);
-        glass.line_to(w - 1.5, 1.0);
-        glass.line_to(w / 2.0 + 0.6, h / 2.0);
-        glass.line_to(w - 1.5, h - 1.0);
-        glass.line_to(1.5, h - 1.0);
-        glass.line_to(w / 2.0 - 0.6, h / 2.0);
-        glass.close();
-        draw::stroke(snapshot, &glass.to_path(), color, 1.0);
-        let sand = gtk::gsk::PathBuilder::new();
-        sand.move_to(2.8, h - 1.5);
-        sand.line_to(w - 2.8, h - 1.5);
-        sand.line_to(w / 2.0, h / 2.0 + 1.5);
-        sand.close();
-        draw::fill(snapshot, &sand.to_path(), color);
-    });
-    mark.set_valign(gtk::Align::Center);
-    mark.set_can_target(false);
-    mark
-}
-
 /// An annotation or status badge, in Carbide's words.
 fn annotation_row(annotations: &[String], badges: &[String]) -> Option<gtk::Box> {
     if annotations.is_empty() && badges.is_empty() {
@@ -241,7 +215,7 @@ fn annotation_row(annotations: &[String], badges: &[String]) -> Option<gtk::Box>
     }
     for badge in badges {
         let label = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-        label.append(&hourglass(tone::MINED));
+        label.append(&icons::icon(Icon::Hourglass, 11, tone::MINED));
         let text = page::text(badge, &["caption-text", "medium", "mined"]);
         label.append(&text);
         label.set_tooltip_text(Some(if badge == "Immature" {

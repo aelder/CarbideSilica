@@ -13,15 +13,14 @@ use std::collections::HashSet;
 use std::rc::{Rc, Weak};
 
 use gtk::glib;
-use gtk::gsk;
 use gtk::prelude::*;
 
 use crate::bridge::{self, api, api::Route};
 use crate::format;
 use crate::model::{AppModel, Topic};
 use crate::page::{self, load::clear, Card, Page};
-use crate::theme::{draw, tone, Color};
-use crate::widgets::canvas::Canvas;
+use crate::theme::tone;
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::display;
 use crate::widgets::{lamp, loader};
 
@@ -268,57 +267,6 @@ impl History {
     }
 }
 
-/// A mark in a circle: a check for active, a branch for orphaned, a question for
-/// unverified (`checkmark.circle.fill`, `arrow.triangle.branch`, `questionmark.circle`).
-fn membership_icon(membership: api::Membership, color: Color) -> Canvas {
-    let mark = Canvas::new(13, 13, move |_, snapshot, w, h| {
-        let (cx, cy, r) = (w / 2.0, h / 2.0, w.min(h) / 2.0 - 0.5);
-        match membership {
-            api::Membership::Active => {
-                let circle = gsk::PathBuilder::new();
-                circle.add_circle(&draw::point(cx, cy), r);
-                draw::fill(snapshot, &circle.to_path(), color);
-                let check = gsk::PathBuilder::new();
-                check.move_to(cx - r * 0.45, cy);
-                check.line_to(cx - r * 0.1, cy + r * 0.35);
-                check.line_to(cx + r * 0.5, cy - r * 0.35);
-                draw::stroke(snapshot, &check.to_path(), tone::SCREEN, 1.6);
-            }
-            api::Membership::Orphaned => {
-                // A stem that divides into two arrows.
-                let branch = gsk::PathBuilder::new();
-                branch.move_to(cx, h - 1.0);
-                branch.line_to(cx, cy + 1.0);
-                branch.line_to(2.5, 3.0);
-                branch.move_to(cx, cy + 1.0);
-                branch.line_to(w - 2.5, 3.0);
-                draw::stroke(snapshot, &branch.to_path(), color, 1.2);
-                for (x, dx) in [(2.5f32, 1.0f32), (w - 2.5, -1.0)] {
-                    let head = gsk::PathBuilder::new();
-                    head.move_to(x, 6.0);
-                    head.line_to(x, 2.5);
-                    head.line_to(x + 3.5 * dx, 2.5);
-                    draw::stroke(snapshot, &head.to_path(), color, 1.2);
-                }
-            }
-            api::Membership::Unverified => {
-                let circle = gsk::PathBuilder::new();
-                circle.add_circle(&draw::point(cx, cy), r);
-                draw::stroke(snapshot, &circle.to_path(), color, 1.1);
-                let q = gsk::PathBuilder::new();
-                q.move_to(cx - r * 0.35, cy - r * 0.25);
-                q.quad_to(cx - r * 0.3, cy - r * 0.6, cx, cy - r * 0.6);
-                q.quad_to(cx + r * 0.4, cy - r * 0.55, cx + r * 0.35, cy - r * 0.2);
-                q.quad_to(cx + r * 0.3, cy, cx, cy + r * 0.15);
-                draw::stroke(snapshot, &q.to_path(), color, 1.1);
-                draw::fill_rect(snapshot, cx - 0.7, cy + r * 0.38, 1.4, 1.4, color);
-            }
-        }
-    });
-    mark.set_valign(gtk::Align::Center);
-    mark
-}
-
 /// Last observed membership as shape, colour and word (`MembershipMark`).
 pub fn membership_mark(membership: api::Membership) -> gtk::Box {
     let (word, color, class) = match membership {
@@ -327,7 +275,15 @@ pub fn membership_mark(membership: api::Membership) -> gtk::Box {
         api::Membership::Unverified => ("Unverified", tone::LABEL, "label"),
     };
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-    row.append(&membership_icon(membership, color));
+    row.append(&icons::icon(
+        match membership {
+            api::Membership::Active => Icon::CheckCircleFill,
+            api::Membership::Orphaned => Icon::Branch,
+            api::Membership::Unverified => Icon::QuestionCircle,
+        },
+        13,
+        color,
+    ));
     row.append(&page::text(word, &[class]));
     if membership == api::Membership::Unverified {
         row.set_tooltip_text(Some("No stored report says whether this block is on the active chain."));

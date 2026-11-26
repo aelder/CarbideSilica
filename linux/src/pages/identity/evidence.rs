@@ -17,10 +17,10 @@ use crate::page::{self, load::clear, Card, Page};
 use crate::shared::confidence::confidence_mark;
 use crate::shared::identity_support::{self as support, small_progress};
 use crate::theme::{self, font, tone};
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::display;
 use crate::widgets::{lamp, link, loader};
 
-use super::marks::{self, Mark};
 
 /// The evidence for the current version, shared by the header and the evidence section.
 #[derive(Clone)]
@@ -364,7 +364,7 @@ fn referral_view(page: &Rc<Page>, identity: &str, chain: &[String]) -> gtk::Box 
         let link = support::id_link(page, id, Route::Identity { name: id.to_string() }, true);
         let holder = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         holder.append(&link);
-        let chip = marks::outlined(&holder, tone::AXIS, 10, 5);
+        let chip = display::outlined(&holder, tone::AXIS, 10, 5);
         chip.set_valign(gtk::Align::Center);
         chip
     };
@@ -372,7 +372,7 @@ fn referral_view(page: &Rc<Page>, identity: &str, chain: &[String]) -> gtk::Box 
     for (depth, referrer) in chain.iter().enumerate() {
         let arrow = gtk::Box::new(gtk::Orientation::Vertical, 0);
         arrow.set_valign(gtk::Align::Center);
-        let mark = marks::mark(Mark::ArrowLeft, 13, tone::AXIS);
+        let mark = icons::icon(Icon::ArrowLeft, 13, tone::AXIS);
         mark.set_halign(gtk::Align::Center);
         arrow.append(&mark);
         arrow.append(&display::name_text(if depth == 0 { "referred by" } else { "who was referred by" }));

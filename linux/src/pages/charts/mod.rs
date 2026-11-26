@@ -27,11 +27,12 @@ use crate::format as fmt;
 use crate::model::{AppModel, Topic};
 use crate::page::{self, Page};
 use crate::theme::{self, font};
+use crate::widgets::icons::Icon;
 use crate::widgets::display;
 use crate::widgets::{lamp, link, loader};
 
 use model::Span;
-use parts::{caption, caption_note, Holder, Mark};
+use parts::{caption, caption_note, Holder};
 use stack::ChartStack;
 use state::Charts;
 
@@ -66,7 +67,7 @@ pub fn build(model: &Rc<AppModel>) -> Rc<Page> {
 
     let keys_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let weak = Rc::downgrade(&charts);
-    let older = parts::key("Older range", Mark::Left, move || {
+    let older = parts::key("Older range", Icon::ChevronLeft, move || {
         if let Some(charts) = weak.upgrade() {
             charts.older();
         }
@@ -74,7 +75,7 @@ pub fn build(model: &Rc<AppModel>) -> Rc<Page> {
     older.set_tooltip_text(Some("Load the range before this one ( [ or Page Up )"));
     keys_row.append(&older);
     let weak = Rc::downgrade(&charts);
-    let newer = parts::key("Newer range", Mark::Right, move || {
+    let newer = parts::key("Newer range", Icon::ChevronRight, move || {
         if let Some(charts) = weak.upgrade() {
             charts.newer();
         }
@@ -107,7 +108,7 @@ pub fn build(model: &Rc<AppModel>) -> Rc<Page> {
     work.append(&stop);
     keys_row.append(&work);
     let weak = Rc::downgrade(&charts);
-    let refresh = parts::key("Refresh", Mark::Refresh, move || {
+    let refresh = parts::key("Refresh", Icon::Refresh, move || {
         if let Some(charts) = weak.upgrade() {
             charts.refresh();
         }

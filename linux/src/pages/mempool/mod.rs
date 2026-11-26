@@ -40,7 +40,6 @@ fn shows_list() -> bool {
 
 /// The page. Its signature is fixed by `pages/mod.rs`.
 pub fn build(model: &Rc<AppModel>) -> Rc<Page> {
-    waiting::install_style();
     let page = Page::scrolling(model);
 
     let totals = Rc::new(Totals::new());

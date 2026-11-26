@@ -10,11 +10,12 @@ use crate::bridge::api::{FeePoolCheckpoint, Route};
 use crate::format;
 use crate::page::{self, Page};
 use crate::theme::tone;
+use crate::widgets::icons::Icon;
 use crate::widgets::{lamp, loader};
 
 use super::format as chart_format;
 use super::model::{Currency, Scale};
-use super::parts::{self, caption, Holder, Mark};
+use super::parts::{self, caption, Holder};
 use super::state::Charts;
 
 /// The names of the two currencies of the fee pool.
@@ -285,13 +286,13 @@ pub fn set_disclosure_title(disclosure: &lamp::Disclosure, title: &str) {
 pub fn moves(charts: &Rc<Charts>, hash: &str) -> gtk::Box {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let weak = Rc::downgrade(charts);
-    row.append(&parts::key("Older", Mark::Left, move || {
+    row.append(&parts::key("Older", Icon::ChevronLeft, move || {
         if let Some(charts) = weak.upgrade() {
             charts.move_by(-1);
         }
     }));
     let weak = Rc::downgrade(charts);
-    row.append(&parts::key("Newer", Mark::Right, move || {
+    row.append(&parts::key("Newer", Icon::ChevronRight, move || {
         if let Some(charts) = weak.upgrade() {
             charts.move_by(1);
         }

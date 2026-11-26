@@ -258,13 +258,10 @@ impl WaitingRoom {
         }
         self.kinds.remove_all();
         for (name, count, on) in &plates {
-            let plate = display::plate(&format!("{name} {count}"), PlateFill::None);
-            if *on {
-                present_fill(&plate);
-            }
+            let plate = display::plate(&format!("{name} {count}"), if *on { PlateFill::Present } else { PlateFill::None });
             let button = gtk::Button::new();
             button.add_css_class("flat");
-            button.add_css_class("mempool-plain");
+            button.add_css_class("plain-key");
             button.set_child(Some(&plate));
             button.set_tooltip_text(Some(if *on { "Show each kind." } else { "Show only this kind." }));
             let (weak, name) = (Rc::downgrade(self), name.clone());
@@ -290,31 +287,3 @@ fn clear_grid(grid: &gtk::Grid) {
     }
 }
 
-/// A plate on a field of the present's colour (`Plate(fill: Tone.present)`). The shared
-/// plate has no such fill, so the page gives it one with its own class.
-fn present_fill(plate: &gtk::Label) {
-    for class in ["fill-none", "fill-staked", "fill-mined", "fill-record", "fill-good", "fill-alert"] {
-        plate.remove_css_class(class);
-    }
-    plate.add_css_class("mempool-fill-present");
-}
-
-/// The page's few styles that `style.css` does not have: the plate of the chosen kind, and
-/// a key with no frame of its own (SwiftUI's `.buttonStyle(.plain)`).
-pub fn install_style() {
-    thread_local! {
-        static DONE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    }
-    if DONE.with(|done| done.replace(true)) {
-        return;
-    }
-    let Some(display) = gtk::gdk::Display::default() else { return };
-    let provider = gtk::CssProvider::new();
-    provider.load_from_string(&format!(
-        ".plate.mempool-fill-present {{ background-color: {present}; border-color: {present}; color: {screen}; }}\n\
-         button.mempool-plain {{ background: none; border: none; box-shadow: none; padding: 0; min-height: 0; min-width: 0; outline: none; }}\n",
-        present = crate::theme::tone::PRESENT.css(),
-        screen = crate::theme::tone::SCREEN.css(),
-    ));
-    gtk::style_context_add_provider_for_display(&display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
-}

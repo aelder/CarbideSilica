@@ -4,7 +4,6 @@
 //! Each row shows tags derived from the object in Carbide's cache and the source that
 //! observed it. Cached data does not prove that the object is still on the active chain.
 
-mod glyphs;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -24,7 +23,6 @@ use crate::widgets::canvas::Canvas;
 use crate::widgets::display::{self, PlateFill};
 use crate::widgets::icons::{self, Icon};
 use crate::widgets::{lamp, link, loader};
-use glyphs::Glyph;
 
 pub fn kind_word(kind: &str) -> String {
     match kind {
@@ -58,16 +56,16 @@ pub fn route_for(entry: &api::BookmarkEntry) -> Option<Route> {
     }
 }
 
-fn glyph_for(entry: &api::BookmarkEntry) -> Glyph {
+fn glyph_for(entry: &api::BookmarkEntry) -> Icon {
     match route_for(entry) {
-        Some(Route::Block { .. }) => Glyph::Cube,
-        Some(Route::Transaction { .. }) => Glyph::Arrows,
-        Some(Route::Identity { .. }) => Glyph::Person,
-        Some(Route::Currency { .. }) | Some(Route::Currencies) => Glyph::Hexagons,
-        Some(Route::Address { .. }) => Glyph::Card,
-        Some(Route::Estimate { .. }) => Glyph::Bookmark,
-        None if entry.kind == "notarizations" => Glyph::Link,
-        None => Glyph::Bookmark,
+        Some(Route::Block { .. }) => Icon::Cube,
+        Some(Route::Transaction { .. }) => Icon::ArrowsLeftRight,
+        Some(Route::Identity { .. }) => Icon::PersonCircle,
+        Some(Route::Currency { .. }) | Some(Route::Currencies) => Icon::HexagonGrid,
+        Some(Route::Address { .. }) => Icon::CreditCard,
+        Some(Route::Estimate { .. }) => Icon::Bookmark,
+        None if entry.kind == "notarizations" => Icon::Link,
+        None => Icon::Bookmark,
     }
 }
 
@@ -293,7 +291,7 @@ impl Bookmarks {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         row.set_margin_top(8);
         row.set_margin_bottom(8);
-        let mark = glyphs::glyph(glyph_for(entry), 16, tone::LABEL);
+        let mark = icons::icon(glyph_for(entry), 16, tone::LABEL);
         mark.set_size_request(20, 16);
         mark.set_margin_top(1);
         row.append(&mark);
@@ -464,7 +462,7 @@ fn cache_line(entry: &api::BookmarkEntry) -> gtk::Box {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     match &entry.cache {
         api::BookmarkCache::Cached { source, tags } => {
-            row.append(&glyphs::glyph(Glyph::TrayFull, 13, tone::GOOD));
+            row.append(&icons::icon(Icon::TrayFull, 13, tone::GOOD));
             let label = page::text("Cached observation", &["caption-text", "semibold", "good"]);
             row.append(&label);
             for tag in tags {
@@ -475,7 +473,7 @@ fn cache_line(entry: &api::BookmarkEntry) -> gtk::Box {
             row.append(&from);
         }
         api::BookmarkCache::Uncached => {
-            row.append(&glyphs::glyph(Glyph::Tray, 13, tone::LABEL));
+            row.append(&icons::icon(Icon::Tray, 13, tone::LABEL));
             row.append(&page::text("Uncached", &["caption-text", "semibold", "label"]));
         }
         api::BookmarkCache::Failed { message } => {

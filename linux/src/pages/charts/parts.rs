@@ -7,82 +7,18 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gtk::prelude::*;
-use gtk::{gio, glib, gsk};
+use gtk::{gio, glib};
 
 use crate::page::load::clear;
 use crate::theme::{draw, Color};
+use crate::widgets::icons::Icon;
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display;
 use crate::widgets::lamp;
 
-/// The marks of the keys of this page.
-#[derive(Clone, Copy)]
-pub enum Mark {
-    Left,
-    Right,
-    Refresh,
-}
-
-/// A mark in the colour of the key's legend, so that it follows the light of the key.
-fn mark(kind: Mark) -> Canvas {
-    let canvas = Canvas::new(10, 10, move |canvas, snapshot, w, h| {
-        let rgba = canvas.color();
-        let color = Color { r: rgba.red(), g: rgba.green(), b: rgba.blue(), a: rgba.alpha() };
-        let builder = gsk::PathBuilder::new();
-        match kind {
-            Mark::Left => {
-                builder.move_to(w * 0.62, h * 0.18);
-                builder.line_to(w * 0.34, h * 0.5);
-                builder.line_to(w * 0.62, h * 0.82);
-            }
-            Mark::Right => {
-                builder.move_to(w * 0.38, h * 0.18);
-                builder.line_to(w * 0.66, h * 0.5);
-                builder.line_to(w * 0.38, h * 0.82);
-            }
-            Mark::Refresh => {
-                // A circle open at the upper right, with an arrow head at the end of its
-                // clockwise turn: arrow.clockwise.
-                let (cx, cy, r) = (w / 2.0, h / 2.0 + 0.3, w * 0.4);
-                let start = -30f32.to_radians();
-                let sweep = 300f32.to_radians();
-                for i in 0..=24 {
-                    let a = start + (i as f32 / 24.0) * sweep;
-                    let (x, y) = (cx + r * a.cos(), cy + r * a.sin());
-                    if i == 0 { builder.move_to(x, y) } else { builder.line_to(x, y) }
-                }
-                let end = start + sweep;
-                let (ax, ay) = (cx + r * end.cos(), cy + r * end.sin());
-                // Back along the turn, and to each side of it.
-                let (bx, by) = (end.sin(), -end.cos());
-                for turn in [0.65f32, -0.65] {
-                    let (wx, wy) = (bx * turn.cos() - by * turn.sin(), bx * turn.sin() + by * turn.cos());
-                    builder.move_to(ax, ay);
-                    builder.line_to(ax + wx * w * 0.32, ay + wy * h * 0.32);
-                }
-            }
-        }
-        let stroke = gsk::Stroke::new(1.3);
-        stroke.set_line_cap(gsk::LineCap::Round);
-        stroke.set_line_join(gsk::LineJoin::Round);
-        snapshot.append_stroke(&builder.to_path(), &stroke, &color.rgba());
-    });
-    canvas.set_valign(gtk::Align::Center);
-    canvas
-}
-
 /// A small key of the page with a mark before its legend.
-pub fn key(title: &str, kind: Mark, action: impl Fn() + 'static) -> gtk::Button {
-    let button = lamp::button(title, action);
-    let label = button.child().and_downcast::<gtk::Label>();
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 7);
-    row.append(&mark(kind));
-    if let Some(label) = label {
-        button.set_child(None::<&gtk::Widget>);
-        row.append(&label);
-    }
-    button.set_child(Some(&row));
-    button
+pub fn key(title: &str, icon: Icon, action: impl Fn() + 'static) -> gtk::Button {
+    lamp::button_with(title, Some(icon), action)
 }
 
 /// A part that builds its contents again only when its signature changes.

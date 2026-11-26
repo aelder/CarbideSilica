@@ -21,8 +21,7 @@ use crate::display;
 use crate::format;
 use crate::model::{AppModel, Topic};
 use crate::page::{self, Page};
-use crate::theme::{self, font, tone, Color};
-use crate::widgets::canvas::Canvas;
+use crate::theme::{self, font, tone};
 use crate::widgets::icons::{self, Icon};
 use crate::widgets::lamp::Disclosure;
 use crate::widgets::{link, loader};
@@ -433,7 +432,6 @@ const HINT_HIDE: &str = "Hide";
 
 /// The "Raw JSON" card. `filename` is the file name that Save offers, with the object in it.
 pub fn json_section(page: &Rc<Page>, json: &str, filename: &str) -> gtk::Box {
-    install_style();
     let card = page.card("Raw JSON", None);
     // The label of the disclosure is in the style of the disclosure: small capitals, here
     // in the secondary colour, with the copy key at the right.
@@ -501,7 +499,6 @@ pub fn json_section(page: &Rc<Page>, json: &str, filename: &str) -> gtk::Box {
 /// Save), for a page to put where it shows JSON (`JSONTreeView`). Each line is a stop of
 /// the page's cursor. While the tree is on screen, s saves its document as `filename`.
 pub fn json_tree(page: &Rc<Page>, json: &str, filename: &str) -> gtk::Box {
-    install_style();
     let tree = JsonTree::new(page, json, filename);
     let root = tree.root.upgrade().expect("the tree's root is new");
     // The tree lives as long as its widgets.
@@ -509,22 +506,6 @@ pub fn json_tree(page: &Rc<Page>, json: &str, filename: &str) -> gtk::Box {
         let _ = &tree;
     });
     root
-}
-
-/// Style of the lines of the tree. The selected line has a faint light of the present.
-fn install_style() {
-    thread_local!(static DONE: Cell<bool> = const { Cell::new(false) });
-    if DONE.with(|done| done.replace(true)) {
-        return;
-    }
-    let Some(display) = gtk::gdk::Display::default() else { return };
-    let provider = gtk::CssProvider::new();
-    provider.load_from_string(
-        ".json-row { padding: 1px 0; }\n\
-         .json-row.json-selected { background-color: alpha(@present, 0.1); }\n\
-         .json-chevron { background: none; border: none; box-shadow: none; padding: 0; min-height: 0; min-width: 12px; }\n",
-    );
-    gtk::style_context_add_provider_for_display(&display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
 }
 
 // MARK: - The tree
@@ -661,10 +642,10 @@ impl JsonTree {
         spacer.set_hexpand(true);
         bar.append(&spacer);
         let json = self.json.clone();
-        let copy_all = icon_link(Glyph::Copy, "Copy All", move |button| button.clipboard().set_text(&json));
+        let copy_all = icon_link(Icon::Copy, "Copy All", move |button| button.clipboard().set_text(&json));
         bar.append(&copy_all);
         let weak = Rc::downgrade(self);
-        let save = icon_link(Glyph::Save, "Save…", move |_| {
+        let save = icon_link(Icon::Save, "Save…", move |_| {
             if let Some(tree) = weak.upgrade() {
                 tree.save();
             }
@@ -1048,18 +1029,9 @@ impl JsonTree {
 
 // MARK: - Small marks
 
-/// The marks of the toolbar keys.
-#[derive(Clone, Copy)]
-enum Glyph {
-    /// `doc.on.doc`
-    Copy,
-    /// `square.and.arrow.down`
-    Save,
-}
-
 /// A link with a mark before its text (`Label(title, systemImage:)` in a borderless
 /// button). The mark takes the colour of the link, also under the pointer.
-fn icon_link(glyph: Glyph, title: &str, action: impl Fn(&gtk::Button) + 'static) -> gtk::Button {
+fn icon_link(glyph: Icon, title: &str, action: impl Fn(&gtk::Button) + 'static) -> gtk::Button {
     let action = Rc::new(action);
     let slot: Rc<RefCell<Option<glib::WeakRef<gtk::Button>>>> = Rc::default();
     let button = {
@@ -1072,40 +1044,13 @@ fn icon_link(glyph: Glyph, title: &str, action: impl Fn(&gtk::Button) + 'static)
     };
     *slot.borrow_mut() = Some(button.downgrade());
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-    let mark = Canvas::new(12, 12, move |canvas, snapshot, w, h| {
-        let c = canvas.color();
-        let color = Color { r: c.red(), g: c.green(), b: c.blue(), a: c.alpha() };
-        match glyph {
-            Glyph::Copy => icons::paint(snapshot, Icon::Copy, w, h, color),
-            Glyph::Save => paint_save(snapshot, w, h, color),
-        }
-    });
+    let mark = icons::text_icon(glyph, 12);
     mark.set_valign(gtk::Align::Center);
     let label = page::text(title, &["callout"]);
     row.append(&mark);
     row.append(&label);
     button.set_child(Some(&row));
     button
-}
-
-/// `square.and.arrow.down`: a tray open at the top with an arrow into it.
-fn paint_save(snapshot: &gtk::Snapshot, w: f32, h: f32, color: Color) {
-    use crate::theme::draw;
-    let line = (w / 11.0).max(1.0);
-    let tray = gtk::gsk::PathBuilder::new();
-    tray.move_to(w * 0.3, h * 0.38);
-    tray.line_to(w * 0.14, h * 0.38);
-    tray.line_to(w * 0.14, h * 0.92);
-    tray.line_to(w * 0.86, h * 0.92);
-    tray.line_to(w * 0.86, h * 0.38);
-    tray.line_to(w * 0.7, h * 0.38);
-    draw::stroke(snapshot, &tray.to_path(), color, line);
-    draw::rule(snapshot, w * 0.5, h * 0.06, w * 0.5, h * 0.68, color, line, &[]);
-    let head = gtk::gsk::PathBuilder::new();
-    head.move_to(w * 0.32, h * 0.5);
-    head.line_to(w * 0.5, h * 0.68);
-    head.line_to(w * 0.68, h * 0.5);
-    draw::stroke(snapshot, &head.to_path(), color, line);
 }
 
 #[cfg(test)]

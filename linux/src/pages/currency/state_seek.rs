@@ -13,7 +13,6 @@ use std::rc::{Rc, Weak};
 use gtk::glib;
 use gtk::prelude::*;
 
-use super::marks::{self, Mark};
 use super::pool_batch;
 use crate::bridge::{self, api, api::Route};
 use crate::format;
@@ -21,6 +20,7 @@ use crate::model::{AppModel, Topic};
 use crate::page::{self, load::clear, Card, Page};
 use crate::shared::currency_stores::{height_text, known_name, observation_source, other_chain_note, source_word};
 use crate::theme::{self, draw, font, tone};
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display::{self, PlateFill, Readout};
 use crate::widgets::{lamp, loader};
@@ -40,13 +40,8 @@ pub fn other_chain(model: &Rc<AppModel>, system_id: &str, fallback: Option<&str>
 }
 
 /// A key of the display with a mark before its legend, as a `Label` in a button.
-pub fn mark_key(title: &str, mark: Mark, action: impl Fn() + 'static) -> gtk::Button {
-    let button = lamp::button(title, action);
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-    row.append(&marks::mark(mark, 11, tone::VALUE.opacity(0.85)));
-    row.append(&theme::label(font::KEY, title, ""));
-    button.set_child(Some(&row));
-    button
+pub fn mark_key(title: &str, mark: Icon, action: impl Fn() + 'static) -> gtk::Button {
+    lamp::button_with(title, Some(mark), action)
 }
 
 /// A small spinner, as `ProgressView().controlSize(.small)`.
@@ -535,7 +530,7 @@ impl Activity {
         let older = data.page.as_ref().and_then(|p| p.older);
         let newer = data.page.as_ref().and_then(|p| p.newer);
         let weak = Rc::downgrade(self);
-        let older_key = mark_key("Older", Mark::ChevronLeft, move || {
+        let older_key = mark_key("Older", Icon::ChevronLeft, move || {
             if let (Some(activity), Some(window)) = (weak.upgrade(), older) {
                 activity.load(window);
             }
@@ -543,7 +538,7 @@ impl Activity {
         older_key.set_sensitive(older.is_some() && !data.loading);
         keys.append(&older_key);
         let weak = Rc::downgrade(self);
-        let newer_key = mark_key("Newer", Mark::ChevronRight, move || {
+        let newer_key = mark_key("Newer", Icon::ChevronRight, move || {
             if let (Some(activity), Some(window)) = (weak.upgrade(), newer) {
                 activity.load(window);
             }
@@ -688,8 +683,8 @@ impl Activity {
         row.set_margin_top(6);
         row.set_margin_bottom(6);
         let is_import = record.kind == api::ActivityKind::Import;
-        let kind = marks::label(
-            if is_import { Mark::ArrowDownFill } else { Mark::ArrowUp },
+        let kind = icons::label(
+            if is_import { Icon::ArrowDownCircleFill } else { Icon::ArrowUpCircle },
             if is_import { "Import" } else { "Export" },
             if is_import { IMPORT_TONE } else { EXPORT_TONE },
             &[],

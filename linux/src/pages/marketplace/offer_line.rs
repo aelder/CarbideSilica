@@ -16,6 +16,7 @@ use crate::model::AppModel;
 use crate::page::Page;
 use crate::shared::currency_stores::{height_text, known_name};
 use crate::theme::{draw, tone};
+use crate::widgets::icons::{self, Icon};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display::{plate, PlateFill};
 use crate::widgets::{link, row_light};
@@ -60,6 +61,7 @@ pub fn offer_line(page: &Rc<Page>, model: &Rc<AppModel>, line: Line) -> gtk::Box
         link::link(&title, false, move || open())
     };
     title_link.add_css_class("market-title");
+    title_link.add_css_class("value-link");
     if let Some(label) = link::label_of(&title_link) {
         label.set_wrap(true);
         label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
@@ -88,9 +90,9 @@ pub fn offer_line(page: &Rc<Page>, model: &Rc<AppModel>, line: Line) -> gtk::Box
                 }
             }
         });
-        points.add_css_class("market-label-link");
+        points.add_css_class("label-link");
         if let Some(label) = link::label_of(&points) {
-            label.add_css_class("market-caption");
+            label.add_css_class("caption-small");
         }
         points.set_tooltip_text(Some("Show the code points of this name"));
         let column = gtk::Box::new(gtk::Orientation::Vertical, 6);
@@ -122,7 +124,7 @@ pub fn offer_line(page: &Rc<Page>, model: &Rc<AppModel>, line: Line) -> gtk::Box
             logic::asset(&offer.offered, identity_name, ticker),
             logic::asset(&offer.accepted, identity_name, ticker)
         );
-        let text = crate::page::text(&exchange, &["market-caption", "secondary"]);
+        let text = crate::page::text(&exchange, &["caption-small", "secondary"]);
         text.set_ellipsize(gtk::pango::EllipsizeMode::End);
         text.set_single_line_mode(true);
         names.append(&text);
@@ -151,13 +153,13 @@ pub fn offer_line(page: &Rc<Page>, model: &Rc<AppModel>, line: Line) -> gtk::Box
     let dates = gtk::Box::new(gtk::Orientation::Vertical, 1);
     dates.set_valign(gtk::Align::Center);
     if let Some(time) = detail.and_then(|d| d.block_time) {
-        let offered = crate::page::text(&format!("offered {} ago", logic::age(time, format::now())), &["market-caption", "secondary"]);
+        let offered = crate::page::text(&format!("offered {} ago", logic::age(time, format::now())), &["caption-small", "secondary"]);
         offered.set_tooltip_text(Some(&format::date(time)));
         offered.set_single_line_mode(true);
         offered.set_ellipsize(gtk::pango::EllipsizeMode::End);
         dates.append(&offered);
     }
-    let expiry = crate::page::text(&expiry(model, offer.expiry_height), &["market-caption", "secondary"]);
+    let expiry = crate::page::text(&expiry(model, offer.expiry_height), &["caption-small", "secondary"]);
     expiry.set_single_line_mode(true);
     expiry.set_ellipsize(gtk::pango::EllipsizeMode::End);
     dates.append(&expiry);
@@ -220,9 +222,9 @@ fn expiry(model: &Rc<AppModel>, height: u64) -> String {
 /// identity and currency, and the addresses of the funding transaction once they are read.
 fn links_menu(model: &Rc<AppModel>, item: &MarketItem) -> gtk::MenuButton {
     let button = gtk::MenuButton::new();
-    button.add_css_class("market-links");
+    button.add_css_class("frameless-menu");
     button.set_always_show_arrow(false);
-    let mark = Canvas::new(14, 14, |_, snapshot, w, h| link_mark(snapshot, w, h));
+    let mark = icons::icon(Icon::Link, 14, tone::RECORD);
     button.set_child(Some(&mark));
     button.set_tooltip_text(Some("The objects that this offer refers to"));
     button.update_property(&[gtk::accessible::Property::Label("Links")]);
@@ -319,21 +321,4 @@ fn identity_name(model: &Rc<AppModel>, offer: &api::Offer, id: &str) -> String {
         }
     }
     model.state().names.get(id).cloned().unwrap_or_else(|| format::short(id, 6, 4))
-}
-
-/// The mark of the links key: two links of a chain, at an angle.
-fn link_mark(snapshot: &gtk::Snapshot, w: f32, h: f32) {
-    let color = tone::RECORD;
-    snapshot.save();
-    snapshot.translate(&draw::point(w / 2.0, h / 2.0));
-    snapshot.rotate(-45.0);
-    let (lw, lh, gap) = (w * 0.62, h * 0.36, w * 0.14);
-    for dx in [-(lw / 2.0 - gap), lw / 2.0 - gap] {
-        let rect = draw::rect(dx - lw / 2.0, -lh / 2.0, lw, lh);
-        let rounded = gtk::gsk::RoundedRect::from_rect(rect, lh / 2.0);
-        let builder = gtk::gsk::PathBuilder::new();
-        builder.add_rounded_rect(&rounded);
-        draw::stroke(snapshot, &builder.to_path(), color, 1.4);
-    }
-    snapshot.restore();
 }
