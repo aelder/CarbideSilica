@@ -15,15 +15,9 @@ struct MempoolView: View {
     var body: some View {
         PlacePage(key: "mempool") { proxy in
             Totals(feed: feed)
-            Picker("Show as", selection: $showsList) {
-                Text("Waiting").tag(false)
-                Text("List").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .fixedSize()
-            .labelsHidden()
+            LampSegments(options: [(false, "Waiting"), (true, "List")], selection: $showsList)
 
-            Card(showsList ? "Unconfirmed transactions" : "Waiting for a block") {
+            Card(showsList ? "Unconfirmed transactions" : "Waiting for a block", showsTitle: showsList) {
                 if let failure = feed.failure, feed.entries.isEmpty {
                     Text(
                         model.status?.source == .publicApi
@@ -51,12 +45,6 @@ struct MempoolView: View {
         }
         .navigationTitle("Mempool")
         .publishPlace(PlaceActions(refresh: { Task { await feed.refresh(model) } }, mempoolAsList: $showsList))
-        .task(id: model.generation) {
-            while !Task.isCancelled {
-                await feed.refresh(model)
-                try? await Task.sleep(for: MempoolFeed.interval)
-            }
-        }
         // The page sets the mempool against the newest blocks, thus it keeps the chain
         // status fresh while it is open, as the dashboard does.
         .task(id: model.generation) {
@@ -282,13 +270,9 @@ private struct Totals: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             VStack(alignment: .leading, spacing: 6) {
-                SourceLine(provenance: feed.provenance)
+                SourceLine(provenance: feed.provenance, short: model.currentChain, labelled: true)
+                // The instrument below has the count, the size and the last block.
                 HStack(spacing: 18) {
-                    item("Transactions", feed.loaded ? "\(feed.entries.count)" : "–")
-                    item("Serialized size", feed.loaded ? Format.bytes(feed.totalBytes) : "–")
-                    item(
-                        "Last block",
-                        model.status?.tipTime.map { Format.age($0, now: context.date) } ?? "unknown")
                     item("Refresh", refresh(context.date))
                     Spacer(minLength: 0)
                 }
@@ -489,11 +473,9 @@ private struct WaitingRoom: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let now = context.date
             VStack(alignment: .leading, spacing: 14) {
-                Text(sentence(now))
-                    .font(.title3)
-                    .fixedSize(horizontal: false, vertical: true)
                 // The time record and the next block are one instrument.
                 MempoolTimeRecord(feed: feed, now: now, nextBlock: feed.entries.isEmpty ? nil : feed.totalBytes)
+                analysis(now)
                 if !feed.entries.isEmpty {
                     if feed.entries.count > Self.manyRows { kinds }
                     rows(now)
@@ -537,6 +519,168 @@ private struct WaitingRoom: View {
             parts.append("A node does not collect unconfirmed transactions during synchronization.")
         }
         return parts.joined(separator: " ")
+    }
+
+    // MARK: The analysis
+
+    /// What the mempool is, what waits in it now, and what that means for a person who has
+    /// a transaction in it.
+    private func analysis(_ now: Date) -> some View {
+        let kinds = kindCounts(feed.entries)
+        return VStack(alignment: .leading, spacing: 14) {
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 22, verticalSpacing: 10) {
+                ForEach(meaning(now), id: \.name) { point in
+                    GridRow {
+                        NameText(point.name).gridColumnAlignment(.leading)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(point.value).font(Tone.figureSmall).monospacedDigit()
+                            if let note = point.note {
+                                Text(note)
+                                    .font(Tone.caption)
+                                    .foregroundStyle(Tone.label)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+            }
+            // With one kind, the first line says all that the table says.
+            if kinds.count > 1 {
+                PanelRule()
+                kindTable(now)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// One point of the analysis: a name, a short value and, where it helps, what it means.
+    private struct Point {
+        let name: String
+        let value: String
+        var note: String?
+    }
+
+    /// The usual wait for a block, from the record of the last day: the middle wait and the
+    /// wait that 9 of 10 are below.
+    private var usualWait: (middle: Double, most: Double)? {
+        guard let waits = record.history?.waits, waits.count >= 20 else { return nil }
+        return (Double(waits[waits.count / 2]), Double(waits[waits.count * 9 / 10]))
+    }
+
+    private func usualPoint() -> Point? {
+        guard let usual = usualWait else { return nil }
+        return Point(
+            name: "Usual wait", value: MempoolText.span(usual.middle),
+            note: "In the last day, half of the blocks came within this time of the block before. "
+                + "9 of 10 came within \(MempoolText.span(usual.most)).")
+    }
+
+    private func meaning(_ now: Date) -> [Point] {
+        var points: [Point] = []
+        let entries = feed.entries
+        if entries.isEmpty {
+            points.append(Point(
+                name: "Mempool", value: "Empty",
+                note: "The mempool holds the transactions that no block has yet. A transaction stays "
+                    + "here until a miner or a staker puts it in a block."))
+            if let usual = usualPoint() { points.append(usual) }
+            let passed = feed.sightings.values.filter { $0.left != nil && !$0.gone }
+            if !passed.isEmpty {
+                let longest = passed.compactMap { sighting -> Double? in
+                    sighting.left.map { $0.timeIntervalSince(sighting.arrival) }
+                }.max() ?? 0
+                points.append(Point(
+                    name: "Went into a block", value: MempoolText.count(passed.count, "transaction", "transactions"),
+                    note: "While this page was open. The longest wait was \(MempoolText.span(longest))."))
+            }
+            return points
+        }
+
+        // What waits, by kind.
+        let names = kindCounts(entries).map { "\($0.count) \($0.name.lowercased())" }
+        points.append(Point(
+            name: "Waiting", value: MempoolText.count(entries.count, "transaction", "transactions"),
+            note: names.joined(separator: ", ")))
+
+        // How long, and how long more.
+        if let oldest = entries.compactMap(\.time).min() {
+            points.append(Point(
+                name: "Oldest", value: "\(MempoolText.span(now.timeIntervalSince1970 - Double(oldest))) ago"))
+        }
+        if let usual = usualPoint() { points.append(usual) }
+
+        // Room, fees, and what can stop a transaction.
+        points.append(
+            feed.totalBytes <= Self.blockLimit
+                ? Point(name: "Next block", value: "All fit")
+                : Point(
+                    name: "Next block", value: "Not all fit",
+                    note: "A block takes the transactions with the higher fee for each byte first."))
+        let fees = entries.compactMap(\.feeSats)
+        if !fees.isEmpty {
+            points.append(Point(name: "Fees", value: "\(Format.coins(fees.reduce(0, +))) \(model.coin)"))
+        }
+        let waiting = Set(entries.map(\.txid))
+        let chained = entries.filter { $0.parents.contains(where: waiting.contains) }.count
+        if chained > 0 {
+            points.append(Point(
+                name: "Spend from waiting", value: MempoolText.count(chained, "transaction", "transactions"),
+                note: "Each spends from a transaction that also waits. A block must take that one first or with it."))
+        }
+        if let tip = model.status?.blocks {
+            let soon = entries.filter { entry in
+                guard let expiry = feed.details[entry.txid]?.expiryHeight else { return false }
+                return expiry <= tip + 10
+            }.count
+            if soon > 0 {
+                points.append(Point(
+                    name: "Expire soon", value: MempoolText.count(soon, "transaction", "transactions"),
+                    note: "In 10 blocks or less. A transaction that expires leaves the mempool and does not go into a block."))
+            }
+        }
+        return points
+    }
+
+    private func kindCounts(_ entries: [MempoolEntry]) -> [(name: String, count: Int, bytes: UInt64, fees: Int64, oldest: UInt64?)] {
+        var order: [String] = []
+        var groups: [String: [MempoolEntry]] = [:]
+        for entry in entries {
+            let name = kindOf(entry) ?? "Not read yet"
+            if groups[name] == nil { order.append(name) }
+            groups[name, default: []].append(entry)
+        }
+        return order.map { name in
+            let members = groups[name] ?? []
+            return (
+                name == Self.untagged ? "Payment" : name, members.count, members.map(\.size).reduce(0, +),
+                members.compactMap(\.feeSats).reduce(0, +), members.compactMap(\.time).min()
+            )
+        }
+        .sorted { $0.count > $1.count }
+    }
+
+    /// One row for each kind of transaction that waits.
+    private func kindTable(_ now: Date) -> some View {
+        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 26, verticalSpacing: 5) {
+            GridRow {
+                NameText("Kind")
+                NameText("Count").gridColumnAlignment(.trailing)
+                NameText("Size").gridColumnAlignment(.trailing)
+                NameText("Fees, \(model.coin)").gridColumnAlignment(.trailing)
+                NameText("Oldest")
+            }
+            ForEach(kindCounts(feed.entries), id: \.name) { kind in
+                GridRow {
+                    Text(kind.name)
+                    Text("\(kind.count)").monospacedDigit()
+                    Text(Format.bytes(kind.bytes)).monospacedDigit()
+                    Text(Format.coins(kind.fees)).monospacedDigit()
+                    Text(kind.oldest.map { "\(MempoolText.span(now.timeIntervalSince1970 - Double($0))) ago" } ?? "–")
+                        .foregroundStyle(Tone.label)
+                }
+            }
+        }
+        .padding(.top, 2)
     }
 
     // MARK: The rows
@@ -685,16 +829,26 @@ private struct MempoolTimeRecord: View {
     /// The serialized size of what waits. Nil when nothing waits: the panel then has no bar.
     var nextBlock: UInt64?
     @Environment(AppModel.self) private var model
+    @AppStorage(DisplayKey.showsNames) private var showsNames = true
+    /// The transaction or the block under the pointer.
+    @State private var pointed: Target?
+
+    private enum Target: Equatable {
+        case transaction(String)
+        case block(String)
+    }
 
     private let span: Double = 15 * 60
-    private let gutter: CGFloat = 78
+    private let gutter: CGFloat = 92
     private let rightInset: CGFloat = 22
-    private let laneStep: CGFloat = 11
+    private let laneStep: CGFloat = 12
     private let maxLanes = 8
+    /// The part for the transactions has room for this many lines also when it has none.
+    private let minLanes = 4
     /// The middle of the first transaction lane.
-    private let lanesTop: CGFloat = 26
+    private let lanesTop: CGFloat = 30
     /// The width of a lane's plate.
-    private let plateWidth: CGFloat = 54
+    private let plateWidth: CGFloat = 60
 
     /// The end of a sighting's line: the present, the arrival of its block, or the refresh
     /// that first did not have it.
@@ -720,35 +874,258 @@ private struct MempoolTimeRecord: View {
         return result
     }
 
-    private func axisY(_ lanes: Int) -> CGFloat { lanesTop + CGFloat(lanes) * laneStep + 20 }
+    /// The line of the blocks. The staked marks are above it and the mined marks below.
+    private func axisY(_ lanes: Int) -> CGFloat { lanesTop + CGFloat(lanes) * laneStep + 34 }
 
     var body: some View {
         let lines = lines
-        let lanes = max((lines.map(\.lane).max() ?? -1) + 1, 1)
+        let lanes = max((lines.map(\.lane).max() ?? -1) + 1, minLanes)
         DisplayPanel(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                Canvas { context, size in
-                    draw(context, size, lines: lines, lanes: lanes)
-                }
-                .frame(height: axisY(lanes) + 40)
-                .accessibilityLabel(spoken(lines))
-                if let bytes = nextBlock {
-                    PanelRule()
-                    nextBlockBar(bytes)
-                }
-                PanelRule()
-                Text(
-                    "Each mark on the line is a block: up for staked, down for mined. A thick line is a "
-                        + "transaction, from its arrival to the block that took it. The app sees only the "
-                        + "transactions that arrive while this page is open.")
-                    .font(Tone.caption)
-                    .foregroundStyle(Tone.label)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                readouts
                     .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
+                    .padding(.top, 14)
+                    .padding(.bottom, 10)
+                PanelRule()
+                GeometryReader { geometry in
+                    let shapes = shapes(width: geometry.size.width, lines: lines, lanes: lanes)
+                    Canvas { context, size in
+                        draw(context, size, lines: lines, lanes: lanes)
+                    }
+                    .contentShape(Rectangle())
+                    // A line and a mark can be opened: a click on a line opens its
+                    // transaction, and a click on a mark opens its block.
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let point): pointed = target(at: point, in: shapes)
+                        case .ended: pointed = nil
+                        }
+                    }
+                    .onTapGesture(coordinateSpace: .local) { point in
+                        switch target(at: point, in: shapes) {
+                        case .transaction(let txid)?: model.open(.transaction(txid: txid))
+                        case .block(let hash)?: model.open(.block(id: hash))
+                        case nil: break
+                        }
+                    }
+                    // The pulse of the chain: with each second a front goes from the present
+                    // to the left and gives light to the line, the blocks and the transactions.
+                    .overlay {
+                        LightTrace(
+                            parts: [
+                                .init(path: shapes.axis, stroke: true, color: LightTrace.warm, glow: LightTrace.warm),
+                                // The guides, the marks and the lines get their new places at
+                                // the front. The guides get no light.
+                                .init(
+                                    path: shapes.guides, stroke: true, color: Self.noLight, glow: Self.noLight,
+                                    base: NSColor(Tone.grid).cgColor),
+                                .init(
+                                    path: shapes.staked, stroke: false, color: Self.stakedLight, glow: Self.stakedGlow,
+                                    base: NSColor(Tone.staked).cgColor, baseGlow: 0.6),
+                                .init(
+                                    path: shapes.mined, stroke: false, color: Self.minedLight, glow: Self.minedGlow,
+                                    base: NSColor(Tone.mined).cgColor, baseGlow: 0.6),
+                                .init(
+                                    path: shapes.waiting, stroke: false, color: LightTrace.pale, glow: LightTrace.blue,
+                                    base: NSColor(Tone.present).cgColor, baseGlow: 0.7),
+                                .init(
+                                    path: shapes.taken, stroke: false, color: LightTrace.pale, glow: LightTrace.blue,
+                                    base: NSColor(Tone.record).cgColor),
+                                .init(
+                                    path: shapes.gone, stroke: false, color: LightTrace.pale, glow: LightTrace.blue,
+                                    base: NSColor(Tone.alert).cgColor),
+                            ],
+                            area: CGRect(
+                                x: gutter, y: lanesTop - 10, width: max(geometry.size.width - rightInset - gutter, 0),
+                                height: axisY(lanes) + 22 - (lanesTop - 10)),
+                            beat: Int(now.timeIntervalSince1970)
+                        )
+                        .allowsHitTesting(false)
+                    }
+                }
+                .frame(height: axisY(lanes) + 46)
+                .accessibilityLabel(spoken(lines))
+                // What the line or the mark under the pointer is, above the lines.
+                .overlay(alignment: .topLeading) {
+                    if let pointed {
+                        Text(caption(pointed))
+                            .font(Tone.caption)
+                            .foregroundStyle(Tone.value)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.leading, gutter)
+                            .padding(.trailing, 80)
+                            .padding(.top, 6)
+                            .allowsHitTesting(false)
+                    }
+                }
             }
         }
+    }
+
+    // MARK: Shapes, the pointer and the pulse
+
+    private static let stakedLight = CGColor(red: 0.88, green: 0.87, blue: 0.9, alpha: 1)
+    private static let minedLight = CGColor(red: 0.9, green: 0.86, blue: 0.68, alpha: 1)
+    private static let stakedGlow = CGColor(red: 0.56, green: 0.3, blue: 0.86, alpha: 1)
+    private static let minedGlow = CGColor(red: 1, green: 0.5, blue: 0.12, alpha: 1)
+
+    private static let noLight = CGColor(gray: 0, alpha: 0)
+
+    private struct Shapes {
+        var axis = CGMutablePath()
+        /// A guide up from each block through the transactions.
+        var guides = CGMutablePath()
+        var staked = CGMutablePath()
+        var mined = CGMutablePath()
+        /// Transactions that wait, that a block took, and that left without a block.
+        var waiting = CGMutablePath()
+        var taken = CGMutablePath()
+        var gone = CGMutablePath()
+        /// Where each transaction and each block is, for the pointer.
+        var targets: [(target: Target, box: CGRect)] = []
+    }
+
+    /// The same places as the drawing, as shapes: for the light of the pulse and for the
+    /// pointer.
+    private func shapes(width: CGFloat, lines: [(sighting: MempoolSighting, lane: Int)], lanes: Int) -> Shapes {
+        var shapes = Shapes()
+        let start = now.addingTimeInterval(-span)
+        let right = width - rightInset
+        let axis = axisY(lanes)
+        func x(_ date: Date) -> CGFloat {
+            gutter + CGFloat(min(max(date.timeIntervalSince(start) / span, 0), 1)) * (right - gutter)
+        }
+        shapes.axis.move(to: CGPoint(x: gutter, y: axis))
+        shapes.axis.addLine(to: CGPoint(x: right, y: axis))
+        for line in lines {
+            let y = lanesTop + CGFloat(line.lane) * laneStep
+            let from = x(line.sighting.arrival)
+            let to = max(x(end(line.sighting)), from + 3)
+            let box = CGRect(x: from, y: y - 1.5, width: to - from, height: 3)
+            if line.sighting.left == nil {
+                shapes.waiting.addRect(box)
+            } else if line.sighting.gone {
+                // A line of dashes.
+                for dash in stride(from: from, to: to, by: 9) {
+                    shapes.gone.addRect(CGRect(x: dash, y: y - 1.5, width: min(2, to - dash), height: 3))
+                }
+            } else {
+                shapes.taken.addRect(box)
+                // The end of the line: the block that took the transaction.
+                shapes.taken.addRect(CGRect(x: to - 1, y: y - 4, width: 2, height: 8))
+            }
+            shapes.targets.append((.transaction(line.sighting.txid), box.insetBy(dx: -3, dy: -4)))
+        }
+        for block in model.blocks {
+            let seen = model.arrivals[block.hash] ?? Date(timeIntervalSince1970: TimeInterval(block.time))
+            guard seen > start else { continue }
+            let position = min(x(seen), right - 5)
+            shapes.guides.move(to: CGPoint(x: position, y: lanesTop - 10))
+            shapes.guides.addLine(to: CGPoint(x: position, y: axis))
+            let mark = CGRect(x: position - 4.5, y: block.staked ? axis - 16 : axis + 7, width: 9, height: 9)
+            if block.staked { shapes.staked.addEllipse(in: mark) } else { shapes.mined.addRect(mark) }
+            shapes.targets.append((.block(block.hash), mark.insetBy(dx: -4, dy: -4)))
+        }
+        return shapes
+    }
+
+    private func target(at point: CGPoint, in shapes: Shapes) -> Target? {
+        shapes.targets.first { $0.box.contains(point) }?.target
+    }
+
+    /// What the line or the mark under the pointer is.
+    private func caption(_ target: Target) -> String {
+        _ = showsNames
+        switch target {
+        case .transaction(let txid):
+            var parts: [String] = []
+            if let detail = feed.details[txid], let statement = detail.statement {
+                let sentence = StatementWords(
+                    statement: statement, coin: detail.coin, tags: detail.tags, coinbase: detail.coinbase,
+                    feePool: detail.feePoolCheckpoint, model: model
+                ).sentence
+                if !sentence.isEmpty { parts.append(sentence) }
+            }
+            if parts.isEmpty { parts.append("Transaction \(Format.short(txid, head: 10, tail: 6)).") }
+            if let sighting = feed.sightings[txid] {
+                var facts: [String] = []
+                if sighting.left == nil {
+                    facts.append("Waits for \(MempoolText.span(now.timeIntervalSince(sighting.arrival)))")
+                } else if sighting.gone {
+                    facts.append("Left the mempool and is not in a block")
+                } else {
+                    facts.append("Waited \(MempoolText.span(end(sighting).timeIntervalSince(sighting.arrival)))")
+                    if let height = sighting.height { facts.append("block \(Format.integer(height)) took it") }
+                }
+                if let fee = sighting.feeSats { facts.append("fee \(Format.coins(fee)) \(model.coin)") }
+                facts.append(Format.bytes(sighting.size))
+                parts.append(facts.joined(separator: " · ") + ". Click to open.")
+            }
+            return parts.joined(separator: " ")
+        case .block(let hash):
+            guard let block = model.blocks.first(where: { $0.hash == hash }) else { return "" }
+            var text = "Block \(Format.integer(block.height)), \(block.staked ? "staked" : "mined"), with "
+                + "\(MempoolText.count(Int(block.transactionCount), "transaction", "transactions"))."
+            if feed.tookBlocks.contains(hash) {
+                let took = feed.took.filter { $0.blockHash == hash }.count
+                text += took == 0
+                    ? " It took no transaction from the mempool."
+                    : " It took \(MempoolText.count(took, "transaction", "transactions")) from the mempool."
+            }
+            return text + " Click to open."
+        }
+    }
+
+    // MARK: Readouts
+
+    /// The figures that answer first: how much waits, how full the next block is, and how
+    /// long ago the last block came.
+    private var readouts: some View {
+        let waiting = feed.entries.count
+        let share = Double(feed.totalBytes) / Double(WaitingRoom.blockLimit)
+        let percent = share * 100
+        let seen = lines.count
+        return HStack(alignment: .lastTextBaseline, spacing: 26) {
+            Readout("Waiting", feed.loaded ? "\(waiting)" : "–", tone: waiting > 0 ? Tone.present : Tone.value)
+            Readout("Size", feed.loaded ? Format.bytes(feed.totalBytes) : "–")
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                NameText("Next block")
+                Canvas { context, size in
+                    context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Tone.grid))
+                    let filled = CGRect(x: 0, y: 0, width: size.width * min(share, 1), height: size.height)
+                    context.fill(Path(filled), with: .color(share <= 1 ? Tone.record : Tone.alert))
+                    context.fill(Path(CGRect(x: size.width - 1, y: -2, width: 1, height: size.height + 4)), with: .color(Tone.axis))
+                }
+                .frame(width: 110, height: 8)
+                .alignmentGuide(.lastTextBaseline) { $0[.bottom] - 3 }
+                Text(waiting == 0 ? "0%" : percent < 1 ? String(format: "%.2f%%", percent) : String(format: "%.0f%%", percent))
+                    .font(Tone.figure).monospacedDigit()
+                    .foregroundStyle(share <= 1 ? Tone.value : Tone.alert)
+            }
+            .help("The part of one block that the waiting transactions fill. A block holds \(Format.bytes(WaitingRoom.blockLimit)).")
+            if let block = model.blocks.first {
+                Readout("Last block", Self.clock(max(now.timeIntervalSince1970 - Double(block.time), 0)))
+            }
+            Readout("Seen in 15 min", "\(seen)")
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// "6:08" for six minutes and eight seconds.
+    private static func clock(_ seconds: Double) -> String {
+        let whole = Int(seconds)
+        return whole >= 3600
+            ? "\(whole / 3600):\(String(format: "%02d", whole / 60 % 60)):\(String(format: "%02d", whole % 60))"
+            : "\(whole / 60):\(String(format: "%02d", whole % 60))"
+    }
+
+    private func roomText(_ bytes: UInt64) -> String {
+        let limit = WaitingRoom.blockLimit
+        return Double(bytes) <= Double(limit)
+            ? "All that waits fits in one block: \(Format.bytes(bytes)) of \(Format.bytes(limit))."
+            : "More waits than one block holds: \(Format.bytes(bytes)) of \(Format.bytes(limit)). "
+                + "A block takes the transactions with the higher fee for each byte first."
     }
 
     private func spoken(_ lines: [(sighting: MempoolSighting, lane: Int)]) -> String {
@@ -766,22 +1143,26 @@ private struct MempoolTimeRecord: View {
         let right = size.width - rightInset
         let axis = axisY(lanes)
         let top = lanesTop - 10
+        let waitBottom = lanesTop + CGFloat(lanes) * laneStep
         func x(_ date: Date) -> CGFloat {
             gutter + CGFloat(min(max(date.timeIntervalSince(start) / span, 0), 1)) * (right - gutter)
         }
 
-        // The names of the lanes.
-        context.plate(
-            "Mempool", y: lanesTop + CGFloat(lanes - 1) * laneStep / 2, width: plateWidth, fill: nil)
-        context.plate("Staked", y: axis - 9, width: plateWidth, fill: Tone.staked)
-        context.plate("Mined", y: axis + 9, width: plateWidth, fill: Tone.mined)
+        // The names of the lanes: the transactions that wait, and the blocks, as on the
+        // chain pulse.
+        context.plate("Waiting", y: (top + waitBottom) / 2, width: plateWidth, fill: nil)
+        context.plate("Staked", y: axis - 13, width: plateWidth, fill: Tone.staked)
+        context.plate("Mined", y: axis + 13, width: plateWidth, fill: Tone.mined)
+
+        // The part of the transactions has a line below it.
+        context.rule(gutter, waitBottom + 4, right, waitBottom + 4, Tone.grid)
 
         // A tick for each minute, and a line for each five.
         for minute in 1...15 {
             let gx = x(now.addingTimeInterval(-Double(minute) * 60))
             if minute % 5 == 0 {
-                context.rule(gx, top, gx, axis + 14, Tone.grid)
-                context.name("\(minute) min", gx, axis + 27)
+                context.rule(gx, top, gx, axis + 22, Tone.grid)
+                context.name("\(minute) min", gx, axis + 33)
             } else {
                 context.rule(gx, axis - 2.5, gx, axis + 2.5, Tone.rule)
             }
@@ -790,68 +1171,37 @@ private struct MempoolTimeRecord: View {
         // The line of the blocks.
         context.rule(gutter, axis, right, axis, Tone.axis)
 
-        // Blocks: a guide up to the lanes, and a mark up for staked or down for mined.
-        for block in model.blocks {
-            let seen = model.arrivals[block.hash] ?? Date(timeIntervalSince1970: TimeInterval(block.time))
-            guard seen > start else { continue }
-            let position = x(seen)
-            context.rule(position, top, position, axis, Tone.grid)
-            let mark = CGRect(x: position - 1.5, y: block.staked ? axis - 11 : axis + 1, width: 3, height: 10)
-            context.fill(Path(mark), with: .color(block.staked ? Tone.staked : Tone.mined))
+        // The guides and the marks of the blocks and the lines of the transactions are in
+        // the pulse layer, which gives them their places at the front.
+        if lines.isEmpty {
+            context.name("no transaction in the last 15 minutes", (gutter + right) / 2, (top + waitBottom) / 2)
         }
-
-        // Transactions. What waits now is live and has light. What a block took is done.
-        for line in lines {
-            let y = lanesTop + CGFloat(line.lane) * laneStep
-            let from = x(line.sighting.arrival)
-            let to = max(x(end(line.sighting)), from + 3)
-            if line.sighting.left == nil {
-                context.lit(Path(CGRect(x: from, y: y - 1.5, width: to - from, height: 3)), Tone.present, strength: 0.5)
-            } else if line.sighting.gone {
-                context.rule(from, y, to, y, Tone.alert, width: 3, dash: [2, 7])
-            } else {
-                context.fill(Path(CGRect(x: from, y: y - 1.5, width: to - from, height: 3)), with: .color(Tone.record))
+        // The line or the mark under the pointer.
+        switch pointed {
+        case .transaction(let txid)?:
+            if let line = lines.first(where: { $0.sighting.txid == txid }) {
+                let y = lanesTop + CGFloat(line.lane) * laneStep
+                let from = x(line.sighting.arrival)
+                let to = max(x(end(line.sighting)), from + 3)
+                // A frame round the line: the line itself is in the pulse layer, above this.
+                context.stroke(
+                    Path(CGRect(x: from - 3, y: y - 4.5, width: to - from + 6, height: 9)), with: .color(Tone.present),
+                    lineWidth: 1)
             }
+        case .block(let hash)?:
+            if let block = model.blocks.first(where: { $0.hash == hash }) {
+                let seen = model.arrivals[block.hash] ?? Date(timeIntervalSince1970: TimeInterval(block.time))
+                let position = min(x(seen), right - 5)
+                let mark = CGRect(x: position - 6, y: block.staked ? axis - 17.5 : axis + 5.5, width: 12, height: 12)
+                context.stroke(
+                    block.staked ? Path(ellipseIn: mark) : Path(mark), with: .color(Tone.present), lineWidth: 1.5)
+            }
+        case nil: break
         }
 
         // The right edge: the present.
-        context.lit(Path(CGRect(x: right - 0.75, y: top, width: 1.5, height: axis + 14 - top)), Tone.present, strength: 0.7)
-        context.name("now", right, top - 7, .trailing, color: Tone.present)
-    }
-
-    // MARK: The next block
-
-    private func nextBlockBar(_ bytes: UInt64) -> some View {
-        let limit = WaitingRoom.blockLimit
-        let share = Double(bytes) / Double(limit)
-        let percent = share * 100
-        let text = share <= 1
-            ? "The next block: \(Format.bytes(bytes)) of \(Format.bytes(limit)), "
-                + "\(percent < 1 ? String(format: "%.2f", percent) : String(format: "%.1f", percent)) of each 100. "
-                + "All that waits fits in one block."
-            : "More waits than one block holds: \(Format.bytes(bytes)) of \(Format.bytes(limit)). "
-                + "A block takes the transactions with the higher fee for each byte first."
-        return VStack(alignment: .leading, spacing: 6) {
-            Canvas { context, size in
-                let right = size.width - rightInset
-                let middle = size.height / 2
-                context.plate("Block", y: middle, width: plateWidth, fill: nil)
-                let track = CGRect(x: gutter, y: middle - 3, width: right - gutter, height: 6)
-                context.fill(Path(track), with: .color(Tone.grid))
-                let filled = CGRect(x: gutter, y: track.minY, width: max(track.width * min(share, 1), 2), height: 6)
-                context.lit(Path(filled), share <= 1 ? Tone.record : Tone.alert, strength: share <= 1 ? 0 : 0.6)
-                context.rule(right, middle - 7, right, middle + 7, Tone.axis)
-            }
-            .frame(height: 24)
-            .accessibilityHidden(true)
-            Text(text)
-                .font(Tone.caption)
-                .foregroundStyle(Tone.value)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, gutter)
-                .padding(.trailing, rightInset)
-        }
-        .padding(.vertical, 10)
+        context.lit(Path(CGRect(x: right - 0.75, y: top, width: 1.5, height: axis + 22 - top)), Tone.present, strength: 0.7)
+        context.name("now", right, top - 8, .trailing, color: Tone.present)
     }
 }
 

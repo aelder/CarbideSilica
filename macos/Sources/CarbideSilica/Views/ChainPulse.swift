@@ -613,13 +613,19 @@ struct ChainPulse: View {
 /// front is at it, and the light goes down behind the front. The shapes do not move.
 ///
 /// It is Core Animation: the system moves the front, and the app does no work for a frame.
-private struct LightTrace: NSViewRepresentable {
+struct LightTrace: NSViewRepresentable {
     struct Part {
         let path: CGPath
         /// True for a line, false for a filled shape.
         let stroke: Bool
         let color: CGColor
         let glow: CGColor
+        /// The colour of the shape itself. With it, the view also draws the shape, and the
+        /// shape gets its new place when the front goes across it. Nil: the view draws only
+        /// the light, and a different view draws the shape.
+        var base: CGColor?
+        /// How strong the light around the shape itself is, from 0 to 1.
+        var baseGlow: Float = 0
     }
 
     static let warm = CGColor(red: 0.84, green: 0.88, blue: 0.8, alpha: 1)
@@ -637,12 +643,27 @@ private struct LightTrace: NSViewRepresentable {
         let light = CALayer()
         let mask = CAGradientLayer()
         var shapes: [CAShapeLayer] = []
+        /// The shapes ahead of the front, at the places of the beat before.
+        let before = CALayer()
+        let beforeMask = CALayer()
+        var beforeShapes: [CAShapeLayer] = []
+        /// The shapes behind the front, at their new places.
+        let after = CALayer()
+        let afterMask = CALayer()
+        var afterShapes: [CAShapeLayer] = []
         var beat: Int?
         override var isFlipped: Bool { true }
 
         override init(frame: NSRect) {
             super.init(frame: frame)
             wantsLayer = true
+            for (group, mask) in [(before, beforeMask), (after, afterMask)] {
+                mask.backgroundColor = CGColor(gray: 0, alpha: 1)
+                group.mask = mask
+                layer?.addSublayer(group)
+            }
+            beforeMask.anchorPoint = CGPoint(x: 1, y: 0)
+            afterMask.anchorPoint = CGPoint(x: 0, y: 0)
             mask.colors = [
                 CGColor(gray: 0, alpha: 0), CGColor(gray: 0, alpha: 1), CGColor(gray: 0, alpha: 0.35),
                 CGColor(gray: 0, alpha: 0),
@@ -662,6 +683,7 @@ private struct LightTrace: NSViewRepresentable {
     func makeNSView(context: Context) -> LightView { LightView() }
 
     func updateNSView(_ view: LightView, context: Context) {
+        let newBeat = view.beat != beat
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         view.light.opacity = strength
@@ -671,6 +693,32 @@ private struct LightTrace: NSViewRepresentable {
             shape.shadowOpacity = 1
             view.light.addSublayer(shape)
             view.shapes.append(shape)
+            for (group, list) in [(view.before, \LightView.beforeShapes), (view.after, \LightView.afterShapes)] {
+                let own = CAShapeLayer()
+                own.shadowOffset = .zero
+                own.shadowRadius = 4.5
+                own.lineWidth = 1
+                group.addSublayer(own)
+                view[keyPath: list].append(own)
+            }
+        }
+        for (index, part) in parts.enumerated() {
+            let before = view.beforeShapes[index]
+            let after = view.afterShapes[index]
+            // The shapes of the beat before stay ahead of the front.
+            if newBeat { before.path = after.path ?? part.path }
+            after.path = part.path
+            for own in [before, after] {
+                own.isHidden = part.base == nil
+                own.fillColor = part.stroke ? nil : part.base
+                own.strokeColor = part.stroke ? part.base : nil
+                own.shadowColor = part.glow
+                own.shadowOpacity = part.baseGlow
+            }
+        }
+        for mask in [view.beforeMask, view.afterMask] {
+            mask.bounds = CGRect(x: 0, y: 0, width: area.width + 60, height: area.height + 24)
+            mask.position = CGPoint(x: area.minX - 12, y: area.minY - 12)
         }
         for (shape, part) in zip(view.shapes, parts) {
             shape.path = part.path
@@ -685,19 +733,21 @@ private struct LightTrace: NSViewRepresentable {
         view.mask.position = CGPoint(x: end, y: area.minY - 12)
         CATransaction.commit()
 
-        guard view.beat != beat else { return }
+        guard newBeat else { return }
         view.beat = beat
-        view.mask.removeAnimation(forKey: "front")
         // A person who asked the system for less movement gets no front.
         let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || area.width <= 0
         view.mask.opacity = still ? 0 : 1
-        guard !still else { return }
-        let move = CABasicAnimation(keyPath: "position.x")
-        move.fromValue = area.maxX + 12
-        move.toValue = end
-        move.duration = 1
-        move.timingFunction = CAMediaTimingFunction(name: .linear)
-        view.mask.add(move, forKey: "front")
+        for mask in [view.mask as CALayer, view.beforeMask, view.afterMask] {
+            mask.removeAnimation(forKey: "front")
+            guard !still else { continue }
+            let move = CABasicAnimation(keyPath: "position.x")
+            move.fromValue = area.maxX + 12
+            move.toValue = end
+            move.duration = 1
+            move.timingFunction = CAMediaTimingFunction(name: .linear)
+            mask.add(move, forKey: "front")
+        }
     }
 }
 

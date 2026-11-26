@@ -40,5 +40,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN" "$APP/Contents/MacOS/CarbideSilica"
 cp Info.plist "$APP/Contents/Info.plist"
+# The sounds of the keys, with their licence.
+mkdir -p "$APP/Contents/Resources"
+cp -R Resources/Sounds "$APP/Contents/Resources/Sounds"
 codesign --force --sign - "$APP" >/dev/null 2>&1
 echo "Built $(pwd)/$APP"

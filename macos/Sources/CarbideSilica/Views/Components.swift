@@ -84,25 +84,30 @@ struct Page<Content: View>: View {
 struct Card<Content: View>: View {
     let title: String
     var trailing: String?
+    /// False hides the heading. The card keeps its name for the keys and the command list.
+    var showsTitle = true
     @ViewBuilder let content: Content
 
-    init(_ title: String, trailing: String? = nil, @ViewBuilder content: () -> Content) {
+    init(_ title: String, trailing: String? = nil, showsTitle: Bool = true, @ViewBuilder content: () -> Content) {
         self.title = title
         self.trailing = trailing
+        self.showsTitle = showsTitle
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             PanelRule()
-            HStack(alignment: .firstTextBaseline) {
-                Text(title.uppercased()).font(Tone.heading).tracking(2.2).foregroundStyle(Tone.value)
-                Spacer()
-                if let trailing {
-                    NameText(trailing)
+            if showsTitle {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title.uppercased()).font(Tone.heading).tracking(2.2).foregroundStyle(Tone.value)
+                    Spacer()
+                    if let trailing {
+                        NameText(trailing)
+                    }
                 }
+                .padding(.top, 2)
             }
-            .padding(.top, 2)
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)

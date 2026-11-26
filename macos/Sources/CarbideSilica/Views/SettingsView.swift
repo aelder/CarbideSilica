@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.apiEnabled) private var apiEnabled = false
     @AppStorage(SettingsKey.apiURL) private var apiURL = SettingsKey.defaultAPI
     @AppStorage(SettingsKey.useUTC) private var useUTC = false
+    @AppStorage(ClickSound.settingKey) private var interfaceSounds = true
     @AppStorage(DisplayKey.showsNames) private var showsNames = true
     @AppStorage(DisplayKey.showsDates) private var showsDates = false
     @AppStorage(SettingsKey.cacheDir) private var cacheDir = ""
@@ -55,6 +56,7 @@ struct SettingsView: View {
                 Toggle("Show names in place of identity and currency IDs", isOn: $showsNames)
                 Toggle("Show dates for block heights and times", isOn: $showsDates)
                 Toggle("Show times in UTC", isOn: $useUTC)
+                Toggle("Play a sound for keys and buttons", isOn: $interfaceSounds)
             } header: {
                 SettingsHeading("Display")
             } footer: {

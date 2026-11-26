@@ -288,8 +288,11 @@ struct LampKey<Label: View>: View {
                 .shadow(color: LampTone.halation.opacity(lamp == .off ? 0 : 0.28), radius: 12)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .buttonStyle(PressSoundStyle())
+        .onHover { inside in
+            hovering = inside
+            if inside { ClickSound.shared.hover() }
+        }
         // Quick up, slower down.
         .animation(lamp == .off ? .easeOut(duration: 0.34) : .easeOut(duration: 0.1), value: lamp)
     }
@@ -413,7 +416,14 @@ struct LampButtonStyle: ButtonStyle {
                 .padding(.vertical, 5)
                 .background(LampFace(lamp: lamp).opacity(enabled ? 1 : 0.5))
                 .contentShape(Rectangle())
-                .onHover { hovering = $0 }
+                .onHover { inside in
+                    hovering = inside
+                    // A button that is not in operation has no light and no sound.
+                    if inside, enabled { ClickSound.shared.hover() }
+                }
+                .onChange(of: configuration.isPressed) { _, pressed in
+                    if pressed { ClickSound.shared.press() } else { ClickSound.shared.release() }
+                }
         }
     }
 }
@@ -456,8 +466,11 @@ struct LampSegments<Value: Hashable>: View {
                     .background(LampFace(lamp: lamp))
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .onHover { hovering = $0 }
+            .buttonStyle(PressSoundStyle())
+            .onHover { inside in
+                hovering = inside
+                if inside { ClickSound.shared.hover() }
+            }
             .accessibilityLabel(title)
             .accessibilityAddTraits(chosen ? .isSelected : [])
         }

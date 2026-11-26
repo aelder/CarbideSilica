@@ -105,6 +105,7 @@ struct RootView: View {
         .background(MainWindowReader())
         .onAppear {
             KeyLayer.shared.install(model: model, shell: shell)
+            ClickSound.shared.warm()
             KeyLayer.shared.showKeys = { openWindow(id: KeyboardReference.windowID) }
         }
         .alert("Start-up arguments", isPresented: $showsArgumentProblem) {
@@ -251,6 +252,14 @@ struct Sidebar: View {
         // The sidebar is a part of the display: black, with a thin rule at its edge.
         .background(Tone.screen)
         .overlay(alignment: .trailing) { Rectangle().fill(Tone.rule).frame(width: 1) }
+        // The record of the mempool continues on each page, so that the Mempool page has
+        // the last minutes when a person opens it.
+        .task(id: model.generation) {
+            while !Task.isCancelled {
+                await MempoolFeed.shared.refresh(model)
+                try? await Task.sleep(for: MempoolFeed.interval)
+            }
+        }
         // Names for identity and currency IDs in the Recent list.
         .task(id: model.recent) {
             await model.resolveNames(model.recent.map { route -> String? in

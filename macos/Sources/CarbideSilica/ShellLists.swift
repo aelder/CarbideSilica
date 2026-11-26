@@ -134,6 +134,8 @@ struct SourceLine: View {
     /// A short name to show in place of the full source, such as the chain. The full
     /// source is then in the help text.
     var short: String?
+    /// True shows the word "Source" before the short name.
+    var labelled = false
 
     var body: some View {
         if let provenance, !provenance.source.isEmpty {
@@ -142,6 +144,7 @@ struct SourceLine: View {
                     .font(.system(size: provenance.retained ? 10 : 8))
                     .foregroundStyle(provenance.retained ? .orange : .green)
                 if let short {
+                    if labelled { Text("Source").foregroundStyle(.secondary) }
                     Text(short).fontWeight(.semibold)
                 } else {
                     Text("Source").foregroundStyle(.secondary)
