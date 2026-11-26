@@ -160,6 +160,14 @@ pub mod font {
     /// `.callout` on macOS.
     pub const CALLOUT: Role = Role { size: 12.0, ..BODY };
     pub const MONO_CALLOUT: Role = Role { family: MONO, size: 12.0, weight: 400, tracking: 0.0, uppercase: false, tabular: false };
+    /// `.title2` on macOS: the title of a sheet.
+    pub const TITLE2: Role = Role { size: 17.0, ..BODY };
+    /// `.title3` on macOS: a sentence that leads a card.
+    pub const TITLE3: Role = Role { size: 15.0, ..BODY };
+    /// `.subheadline` on macOS.
+    pub const SUBHEADLINE: Role = Role { size: 11.0, ..BODY };
+    /// `.caption`, `.caption2` and `.footnote` on macOS: the small text under a mark.
+    pub const TEXT_CAPTION: Role = Role { size: 10.0, ..BODY };
 }
 
 /// Loads the fonts, the colours and the style sheet. Call once after GTK starts.
@@ -213,20 +221,104 @@ pub fn stylesheet() -> String {
     css
 }
 
+/// Points in one logical pixel. Pango takes font sizes in points, and a point is 4/3 of a
+/// pixel at the 96 dots per inch of a GTK display. The Swift sizes are pixels (points of a
+/// Mac screen), so a font size is multiplied by this factor. GTK's text scale changes points
+/// and the pixels of CSS in the same way, so the roles keep their size relative to the CSS
+/// text. Letter spacing is not a font size: Pango takes it in pixels.
+pub const POINTS_PER_PIXEL: f64 = 0.75;
+
+/// A font size in logical pixels as the value of Pango markup's `font_size` and of
+/// `FontDescription::set_size` (1024ths of a point).
+pub fn pango_points(pixels: f64) -> i64 {
+    (pixels * POINTS_PER_PIXEL * 1024.0).round() as i64
+}
+
+/// A letter spacing in logical pixels as the value of Pango's `letter_spacing` (1024ths of
+/// a pixel).
+pub fn pango_spacing(pixels: f64) -> i64 {
+    (pixels * 1024.0).round() as i64
+}
+
+/// The size of Jost against the size of Futura for the same role. Jost is a little smaller
+/// than Futura at one size: its capitals are 0.70 of the size against 0.76, and its
+/// lettering is approximately 3.5% narrower (measured with the advances of both fonts over
+/// the names of the app). At 1.05 the widths of the names match the macOS pictures within
+/// approximately 2%, and the capitals are approximately 3% lower.
+pub const DISPLAY_SCALE: f64 = 1.05;
+
+/// The size in pixels at which a role is drawn: its Swift size, times [`DISPLAY_SCALE`] for
+/// the Jost roles.
+pub fn drawn_size(role: font::Role) -> f64 {
+    if role.family == font::DISPLAY { role.size * DISPLAY_SCALE } else { role.size }
+}
+
 /// Pango markup for a text in a role: font, size, tracking and case. The text is escaped.
 pub fn markup(role: font::Role, text: &str) -> String {
     let text = if role.uppercase { text.to_uppercase() } else { text.to_string() };
-    let spacing = (role.tracking * 1024.0).round() as i64;
     let features = if role.tabular { " font_features=\"tnum\"" } else { "" };
     format!(
         "<span font_family=\"{}\" font_size=\"{}\" font_weight=\"{}\" letter_spacing=\"{}\"{}>{}</span>",
         role.family,
-        (role.size * 1024.0).round() as i64,
+        pango_points(drawn_size(role)),
         role.weight,
-        spacing,
+        pango_spacing(role.tracking),
         features,
         gtk::glib::markup_escape_text(&text)
     )
+}
+
+/// Pango markup for a text in the text face at a size in logical pixels, as the Swift app's
+/// system sizes (`.title2` 17, `.title3` 15, `.callout` 12, `.caption` 10). `weight` is
+/// 400 for regular, 500 medium, 600 semibold, 700 bold. The text is escaped.
+pub fn text_markup(size: f64, weight: i32, text: &str) -> String {
+    format!(
+        "<span font_size=\"{}\" font_weight=\"{}\">{}</span>",
+        pango_points(size),
+        weight,
+        gtk::glib::markup_escape_text(text)
+    )
+}
+
+/// Pango attributes for a role: font, size, tracking and figures. A label with them keeps
+/// its role when its text changes with `set_text`. They do not change the case.
+pub fn role_attributes(role: font::Role) -> gtk::pango::AttrList {
+    use gtk::pango;
+    let mut description = pango::FontDescription::new();
+    description.set_family(role.family);
+    description.set_size(pango_points(drawn_size(role)) as i32);
+    description.set_weight(match role.weight {
+        w if w >= 700 => pango::Weight::Bold,
+        w if w >= 600 => pango::Weight::Semibold,
+        w if w >= 500 => pango::Weight::Medium,
+        _ => pango::Weight::Normal,
+    });
+    let attributes = pango::AttrList::new();
+    attributes.insert(pango::AttrFontDesc::new(&description));
+    if role.tracking != 0.0 {
+        attributes.insert(pango::AttrInt::new_letter_spacing(pango_spacing(role.tracking) as i32));
+    }
+    if role.tabular {
+        attributes.insert(pango::AttrFontFeatures::new("tnum"));
+    }
+    attributes
+}
+
+/// Gives a label the font of a role with [`role_attributes`].
+pub fn set_role(label: &gtk::Label, role: font::Role) {
+    label.set_attributes(Some(&role_attributes(role)));
+}
+
+/// A plain-text label in a role of the text face (`TITLE3`, `TEXT_CAPTION`…), left
+/// aligned, with classes of `style.css`. Its text can change with `set_text`.
+pub fn text_label(role: font::Role, text: &str, classes: &[&str]) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.set_xalign(0.0);
+    set_role(&label, role);
+    for class in classes {
+        label.add_css_class(class);
+    }
+    label
 }
 
 /// A label in a role, in a colour class from `style.css` (`value`, `label`, `secondary`…).

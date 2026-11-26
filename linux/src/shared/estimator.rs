@@ -104,7 +104,7 @@ fn caption(text: &str) -> gtk::Label {
 fn forecast_result(page: &Rc<Page>, forecast: &api::Forecast) -> gtk::Box {
     let column = gtk::Box::new(gtk::Orientation::Vertical, 10);
     let title = page::paragraph("", &["value"]);
-    title.set_markup(&format!("<span font_size=\"{}\">{}</span>", 15 * 1024, glib::markup_escape_text(&headline(forecast, format::now() as i64))));
+    title.set_markup(&format!("<span font_size=\"{}\">{}</span>", crate::theme::pango_points(15.0), glib::markup_escape_text(&headline(forecast, format::now() as i64))));
     column.append(&title);
     let timeline = timeline(forecast);
     timeline.set_margin_start(14);

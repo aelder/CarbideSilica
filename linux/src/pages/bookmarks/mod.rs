@@ -237,7 +237,7 @@ impl Bookmarks {
                     empty.set_vexpand(true);
                     field.append(&empty);
                     let title = gtk::Label::new(None);
-                    title.set_markup(&format!("<span font_size=\"{}\">No bookmarks.</span>", 15 * 1024));
+                    title.set_markup(&format!("<span font_size=\"{}\">No bookmarks.</span>", crate::theme::pango_points(15.0)));
                     title.add_css_class("value");
                     empty.append(&title);
                     let text = page::paragraph(
@@ -585,7 +585,7 @@ fn add_sheet(model: &Rc<AppModel>, parent: &gtk::Window, default_system: &str, d
     column.set_margin_end(20);
     column.set_size_request(480, -1);
     let title = gtk::Label::new(None);
-    title.set_markup(&format!("<span font_size=\"{}\" weight=\"600\">Add a bookmark</span>", 17 * 1024));
+    title.set_markup(&format!("<span font_size=\"{}\" weight=\"600\">Add a bookmark</span>", crate::theme::pango_points(17.0)));
     title.set_xalign(0.0);
     title.add_css_class("value");
     column.append(&title);

@@ -66,24 +66,16 @@ pub fn build(model: &Rc<AppModel>, name: &str) -> Rc<Page> {
     page
 }
 
-/// A type role whose size is given in logical pixels, as the CSS text classes are. The
-/// sizes of the roles are Pango points, which are a third larger at 96 dots an inch.
-pub const fn in_pixels(role: font::Role, pixels: f64) -> font::Role {
-    font::Role { size: pixels * 0.75, ..role }
-}
-
 /// Body text in the size of SwiftUI's `.title3`: 15 against the 13 of the body.
 pub fn title3(text: &str) -> gtk::Label {
-    const TITLE3: font::Role = in_pixels(font::BODY, 15.0);
-    let label = theme::label(TITLE3, text, "value");
+    let label = theme::label(font::TITLE3, text, "value");
     label.set_wrap(true);
     label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
     label
 }
 
 /// A part that opens to show the data from the node, with a copy key at its right. The
-/// contents are made when it opens and removed when it closes: a closed `lamp::Disclosure`
-/// keeps the room of its contents, because its revealer has no transition.
+/// contents are made the first time it opens, because the JSON of a large currency is long.
 pub fn data_disclosure(
     open: bool,
     hint: fn(bool) -> &'static str,
@@ -97,11 +89,11 @@ pub fn data_disclosure(
     let fill = {
         let (content, make) = (content.clone(), make.clone());
         move |open: bool| {
-            if let Some(holder) = content.borrow().as_ref() {
-                clear(holder);
-                if open {
-                    holder.append(&make());
-                }
+            if let Some(holder) = content.borrow().as_ref()
+                && open
+                && holder.first_child().is_none()
+            {
+                holder.append(&make());
             }
         }
     };

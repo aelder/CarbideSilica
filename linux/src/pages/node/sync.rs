@@ -147,7 +147,7 @@ impl SyncCard {
             (true, Some(tip)) => {
                 self.title.set_markup(&format!(
                     "<span font_size=\"{}\">Validating blocks from <b>{}</b></span>",
-                    15 * 1024,
+                    crate::theme::pango_points(15.0),
                     glib::markup_escape_text(&format::month_year(tip))
                 ));
                 self.title.set_visible(true);

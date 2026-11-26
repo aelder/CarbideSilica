@@ -16,7 +16,7 @@ use crate::bridge::api::{self, IdentityState, Route, Timelock};
 use crate::format;
 use crate::page::{self, Page};
 use crate::shared::identity_support::{self as support, abbreviated_date};
-use crate::theme::{self, tone, Color};
+use crate::theme::{self, font, tone, Color};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display::{self, PlateFill};
 use crate::widgets::icons::{self, Icon};
@@ -188,7 +188,7 @@ pub fn control_card(page: &Rc<Page>, identity: &IdentityState) -> gtk::Box {
     let display = |id: &str| support::display_id(&model, id);
 
     // `.title3`: 15.
-    let sentence_label = super::px_label(&sentence(&facts, &display), 15.0, 400, &[]);
+    let sentence_label = theme::text_label(font::TITLE3, &sentence(&facts, &display), &[]);
     sentence_label.set_wrap(true);
     sentence_label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
     sentence_label.set_selectable(true);
@@ -402,7 +402,7 @@ fn history_row(
     if version.on_active_chain == Some(false) {
         let warning = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         warning.append(&icons::icon(Icon::Warning, 11, tone::MINED));
-        warning.append(&super::px_label("Not on the active chain", 10.0, 400, &["mined"]));
+        warning.append(&theme::text_label(font::TEXT_CAPTION, "Not on the active chain", &["mined"]));
         heading.append(&warning);
     }
     column.append(&heading);

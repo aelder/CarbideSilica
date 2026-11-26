@@ -263,9 +263,9 @@ fn draw_origin(canvas: &Canvas, snapshot: &gtk::Snapshot, width: f32, height: f3
         draw::fill_rect(snapshot, x + 0.5, y + 0.5, w - 1.0, h - 1.0, tone::SCREEN);
         snapshot.append_stroke(&draw::rect_path(x + 0.5, y + 0.5, w - 1.0, h - 1.0), &dashed_stroke(dashed), &color.rgba());
         // `.callout.weight(.semibold)` and `.caption2`: 12 and 10.
-        let layout = super::px_layout(canvas, title, 12.0, 600);
+        let layout = draw::layout(canvas, font::Role { weight: 600, ..font::CALLOUT }, title);
         draw::draw_layout(snapshot, &layout, x + w / 2.0, y + h / 2.0 - 7.0, draw::Anchor::Center, tone::VALUE);
-        let layout = super::px_layout(canvas, subtitle, 10.0, 400);
+        let layout = draw::layout(canvas, font::TEXT_CAPTION, subtitle);
         draw::draw_layout(snapshot, &layout, x + w / 2.0, y + h / 2.0 + 9.0, draw::Anchor::Center, tone::LABEL);
     };
     for (index, payer) in origin.payers.iter().enumerate() {

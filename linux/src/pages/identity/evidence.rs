@@ -16,7 +16,7 @@ use crate::model::{AppModel, Topic};
 use crate::page::{self, load::clear, Card, Page};
 use crate::shared::confidence::confidence_mark;
 use crate::shared::identity_support::{self as support, small_progress};
-use crate::theme::tone;
+use crate::theme::{self, font, tone};
 use crate::widgets::display;
 use crate::widgets::{lamp, link, loader};
 
@@ -347,7 +347,7 @@ fn evidence_body(page: &Rc<Page>, name: &str, report: &IdentityEvidenceReport, a
         }
         text.push_str(". A reorganization that removes that block makes the stored links invalid.");
         let label = page::paragraph(&text, &["secondary"]);
-        super::set_px(&label, 10.0, 400);
+        theme::set_role(&label, font::TEXT_CAPTION);
         label.set_selectable(true);
         column.append(&label);
     }
@@ -388,7 +388,7 @@ fn referral_view(page: &Rc<Page>, identity: &str, chain: &[String]) -> gtk::Box 
         "Each box is an identity. An arrow points from an identity to the identity named as its referrer in its registration.",
         &["secondary"],
     );
-    super::set_px(&caption, 10.0, 400);
+    theme::set_role(&caption, font::TEXT_CAPTION);
     column.append(&caption);
     column
 }
@@ -438,7 +438,7 @@ fn evidence_source(page: &Rc<Page>, source: &str) -> gtk::Box {
     for piece in pieces(source, crate::display::shows_names(), &display) {
         match piece {
             Piece::Text(text) => {
-                let label = super::px_label(&text, 10.0, 400, &["secondary"]);
+                let label = theme::text_label(font::TEXT_CAPTION, &text, &["secondary"]);
                 label.set_single_line_mode(true);
                 label.set_valign(gtk::Align::Baseline);
                 row.append(&label);
@@ -452,7 +452,7 @@ fn evidence_source(page: &Rc<Page>, source: &str) -> gtk::Box {
                     }
                 });
                 if let Some(label) = link::label_of(&button) {
-                    super::set_px(&label, 10.0, 400);
+                    theme::set_role(&label, font::TEXT_CAPTION);
                 }
                 button.set_tooltip_text(Some(&txid));
                 row.append(&button);

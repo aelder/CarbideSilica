@@ -222,11 +222,14 @@ pub fn route_link(page: &super::Page, id: &str, route: Route, shorten: bool) -> 
     let (label, mono) = link_text(&model, id, &route, shorten);
     let open_route = route.clone();
     let weak_model = Rc::downgrade(&model);
-    let button = link::link(&label, mono, move || {
+    let button = link::link(&label, false, move || {
         if let Some(model) = weak_model.upgrade() {
             model.open(open_route.clone());
         }
     });
+    if let Some(child) = link::label_of(&button) {
+        link::set_mono(&child, mono);
+    }
     button.set_tooltip_text(Some(id));
     let (id_owned, route_owned) = (id.to_string(), route.clone());
     let weak = button.downgrade();
@@ -235,11 +238,13 @@ pub fn route_link(page: &super::Page, id: &str, route: Route, shorten: bool) -> 
             let (label, mono) = link_text(model, &id_owned, &route_owned, shorten);
             link::set_text(&button, &label);
             if let Some(child) = link::label_of(&button) {
-                if mono { child.add_css_class("mono") } else { child.remove_css_class("mono") }
+                link::set_mono(&child, mono);
             }
         }
     });
-    model.resolve_names([id.to_string()]);
+    if !matches!(route, Route::Block { .. }) {
+        model.resolve_names([id.to_string()]);
+    }
     let open_model = Rc::downgrade(&model);
     page.stop(&button, None, Some(id.to_string()), move || {
         if let Some(model) = open_model.upgrade() {
@@ -249,8 +254,20 @@ pub fn route_link(page: &super::Page, id: &str, route: Route, shorten: bool) -> 
     button
 }
 
+/// The name of `value` for a field row, when names are on and the name is known. A
+/// currency's name has no trailing "@".
+fn field_name(model: &AppModel, value: &str, route: &Route) -> Option<String> {
+    if !crate::display::shows_names() {
+        return None;
+    }
+    let name = model.state().names.get(value)?.clone();
+    Some(if is_currency(route) { name.strip_suffix('@').unwrap_or(&name).to_string() } else { name })
+}
+
 /// A label and value line. The value can be selected, copied, and optionally followed
-/// (`FieldRow`).
+/// (`FieldRow`). A followed value shows its name before a short form of the ID when the
+/// name is known, and otherwise the value itself, in the monospaced face only when
+/// `monospaced`. The row requests the name of an ID, and never of a block.
 pub fn field_row(page: &super::Page, label: &str, value: &str, route: Option<Route>, monospaced: bool) -> gtk::Box {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     let name = display::name_text(label);
@@ -259,17 +276,52 @@ pub fn field_row(page: &super::Page, label: &str, value: &str, route: Option<Rou
     row.append(&name);
     match route {
         Some(route) => {
-            let link = route_link(page, value, route, false);
-            if monospaced && let Some(child) = link::label_of(&link) {
-                child.add_css_class("mono");
+            let model = page.model.clone();
+            let open = {
+                let (weak, route) = (Rc::downgrade(&model), route.clone());
+                move || {
+                    if let Some(model) = weak.upgrade() {
+                        model.open(route.clone());
+                    }
+                }
+            };
+            let link = link::link(value, false, open.clone());
+            link.set_tooltip_text(Some(value));
+            let short = text(&format::short(value, 6, 4), &["mono-caption", "tertiary"]);
+            short.set_valign(gtk::Align::Baseline);
+            let show = {
+                let (link, short, value, route) = (link.downgrade(), short.downgrade(), value.to_string(), route.clone());
+                move |model: &AppModel| {
+                    let (Some(link), Some(short)) = (link.upgrade(), short.upgrade()) else { return };
+                    let Some(label) = link::label_of(&link) else { return };
+                    match field_name(model, &value, &route) {
+                        Some(name) => {
+                            label.set_text(&name);
+                            link::set_mono(&label, false);
+                            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                            short.set_visible(true);
+                        }
+                        None => {
+                            label.set_text(&value);
+                            link::set_mono(&label, monospaced);
+                            label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+                            short.set_visible(false);
+                        }
+                    }
+                }
+            };
+            show(&model);
+            model.watch(&[Topic::Names, Topic::Display], &link, move |model| show(model));
+            // An ID can have a name; a block's height or hash has none.
+            if !matches!(route, Route::Block { .. }) {
+                model.resolve_names([value.to_string()]);
             }
-            if let Some(child) = link::label_of(&link) {
-                child.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
-            }
+            page.stop(&link, None, Some(value.to_string()), open);
             row.append(&link);
+            row.append(&short);
         }
         None => {
-            let shown = text(value, if monospaced { &["mono"] } else { &[] });
+            let shown = text(value, if monospaced { &["mono-body"] } else { &[] });
             shown.set_selectable(true);
             shown.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
             shown.set_valign(gtk::Align::Baseline);

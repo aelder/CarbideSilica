@@ -15,8 +15,13 @@ use crate::route;
 use crate::widgets::display as parts;
 use crate::widgets::lamp::LampKey;
 
-/// The width of the sidebar, as the Swift app's ideal width.
-pub const WIDTH: i32 = 210;
+/// The width of the sidebar. The Swift sidebar is 180 to 280 wide, 210 at first; the macOS
+/// pictures show it at 180, and the page column then starts where it does on macOS.
+pub const WIDTH: i32 = 180;
+/// The room at each side of a key, and at the left of a group's name and rule, as the
+/// insets of a macOS sidebar list.
+const KEY_INSET: i32 = 20;
+const NAME_INSET: i32 = 24;
 
 pub fn build(model: &Rc<AppModel>) -> gtk::ScrolledWindow {
     let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -38,8 +43,8 @@ pub fn build(model: &Rc<AppModel>) -> gtk::ScrolledWindow {
                 model.show(place);
             }
         }));
-        key.button.set_margin_start(12);
-        key.button.set_margin_end(12);
+        key.button.set_margin_start(KEY_INSET);
+        key.button.set_margin_end(KEY_INSET);
         key.button.set_margin_top(3);
         key.button.set_margin_bottom(3);
         key.button.set_tooltip_text(None);
@@ -107,8 +112,8 @@ pub fn build(model: &Rc<AppModel>) -> gtk::ScrolledWindow {
                 });
                 key.set_chosen(last.as_ref() == Some(&route));
                 key.button.set_tooltip_text(Some(&route::title(&route)));
-                key.button.set_margin_start(12);
-                key.button.set_margin_end(12);
+                key.button.set_margin_start(KEY_INSET);
+                key.button.set_margin_end(KEY_INSET);
                 key.button.set_margin_top(2);
                 key.button.set_margin_bottom(2);
                 holder.append(&key.button);
@@ -127,13 +132,14 @@ fn group(name: &str) -> (gtk::Box, gtk::Box) {
     group.set_margin_top(2);
     group.set_margin_bottom(16);
     let title = parts::name_text(name);
-    title.set_margin_start(16);
-    title.set_margin_end(16);
+    title.set_margin_start(NAME_INSET);
+    title.set_margin_end(NAME_INSET);
     title.set_margin_top(4);
     title.set_margin_bottom(6);
     group.append(&title);
     let rule = parts::rule();
-    rule.set_margin_start(16);
+    rule.set_margin_start(NAME_INSET);
+    rule.set_margin_end(10);
     rule.set_margin_bottom(5);
     group.append(&rule);
     let keys = gtk::Box::new(gtk::Orientation::Vertical, 0);

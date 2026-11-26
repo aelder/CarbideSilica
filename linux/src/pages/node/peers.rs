@@ -368,7 +368,7 @@ impl PeersCard {
         self.sentence.set_visible(!empty);
         let operators = operator_groups(node, feed);
         let countries = country_groups(node, feed);
-        self.sentence.set_markup(&format!("<span font_size=\"{}\">{}</span>", 15 * 1024, glib::markup_escape_text(&sentence(node, &operators))));
+        self.sentence.set_markup(&format!("<span font_size=\"{}\">{}</span>", crate::theme::pango_points(15.0), glib::markup_escape_text(&sentence(node, &operators))));
         clear(&self.counts);
         if !empty {
             // The names of the two lines are one width, so the squares start at one place.

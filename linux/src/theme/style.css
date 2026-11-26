@@ -24,9 +24,18 @@ window, window.background, .display {
 .good { color: @good; }
 .alert { color: @alert; }
 .warning { color: @system_orange; }
+/* Sizes of the text face, as the system text styles of macOS. */
+.title2 { font-size: 17px; }
+.title3 { font-size: 15px; }
 .callout { font-size: 12px; }
+.subheadline { font-size: 11px; }
 .caption-text { font-size: 11.5px; }
+.caption-small { font-size: 10px; }
 .mono { font-family: "IBM Plex Mono"; font-size: 12px; }
+/* The monospaced face at the size of the body: `.body.monospaced()`. */
+.mono-body { font-family: "IBM Plex Mono"; font-size: 13px; }
+/* The monospaced face at the size of a caption: `.caption.monospaced()`. */
+.mono-caption { font-family: "IBM Plex Mono"; font-size: 10px; }
 .semibold { font-weight: 600; }
 .medium { font-weight: 500; }
 .tabular { font-feature-settings: "tnum"; }
@@ -47,7 +56,7 @@ headerbar, .titlebar {
     background: @screen;
     box-shadow: none;
     border-bottom: 1px solid @rule;
-    min-height: 40px;
+    min-height: 36px;
     padding: 0 6px;
 }
 headerbar windowcontrols button { color: @label; }
@@ -122,6 +131,7 @@ headerbar windowcontrols button { color: @label; }
 .lamp .figure { color: @label; }
 .lamp:hover .figure, .lamp.chosen .figure { color: alpha(@legend, 0.8); }
 .lamp.recent { color: @label; }
+.lamp.recent.chosen, .lamp.recent:hover, .lamp.recent.pressed { color: @legend; }
 
 /* The small key of a page: LampButtonStyle, LampSegments, LampToggle, LampMenu. */
 .lamp.small { padding: 5px 10px; }

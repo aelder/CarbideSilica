@@ -102,8 +102,7 @@ impl Graph {
     pub fn new(data: GraphData, chosen: impl Fn(Option<u32>) + 'static) -> Self {
         let lanes = data.marks.iter().map(|m| m.lane).max().unwrap_or(0) + 1;
         let columns = data.marks.iter().map(|m| m.column).max().unwrap_or(0) + 1;
-        // 8 more than the Swift graph: the figures of Jost are taller than those of Futura.
-        let height = picture::graph_height(lanes) + 8.0;
+        let height = picture::graph_height(lanes);
         let data = Rc::new(RefCell::new(data));
         let shared = data.clone();
         let canvas = Canvas::new(picture::least_width(columns) as i32, height.ceil() as i32, move |widget, snapshot, w, _| {
@@ -286,9 +285,7 @@ fn paint_labels(widget: &Canvas, snapshot: &gtk::Snapshot, mark: &NotarizationMa
             ],
         });
     }
-    // The caption in the size of the caption labels of the page.
-    const CAPTION: font::Role = super::in_pixels(font::CAPTION, 11.5);
-    lines.push(Line { parts: vec![(draw::layout(widget, CAPTION, note), tone::LABEL)] });
+    lines.push(Line { parts: vec![(draw::layout(widget, font::CAPTION, note), tone::LABEL)] });
     let total: f32 = lines.iter().map(Line::height).sum::<f32>() + 2.0 * lines.len().saturating_sub(1) as f32;
     let mut top = y - total / 2.0;
     for line in &lines {

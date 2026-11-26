@@ -142,7 +142,7 @@ fn content(page: &Rc<Page>, card: &Card, payments: &RegistrationPayments) {
                 "Carbide marks the registration payments verified only when every payment matches the issuer's fee rules and the referral chain.",
                 &["secondary"],
             );
-            super::set_px(&caption, 10.0, 400);
+            theme::set_role(&caption, font::TEXT_CAPTION);
             card.append(&caption);
         }
         PaymentsStatus::Verified | PaymentsStatus::NotRegistration => {

@@ -5,7 +5,8 @@ use gtk::prelude::*;
 
 use crate::theme::{self, font, sound};
 
-/// A link with `text` in the body face, or in the monospaced face for an ID.
+/// A link with `text` in the body face, or in the monospaced face of a callout for an ID
+/// (`.callout.monospaced()`, the style of the lists).
 pub fn link(text: &str, mono: bool, action: impl Fn() + 'static) -> gtk::Button {
     let label = gtk::Label::new(Some(text));
     label.set_xalign(0.0);
@@ -13,6 +14,16 @@ pub fn link(text: &str, mono: bool, action: impl Fn() + 'static) -> gtk::Button 
         label.add_css_class("mono");
     }
     wrap(label, action)
+}
+
+/// Sets the label of a link in the monospaced face at the size of the body
+/// (`.body.monospaced()`, the style of `RouteLink` and `FieldRow`), or in the body face.
+pub fn set_mono(label: &gtk::Label, mono: bool) {
+    if mono {
+        label.add_css_class("mono-body");
+    } else {
+        label.remove_css_class("mono-body");
+    }
 }
 
 /// A link whose text is in a type role.

@@ -241,12 +241,12 @@ impl Detail {
     fn header(&self, peer: &api::PeerRow) -> gtk::Box {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
         let title = gtk::Label::new(None);
-        title.set_markup(&format!("<span font_size=\"{}\" weight=\"600\">Peer {}</span>", 17 * 1024, peer.id));
+        title.set_markup(&format!("<span font_size=\"{}\" weight=\"600\">Peer {}</span>", crate::theme::pango_points(17.0), peer.id));
         title.add_css_class("value");
         title.set_valign(gtk::Align::Baseline);
         row.append(&title);
         let address = gtk::Label::new(None);
-        address.set_markup(&format!("<span font_family=\"IBM Plex Mono\" font_size=\"{}\">{}</span>", 15 * 1024, glib::markup_escape_text(&peer.address)));
+        address.set_markup(&format!("<span font_family=\"IBM Plex Mono\" font_size=\"{}\">{}</span>", crate::theme::pango_points(15.0), glib::markup_escape_text(&peer.address)));
         address.add_css_class("value");
         address.set_selectable(true);
         address.set_valign(gtk::Align::Baseline);

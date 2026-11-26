@@ -55,41 +55,6 @@ pub(crate) fn role_markup(role: font::Role, text: &str, color: Color) -> String 
     )
 }
 
-/// A font of the text face at a size in logical pixels, as the Swift app's system sizes
-/// (`.caption` 10, `.callout` 12, `.title3` 15). The CSS of the body text is in pixels too.
-pub(crate) fn px_font(size: f64, weight: i32) -> gtk::pango::FontDescription {
-    let mut font = gtk::pango::FontDescription::new();
-    font.set_family(font::TEXT);
-    font.set_absolute_size(size * gtk::pango::SCALE as f64);
-    font.set_weight(match weight {
-        600 => gtk::pango::Weight::Semibold,
-        700 => gtk::pango::Weight::Bold,
-        500 => gtk::pango::Weight::Medium,
-        _ => gtk::pango::Weight::Normal,
-    });
-    font
-}
-
-/// A label in the text face at a size in logical pixels.
-pub(crate) fn px_label(text: &str, size: f64, weight: i32, classes: &[&str]) -> gtk::Label {
-    let label = page::text(text, classes);
-    set_px(&label, size, weight);
-    label
-}
-
-pub(crate) fn set_px(label: &gtk::Label, size: f64, weight: i32) {
-    let attributes = gtk::pango::AttrList::new();
-    attributes.insert(gtk::pango::AttrFontDesc::new(&px_font(size, weight)));
-    label.set_attributes(Some(&attributes));
-}
-
-/// A Pango layout of `text` in the text face at a size in logical pixels, for a canvas.
-pub(crate) fn px_layout(widget: &impl IsA<gtk::Widget>, text: &str, size: f64, weight: i32) -> gtk::pango::Layout {
-    let layout = widget.as_ref().create_pango_layout(Some(text));
-    layout.set_font_description(Some(&px_font(size, weight)));
-    layout
-}
-
 /// The page. Its signature is fixed by `pages/mod.rs`.
 pub fn build(model: &Rc<AppModel>, name: &str) -> Rc<Page> {
     let page = Page::scrolling(model);
@@ -572,7 +537,7 @@ impl IdentityView {
                 }
             });
             if let Some(label) = link::label_of(&currency) {
-                set_px(&label, 10.0, 500);
+                theme::set_role(&label, font::Role { weight: 500, ..font::TEXT_CAPTION });
                 currency.set_child(None::<&gtk::Widget>);
                 let content = gtk::Box::new(gtk::Orientation::Horizontal, 5);
                 content.append(&marks::text_mark(Mark::HexagonGrid, 12));
@@ -586,7 +551,7 @@ impl IdentityView {
         if state.tokenized_control {
             plates.append(&display::plate("Tokenized control", PlateFill::None));
         } else if state.flags == 0 {
-            plates.append(&px_label("No flags set", 10.0, 400, &["secondary"]));
+            plates.append(&theme::text_label(font::TEXT_CAPTION, "No flags set", &["secondary"]));
         }
         if let Some(offers) = self.offers.borrow().as_ref()
             && self.tip_healthy()

@@ -206,7 +206,7 @@ impl VersionStrip {
         let first_edge = theme::label(font::FIGURE_SMALL, "", "label");
         let last_edge = theme::label(font::FIGURE_SMALL, "", "label");
         // `Tone.caption.weight(.semibold)`: 11.5.
-        let selected = super::px_label("", 11.5, 600, &["present"]);
+        let selected = theme::text_label(font::Role { weight: 600, ..font::CAPTION }, "", &["present"]);
         edges.set_start_widget(Some(&first_edge));
         edges.set_center_widget(Some(&selected));
         edges.set_end_widget(Some(&last_edge));
@@ -342,7 +342,7 @@ fn draw_lanes(
                 draw::fill_rect(snapshot, bx, by, bw, bh, color.opacity(0.85));
                 let label = values[bar.start].split('|').next().unwrap_or("").to_string();
                 // `.caption.weight(.semibold)`: 10.
-                let layout = super::px_layout(canvas, &label, 10.0, 600);
+                let layout = draw::layout(canvas, font::Role { weight: 600, ..font::TEXT_CAPTION }, &label);
                 let (_, extents) = layout.pixel_extents();
                 if extents.width() as f32 + 10.0 < bw {
                     draw::draw_layout(snapshot, &layout, bx + 5.0, by + bh / 2.0, draw::Anchor::Leading, tone::SCREEN);
