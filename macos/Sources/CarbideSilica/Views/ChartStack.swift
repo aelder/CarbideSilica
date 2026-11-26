@@ -78,7 +78,7 @@ struct ChartStack: View {
                 }
             }
             .onTapGesture(coordinateSpace: .local) { point in
-                if let model, let index = model.nearest(x: point.x, in: frame) {
+                if let model, let index = model.nearest(x: point.x, in: frame), samples.indices.contains(index) {
                     select(samples[index].hash)
                     // A wave of light goes out from the selected block in the two directions.
                     wave = (wave.count + 1, model.x(Double(samples[index].time), in: frame))
@@ -148,7 +148,9 @@ struct ChartStack: View {
     /// Each value at the block under the cursor, above the panels and not below the page.
     private var readout: some View {
         VStack(alignment: .leading, spacing: 7) {
-            if let model, let index = shownIndex, samples.indices.contains(index) {
+            // The model is made a moment after the samples change. Until then it can be for a
+            // shorter list: the figures show only for a block that the model has.
+            if let model, let index = shownIndex, samples.indices.contains(index), model.has(index) {
                 let sample = samples[index]
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Button("Block \(Format.integer(sample.height))") { open(sample.hash) }
@@ -292,6 +294,7 @@ struct ChartStack: View {
     /// The selected block is a line of the present with a little light. The block under the
     /// pointer is a quieter line.
     private func cursor(_ context: GraphicsContext, _ size: CGSize, _ model: StackModel, at index: Int, strong: Bool) {
+        guard samples.indices.contains(index) else { return }
         let cx = model.x(Double(samples[index].time), in: plotFrame(size.width))
         let bottom = rect(.pool, size).maxY
         if strong {
@@ -793,14 +796,21 @@ struct StackModel {
         return "\(change > 0 ? "up" : "down") \(abs(change).formatted(.number.precision(.fractionLength(0...1))))%"
     }
 
+    /// True when the model has figures for the block at this place of the list.
+    func has(_ index: Int) -> Bool {
+        index >= 0 && index < times.count && index < miningAt.count && index < stakingAt.count
+            && index < poolAt.count
+    }
+
     func rateText(at index: Int) -> String {
+        guard times.indices.contains(index) else { return "–" }
         let time = times[index]
         guard let bucket = buckets.first(where: { time > $0.start && time <= $0.end }) else { return "–" }
         return "\(bucket.count) in its \(bucketName == "hour" ? "hour" : "period")"
     }
 
     func poolText(at index: Int) -> String {
-        guard let found = poolAt[index] else { return "–" }
+        guard poolAt.indices.contains(index), let found = poolAt[index] else { return "–" }
         let text = "\(found.value.formatted(.number.precision(.fractionLength(8)))) \(coin)"
         return found.exact ? text : text + " (nearest earlier checkpoint)"
     }

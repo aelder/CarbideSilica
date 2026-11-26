@@ -71,6 +71,13 @@ final class ClickSound {
         play(click.presses, last: &click.lastPress, volume: click.volume * 0.45)
     }
 
+    /// The pointer goes on a row of a list: the sound of the pointer on a key, less loud.
+    func row() {
+        guard enabled else { return }
+        prepare(touch)
+        play(touch.presses, last: &touch.lastPress, volume: touch.volume * 0.55)
+    }
+
     /// The pointer goes on a key.
     func hover() {
         guard enabled else { return }

@@ -268,8 +268,8 @@ struct ChainPulse: View {
 
     private var caption: String {
         guard let hash = hovered, let index = blocks.firstIndex(where: { $0.hash == hash }) else {
-            return "Top: one mark is one block. Bottom: one dot is 1 in 100 of the waits in the last "
-                + "\(recordSpan). The curve is the time on the lower axis."
+            return "Top: the blocks of the last 25 minutes. Bottom: the time between blocks in the last "
+                + "\(recordSpan). One dot is 1 of each 100 blocks."
         }
         let block = blocks[index]
         var text = "Block \(Format.integer(block.height)) · \(block.staked ? "staked" : "mined") · "
@@ -381,12 +381,25 @@ struct ChainPulse: View {
         max(1800, (longestWait ?? 0) * 1.15, (current ?? 0) * 1.15)
     }
 
-    /// Where a wait is on the logarithmic axis.
+    /// The time at which the axis of the waits changes from an even scale to a logarithmic
+    /// one. A logarithmic scale has no zero. This scale starts at zero: it is almost even
+    /// for the first seconds and logarithmic after them.
+    private static let knee: Double = 10
+
+    /// Where a wait is on the axis, from 0 at the left to 1 at the right.
+    private static func waitShare(_ seconds: Double, high: Double) -> Double {
+        log1p(max(seconds, 0) / knee) / log1p(high / knee)
+    }
+
+    /// The wait at a place on the axis: the reverse of `waitShare`.
+    private static func waitSeconds(atShare share: Double, high: Double) -> Double {
+        knee * expm1(share * log1p(high / knee))
+    }
+
+    /// Where a wait is on the axis.
     private func waitX(_ seconds: Double, width: CGFloat, high: Double) -> CGFloat {
-        let low: Double = 10
         let right = width - rightInset
-        let share = (log(max(seconds, low)) - log(low)) / (log(high) - log(low))
-        return gutter + CGFloat(share) * (right - gutter)
+        return gutter + CGFloat(Self.waitShare(seconds, high: high)) * (right - gutter)
     }
 
     // MARK: Drawing the blocks
@@ -517,7 +530,7 @@ struct ChainPulse: View {
         // The line of the waits and its times.
         context.rule(gutter, base, right, base, Tone.axis)
         let ticks: [(Double, String)] = [
-            (10, "10 s"), (30, "30 s"), (60, "1 min"), (120, "2 min"), (300, "5 min"), (600, "10 min"),
+            (0, "0"), (10, "10 s"), (30, "30 s"), (60, "1 min"), (120, "2 min"), (300, "5 min"), (600, "10 min"),
             (1200, "20 min"), (3600, "1 h"),
         ]
         for (seconds, name) in ticks where seconds <= high {
@@ -529,7 +542,7 @@ struct ChainPulse: View {
         // A ruler of equal steps of time. The steps get closer together to the right, and
         // then the ruler changes to a longer step.
         let steps: [(from: Double, to: Double, step: Double, name: String)] = [
-            (10, 300, 10, "10 s"), (300, 1800, 60, "1 min"), (1800, 36_000, 600, "10 min"),
+            (0, 300, 10, "10 s"), (300, 1800, 60, "1 min"), (1800, 36_000, 600, "10 min"),
         ]
         for part in steps where part.from < high {
             let end = min(part.to, high)
@@ -568,7 +581,7 @@ struct ChainPulse: View {
         var cx = gutter
         while cx <= right {
             let share = Double((cx - gutter) / (right - gutter))
-            let seconds = 10 * exp(share * log(high / 10))
+            let seconds = Self.waitSeconds(atShare: share, high: high)
             let point = CGPoint(x: cx, y: base - CGFloat(seconds / high) * (base - blocksBottom))
             if cx == gutter { curve.move(to: point) } else { curve.addLine(to: point) }
             cx += 2

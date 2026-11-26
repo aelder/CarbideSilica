@@ -34,7 +34,8 @@ struct MarketplaceView: View {
         let _ = showsNames
         ScrollViewReader { proxy in
             Page {
-                Card("Open offers", trailing: market.map { "\(Format.integer(UInt64($0.offers.count))) involving \($0.subject)" }) {
+                SourceLine(provenance: market?.provenance, short: model.currentChain, labelled: true).font(.callout)
+                Card("Open offers", showsTitle: false) {
                     if loading && market == nil {
                         ProgressView("Loading offers…").frame(maxWidth: .infinity, minHeight: 160)
                     } else if let failure, market == nil {
@@ -68,9 +69,9 @@ struct MarketplaceView: View {
                 rebuild()
             }
             .onChange(of: ScrollKey(sort: sort, descending: descending, selected: selected)) {
-                // As in Carbide, a new sort order returns to the top.
+                // A new order or filter starts with the first rows again. The page does not
+                // scroll: a person who clicks a filter keeps their place.
                 shown = 60
-                proxy.scrollTo("catalogue-top", anchor: .top)
             }
         }
         .navigationTitle("Marketplace")
@@ -99,35 +100,40 @@ struct MarketplaceView: View {
     /// The answer first: how many offers, from how many sellers, at what prices.
     @ViewBuilder
     private func summary(_ market: Marketplace) -> some View {
-        HStack {
-            ProvenanceNote(provenance: market.provenance)
-            Spacer()
-            if loading { ProgressView().controlSize(.small) }
-            Button("Refresh") { Task { await load() } }.disabled(loading)
-        }
         if let failure {
             Note(text: failure, warning: true)
         }
         let prices = priced.map(\.price!).sorted()
-        HStack(alignment: .lastTextBaseline, spacing: 20) {
-            figure("Offers", Format.integer(UInt64(items.count)))
-            if let top = sellers.first {
-                figure("Sellers", "\(sellers.count)")
-                figure("Largest seller", "\(Int((Double(top.count) / Double(max(detailed, 1)) * 100).rounded()))%")
+        DisplayPanel(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .lastTextBaseline, spacing: 22) {
+                    figure("Offers", Format.integer(UInt64(items.count)))
+                    if let top = sellers.first {
+                        figure("Sellers", "\(sellers.count)")
+                        figure("Largest seller", "\(Int((Double(top.count) / Double(max(detailed, 1)) * 100).rounded()))%")
+                    }
+                    if let low = prices.first {
+                        figure("Lowest", "\(Format.amount(low)) \(priceTicker)")
+                        figure("Median", "\(Format.amount(prices[prices.count / 2])) \(priceTicker)")
+                    }
+                    if let newest = items.compactMap({ listed($0) }).max() {
+                        figure("Newest", Self.age(since: newest) + " ago")
+                    }
+                    Spacer(minLength: 0)
+                    if loading { ProgressView().controlSize(.small) }
+                    Button("Refresh") { Task { await load() } }.disabled(loading)
+                }
+                .lineLimit(1)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                if store.loading || detailed < items.count {
+                    PanelRule()
+                    detailProgress
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 9)
+                }
             }
-            if let low = prices.first {
-                figure("Lowest", "\(Format.amount(low)) \(priceTicker)")
-                figure("Median", "\(Format.amount(prices[prices.count / 2])) \(priceTicker)")
-            }
-            if let newest = items.compactMap({ listed($0) }).max() {
-                figure("Newest offer", Self.age(since: newest) + " ago")
-            }
-            Spacer(minLength: 0)
         }
-        .lineLimit(1)
-        detailProgress
-        Text("Request: getoffers for \(market.subject). The seller of an identity is its first primary address now.")
-            .font(.caption).foregroundStyle(.secondary)
     }
 
     private func figure(_ label: String, _ value: String) -> some View {
@@ -408,16 +414,15 @@ struct MarketplaceView: View {
                     .font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.value)
                 Spacer(minLength: 0)
             }
-            HStack(spacing: 8) {
-                Text(appliedText).font(.callout).foregroundStyle(.secondary).lineLimit(2)
-                if !selected.isEmpty || !search.isEmpty {
+            if !selected.isEmpty || !search.trimmingCharacters(in: .whitespaces).isEmpty {
+                HStack(spacing: 10) {
+                    Text(appliedText).font(.callout).foregroundStyle(Tone.value).lineLimit(2)
                     Button("Clear Filters") {
                         selected = [:]
                         search = ""
                     }
-                    .controlSize(.small)
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
             }
             HStack {
                 NameText("Sort by")
@@ -429,7 +434,7 @@ struct MarketplaceView: View {
                 Toggle("Reverse", isOn: $descending)
                 Spacer(minLength: 0)
             }
-            Text(sortNote).font(.caption).foregroundStyle(.secondary)
+            Text(sortNote).font(Tone.caption).foregroundStyle(Tone.label)
             if ordered.isEmpty {
                 Text(items.isEmpty ? "No open offers were returned for this currency." : "No offer matches the filters.")
                     .foregroundStyle(.secondary)
@@ -437,7 +442,7 @@ struct MarketplaceView: View {
             }
             LazyVStack(spacing: 0) {
                 ForEach(ordered.prefix(shown)) { item in
-                    Divider()
+                    PanelRule()
                     OfferLine(
                         item: item, detail: store.details[item.offer.txid], ticker: name, priceTicker: priceTicker,
                         priceBounds: priceBounds)
@@ -763,40 +768,45 @@ private struct FacetOption: View {
     let share: Double
     let on: Bool
     let action: () -> Void
+    @State private var hovering = false
+
+    private var usable: Bool { count > 0 || on }
+    private var lamp: LampFace.Lamp { on ? .amber : hovering && usable ? .blue : .off }
 
     var body: some View {
         Button(action: action) {
-            // A plate: filled when it is selected, an outline when it is not. The faint bar
-            // behind an outline is the count.
+            // A key: lit when it is selected. The faint bar on a key with no light is the count.
             HStack(spacing: 6) {
                 Text(label).fontWeight(on ? .semibold : .regular).lineLimit(1)
-                    .foregroundStyle(on ? Tone.screen : Tone.value)
+                    .foregroundStyle(lamp == .off ? Tone.value : LampTone.legend)
                 Spacer(minLength: 4)
                 Text(Format.integer(UInt64(count))).monospacedDigit()
-                    .foregroundStyle(on ? Tone.screen : Tone.label)
+                    .foregroundStyle(lamp == .off ? Tone.label : LampTone.legend)
             }
             .font(.callout)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(alignment: .leading) {
-                if on {
-                    Rectangle().fill(Tone.record)
-                } else {
-                    GeometryReader { geometry in
-                        Rectangle()
-                            .fill(Tone.record.opacity(0.16))
-                            .frame(width: geometry.size.width * CGFloat(share))
+                ZStack(alignment: .leading) {
+                    LampFace(lamp: lamp)
+                    if lamp == .off {
+                        GeometryReader { geometry in
+                            Rectangle()
+                                .fill(Tone.record.opacity(0.18))
+                                .frame(width: geometry.size.width * CGFloat(share))
+                        }
                     }
                 }
             }
-            .overlay {
-                if !on { Rectangle().strokeBorder(Tone.rule, lineWidth: 1) }
-            }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .disabled(count == 0 && !on)
-        .opacity(count == 0 && !on ? 0.5 : 1)
+        .buttonStyle(PressSoundStyle())
+        .onHover { inside in
+            hovering = inside
+            if inside, usable { ClickSound.shared.hover() }
+        }
+        .disabled(!usable)
+        .opacity(usable ? 1 : 0.5)
         .accessibilityLabel("\(label), \(count) offers")
         .accessibilityValue(on ? "selected" : "not selected")
     }
@@ -833,7 +843,7 @@ private struct OfferLine: View {
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(DisplayLinkStyle(tone: Tone.value))
                     .help(offer.subjectId ?? offer.txid)
                     .cursorStop(token: offer.txid, copy: offer.subjectId ?? offer.txid) { open() }
                     if offer.kind != .identityForSale {
@@ -845,9 +855,9 @@ private struct OfferLine: View {
                         showsPoints.toggle()
                     } label: {
                         Text(traits.scripts.isEmpty ? "no letters" : traits.scripts.joined(separator: ", "))
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.caption)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(DisplayLinkStyle(tone: Tone.label))
                     .help("Show the code points of this name")
                     .popover(isPresented: $showsPoints) {
                         VStack(alignment: .leading, spacing: 6) {
@@ -925,6 +935,9 @@ private struct OfferLine: View {
             .help("The objects that this offer refers to")
         }
         .padding(.vertical, 7)
+        .padding(.horizontal, 8)
+        // The row has light under the pointer, and a click on it opens the offer.
+        .rowLight { open() }
     }
 
     private func open() {

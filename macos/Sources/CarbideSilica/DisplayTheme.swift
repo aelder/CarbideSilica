@@ -725,3 +725,42 @@ extension View {
             .overlay(Rectangle().strokeBorder(Tone.axis, lineWidth: 1))
     }
 }
+
+/// The light of a row of a list under the pointer: a faint field, a lit line at its left
+/// edge, and a quiet sound when the pointer comes to it. With an action, a click on the
+/// row does the action, with the quiet sound of a link.
+struct RowLight: ViewModifier {
+    var action: (() -> Void)?
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(Tone.present.opacity(hovering ? 0.07 : 0))
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(Tone.present)
+                    .frame(width: 2)
+                    .shadow(color: Tone.present.opacity(0.8), radius: 3)
+                    .opacity(hovering ? 1 : 0)
+            }
+            .contentShape(Rectangle())
+            .onHover { inside in
+                hovering = inside
+                if inside { ClickSound.shared.row() }
+            }
+            .onTapGesture {
+                guard let action else { return }
+                ClickSound.shared.link()
+                action()
+            }
+            // Quick up, slower down, as the keys.
+            .animation(hovering ? .easeOut(duration: 0.08) : .easeOut(duration: 0.3), value: hovering)
+    }
+}
+
+extension View {
+    /// The light and the sound of a row of a list. See `RowLight`.
+    func rowLight(action: (() -> Void)? = nil) -> some View {
+        modifier(RowLight(action: action))
+    }
+}
