@@ -23,6 +23,7 @@ directories = "6"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 rand = "0.9"
 rodio = { version = "0.20", default-features = false, features = ["symphonia-mp3"] }
+unicode-segmentation = "1.13"
 
 [profile.dev]
 opt-level = 1
