@@ -17,7 +17,7 @@ use crate::display as settings_display;
 use crate::format;
 use crate::model::{AppModel, Topic};
 use crate::page::{self, load::clear, Page};
-use crate::shared::currency_stores::{known_name, observation_source};
+use crate::shared::currency_stores::{known_name, observation_source, request_notarization_view};
 use crate::shell::dialogs;
 use crate::theme::{draw, tone};
 use crate::widgets::canvas::Canvas;
@@ -413,11 +413,11 @@ impl Bookmarks {
         };
         if entry.kind == "notarizations" {
             if entry.system_id == chain {
-                request_notarizations(&entry.target, &chain);
+                request_notarization_view(&entry.target, &chain);
                 model.open(Route::Currency { name: entry.target.clone() });
             } else if entry.target == chain {
                 // The other chain's view of this chain: open the other chain's currency.
-                request_notarizations(&entry.system_id, &entry.system_id);
+                request_notarization_view(&entry.system_id, &entry.system_id);
                 model.open(Route::Currency { name: entry.system_id.clone() });
             } else {
                 self.message.replace(Some(format!(
@@ -458,12 +458,6 @@ impl Bookmarks {
         });
     }
 }
-
-/// Asks the currency page to open the notarizations of `currency` as `observer` sees them
-/// (`NotarizationRequests.shared.request`). The store is the Currency page's part of
-/// `shared/currency_stores.rs`; until it is there, the currency page opens with its own
-/// default perspective.
-fn request_notarizations(_currency: &str, _observer: &str) {}
 
 /// "Cached observation" with the tags and the source, "Uncached", or the failure.
 fn cache_line(entry: &api::BookmarkEntry) -> gtk::Box {

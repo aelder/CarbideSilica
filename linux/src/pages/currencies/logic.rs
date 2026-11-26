@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 
 use crate::bridge::api::{CurrencyListing, LaunchState};
 
-use super::state::CurrencySort;
+use crate::shared::currency_stores::CurrencySort;
 
 /// "27 of 57", or a dash before the list comes.
 pub fn shown_text(visible: usize, rows: usize) -> String {

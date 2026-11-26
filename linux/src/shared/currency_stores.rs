@@ -7,7 +7,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use gtk::prelude::*;
 
@@ -20,7 +20,7 @@ use crate::widgets::link;
 
 /// The currency browser's list, filters and selection, kept for the session so that they
 /// survive going back and visits to other places in the sidebar (`CurrencyBrowserState`).
-/// Read and change it with [`browser_state`].
+/// Read and change it through [`browser_state`].
 #[derive(Clone, Debug)]
 pub struct CurrencyBrowserState {
     pub rows: Vec<api::CurrencyListing>,
@@ -79,13 +79,41 @@ impl CurrencySort {
     }
 }
 
+/// The browser state and the pages that show it. The Currencies place and a `currencies`
+/// search both show the browser, and a change in one shows in the other, as the Swift
+/// `@Observable` class does.
+#[derive(Default)]
+pub struct CurrencyBrowserStore {
+    pub state: RefCell<CurrencyBrowserState>,
+    listeners: RefCell<Vec<Weak<dyn Fn()>>>,
+}
+
+impl CurrencyBrowserStore {
+    /// Calls `listener` after each change, while the caller keeps it.
+    pub fn listen(&self, listener: &Rc<dyn Fn()>) {
+        self.listeners.borrow_mut().push(Rc::downgrade(listener));
+    }
+
+    /// Tells each page that the state changed. Call it with no borrow of the state.
+    pub fn changed(&self) {
+        let listeners: Vec<Rc<dyn Fn()>> = {
+            let mut list = self.listeners.borrow_mut();
+            list.retain(|l| l.upgrade().is_some());
+            list.iter().filter_map(Weak::upgrade).collect()
+        };
+        for listener in listeners {
+            listener();
+        }
+    }
+}
+
 thread_local! {
-    static BROWSER_STATE: Rc<RefCell<CurrencyBrowserState>> = Rc::new(RefCell::new(CurrencyBrowserState::default()));
+    static BROWSER_STATE: Rc<CurrencyBrowserStore> = Rc::new(CurrencyBrowserStore::default());
     static NOTARIZATION_REQUESTS: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
 }
 
 /// The one store of the currency browser for the session (`CurrencyBrowserState.shared`).
-pub fn browser_state() -> Rc<RefCell<CurrencyBrowserState>> {
+pub fn browser_state() -> Rc<CurrencyBrowserStore> {
     BROWSER_STATE.with(Rc::clone)
 }
 

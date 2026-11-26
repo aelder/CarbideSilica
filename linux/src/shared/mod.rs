@@ -10,4 +10,5 @@ pub mod estimator;
 pub mod identity_support;
 pub mod inclusion;
 pub mod json_tree;
+pub mod registration_payments;
 pub mod statement_words;

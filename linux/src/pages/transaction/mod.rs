@@ -28,6 +28,7 @@ use gtk::prelude::*;
 
 use crate::bridge::{self, api, api::Route};
 use crate::model::AppModel;
+use crate::shared::registration_payments::RegistrationPaymentsCard;
 use crate::shared::statement_words::Namer;
 use crate::page::{self, Adjacent, Investigations, LoadView, Page};
 use crate::shared::{inclusion, json_tree};
@@ -57,6 +58,8 @@ pub(crate) struct Ctx {
     pub witnesses: RefCell<BTreeMap<u32, Rc<extras::WitnessCard>>>,
     /// Carbide's verified registration payment annotations, by output.
     pub payments: RefCell<HashMap<u32, String>>,
+    /// The registration payments card, while the page shows it.
+    pub payments_card: RefCell<Option<Rc<RegistrationPaymentsCard>>>,
     /// Builds the rows of the outputs again, when the payment annotations arrive.
     pub refresh_outputs: RefCell<Option<Box<dyn Fn()>>>,
     /// The parts that have state of their own. They live as long as the transaction is
@@ -211,6 +214,7 @@ fn show(page: &Rc<Page>, model: &Rc<AppModel>, holder: &gtk::Box, transaction: a
         traces: Default::default(),
         witnesses: Default::default(),
         payments: Default::default(),
+        payments_card: Default::default(),
         refresh_outputs: Default::default(),
         kept: Default::default(),
     });
@@ -261,15 +265,11 @@ fn show(page: &Rc<Page>, model: &Rc<AppModel>, holder: &gtk::Box, transaction: a
     ctx.anchor("links", &links);
     column.append(&links);
 
-    if tx.tags.iter().any(|t| t == "Identity Registration") {
-        // `RegistrationPaymentsCard` is a part of the Identity page (RegistrationPayments.swift).
-        // It has no shared form yet; the card says where the payments are.
-        let card = page.card("Registration payments", None);
-        card.append(&page::paragraph(
-            "The identity page shows the registration payments of this transaction. The shared card is not ported yet.",
-            &["secondary"],
-        ));
-        column.append(&card.root);
+    if tx.tags.iter().any(|t| t == "Identity Registration")
+        && let Some(card) = RegistrationPaymentsCard::for_transaction(page, &tx)
+    {
+        column.append(&card.card.root);
+        ctx.payments_card.replace(Some(card));
     }
 
     column.append(&lists::inputs_card(&ctx));

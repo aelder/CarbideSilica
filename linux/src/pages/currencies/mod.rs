@@ -7,9 +7,7 @@
 //! last for the session.
 
 /// The wrapping row, which the Marketplace uses too.
-pub(crate) mod flow;
 mod logic;
-mod state;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -30,8 +28,8 @@ use crate::widgets::canvas::Canvas;
 use crate::widgets::clamp::Clamp;
 use crate::widgets::display::{self, PlateFill, Readout};
 use crate::widgets::{lamp, loader};
-use flow::Flow;
-use state::{CurrencySort, Store, LAUNCH_STATES};
+use crate::widgets::flow::Flow;
+use crate::shared::currency_stores::{self as stores, CurrencyBrowserStore as Store, CurrencySort, LAUNCH_STATES};
 
 /// The widths of the columns of the table.
 const RESERVES_WIDTH: i32 = 250;
@@ -132,7 +130,7 @@ struct View {
 impl View {
     fn new(page: &Rc<Page>) -> Rc<Self> {
         let model = page.model.clone();
-        let store = state::store();
+        let store = stores::browser_state();
 
         let top = gtk::Box::new(gtk::Orientation::Vertical, 6);
         let source = SourceLine::new();
@@ -211,7 +209,7 @@ impl View {
         for launch in LAUNCH_STATES {
             let bit = api::launch_state_bit(launch);
             let store_ref = store.clone();
-            let key = lamp::toggle(state::launch_word(launch), false, false, move || {
+            let key = lamp::toggle(stores::launch_word(launch), false, false, move || {
                 store_ref.state.borrow_mut().filter.launch_mask ^= bit;
                 store_ref.changed();
             });
@@ -418,7 +416,7 @@ impl View {
         }
         for (launch, key) in &self.launch_keys {
             let bit = api::launch_state_bit(*launch);
-            set_toggle(key, state::launch_word(*launch), state.filter.launch_mask & bit != 0, false);
+            set_toggle(key, stores::launch_word(*launch), state.filter.launch_mask & bit != 0, false);
         }
         set_toggle(&self.any_key, "Any", state.filter.required == 0 && state.filter.excluded == 0, false);
         set_toggle(&self.pools_key, "Liquidity pools", state.filter.required == 1 && state.filter.excluded == 0, false);
@@ -611,7 +609,7 @@ fn currency_tile(page: &Rc<Page>, model: &Rc<AppModel>, store: &Rc<Store>, row: 
     // Launched is the usual state: only a different state gets a plate.
     if row.launch != LaunchState::Launched {
         let fill = if row.launch == LaunchState::Failed { PlateFill::Alert } else { PlateFill::Mined };
-        plates.append(&display::plate(state::launch_word(row.launch), fill));
+        plates.append(&display::plate(stores::launch_word(row.launch), fill));
     }
     for tag in &row.option_tags {
         plates.append(&display::plate(tag, PlateFill::None));

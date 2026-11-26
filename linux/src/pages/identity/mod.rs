@@ -14,7 +14,6 @@ mod extras;
 mod lanes;
 mod marks;
 mod origin;
-mod payments;
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
@@ -40,7 +39,7 @@ use evidence::{EvidenceCard, EvidenceState};
 use extras::TokenControlCard;
 use lanes::VersionStrip;
 use marks::Mark;
-use payments::RegistrationPaymentsCard;
+use crate::shared::registration_payments::RegistrationPaymentsCard;
 
 /// Pango markup for a text in a type role and a colour.
 pub(crate) fn role_markup(role: font::Role, text: &str, color: Color) -> String {

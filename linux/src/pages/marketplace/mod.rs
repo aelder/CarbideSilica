@@ -603,7 +603,7 @@ impl View {
         line.set_margin_bottom(12);
         // The figures go on a second line when the window is too narrow for them, so
         // that the page does not get wider than the window.
-        let figures = crate::pages::currencies::flow::Flow::new(22);
+        let figures = crate::widgets::flow::Flow::new(22);
         figures.set_line_spacing(8);
         figures.set_hexpand(true);
         figures.set_valign(gtk::Align::Center);

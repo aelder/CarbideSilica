@@ -2,7 +2,7 @@
 //! payments, the issuer's charge, the native instruction budget and the transaction fee,
 //! against the issuer's own fee rules (`RegistrationPaymentsCard` in
 //! `RegistrationPayments.swift`). Nothing shows for a transaction that does not register
-//! an identity.
+//! an identity. Used by the Identity page and the Transaction page.
 
 use std::cell::Cell;
 use std::rc::{Rc, Weak};
@@ -11,7 +11,7 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use crate::bridge;
-use crate::bridge::api::{Confidence, PaymentRow, PaymentsStatus, RegistrationPayments, Route};
+use crate::bridge::api::{self, Confidence, PaymentRow, PaymentsStatus, RegistrationPayments, Route};
 use crate::format;
 use crate::model::Topic;
 use crate::page::{self, load::clear, Card, Page};
@@ -36,6 +36,14 @@ pub struct RegistrationPaymentsCard {
 }
 
 impl RegistrationPaymentsCard {
+    /// The card for a transaction that the Transaction page shows. None when the
+    /// transaction has no reservation output, so there is nothing to check.
+    pub fn for_transaction(page: &Rc<Page>, transaction: &api::TransactionDetail) -> Option<Rc<Self>> {
+        let json = &transaction.json;
+        let candidate = json.contains("\"identityreservation\"") || json.contains("\"identityadvancedreservation\"");
+        candidate.then(|| Self::new(page, &transaction.txid))
+    }
+
     /// The card for the registration transaction of an identity.
     pub fn new(page: &Rc<Page>, txid: &str) -> Rc<Self> {
         let card = page.card("Registration payments", None);
