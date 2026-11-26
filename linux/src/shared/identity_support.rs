@@ -1,4 +1,4 @@
-//! Owner: the Identity page (`pages/identity`). Small parts of the identity and address
+//! Small parts of the identity and address
 //! pages (`IdentitySupport.swift`): `IDLink`, `IDRow`, `ValueRow`, `SectionLoader`,
 //! `heightAndTime`, `BalanceList` (`IdentityView.swift`) and the `AppModel` extension
 //! (`heightText`, `amountText`). Used by the Identity page and the Address page.

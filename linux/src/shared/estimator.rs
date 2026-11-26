@@ -1,4 +1,4 @@
-//! Owner: the Estimate page (`pages/estimate`). The future block estimate from Carbide's
+//! The future block estimate from Carbide's
 //! calibrated rate, with the calibration shown (`BlockEstimator.swift`). Used by the
 //! Estimate page and the Charts page.
 //!

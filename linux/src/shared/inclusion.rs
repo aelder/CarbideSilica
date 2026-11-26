@@ -1,4 +1,4 @@
-//! Owner: the Transaction page (`pages/transaction`). The blocks that hold a transaction
+//! The blocks that hold a transaction
 //! across side branches, and the stored child blocks of a block (`InclusionCard`,
 //! `BlockBranchesCard`, `ObservedBlockList`, `MembershipMark`, `Pager`, `NodeBranchCheck`
 //! and `ReloadOnRevision` in `InclusionCard.swift`). Used by the Transaction page and the

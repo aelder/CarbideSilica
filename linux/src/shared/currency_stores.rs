@@ -1,4 +1,4 @@
-//! Owner: the Currency page (`pages/currency`). Helpers of the currency pages
+//! Helpers of the currency pages
 //! (`CurrencyStores.swift`): `knownName`, `observationSource`, `heightText`,
 //! `OtherChainNote`, the words of `LaunchState` and `DataSource`, the session store of the
 //! currency browser (`CurrencyBrowserState`, used by the Currencies page) and the requests

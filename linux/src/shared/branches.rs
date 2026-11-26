@@ -1,4 +1,4 @@
-//! Owner: the Node page (`pages/node`). Side branches: the ends of the chains that the node
+//! Side branches: the ends of the chains that the node
 //! knows, drawn against the active chain (`BranchesCard` in `NodeDiagrams.swift`). Used by
 //! the Node page and the Block page.
 //!

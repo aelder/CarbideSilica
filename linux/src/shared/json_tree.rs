@@ -1,4 +1,4 @@
-//! Owner: the Block page (`pages/block`). The node's JSON for the current object, collapsed
+//! The node's JSON for the current object, collapsed
 //! by default (`JSONSection` in `Components.swift`). Expanded, it is a tree with links,
 //! names and dates, a cursor, copy and save (`JSONTreeView` in `JSONTree.swift`). Used by
 //! the Block, Transaction, Identity, Currency and Address pages.

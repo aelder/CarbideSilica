@@ -2,9 +2,9 @@
 
 The Linux app is Carbide Silica as it is on macOS: the same functions and the same display.
 It is GTK 4 through gtk4-rs, in Rust, and it calls the bridge crate (`carbide_bridge::api`)
-directly. This document is for the engineers who port the remaining pages. Read it before
-you change the app. The rules of `macos/CONVENTIONS.md` (text, layout, read-only bridge)
-apply here too.
+directly. All pages are ported. This document is for the engineers who change the app. Read
+it before you change the app. The rules of `macos/CONVENTIONS.md` (text, layout, read-only
+bridge) apply here too.
 
 ## 1. Build, run, picture
 
@@ -18,16 +18,38 @@ cd linux
 ./build.sh clippy          # any cargo command
 ./shot.sh "" docs/progress/dashboard.png          # the Dashboard
 ./shot.sh 4339600 /tmp/block.png                  # an object, as -open=
-WAIT=30 KEYS="ctrl+k" ./shot.sh "" /tmp/palette.png
-WAIT=30 MOUSE="100 145" ./shot.sh "" /tmp/hover.png
+STEPS="key Tab; wait 3; shot json.png; scroll down 10 640 600" ./shot.sh 4339600 /tmp/shots/end.png
 ```
 
 `shot.sh` runs the app on Xvfb at 1281x1084 (the logical size of `macos/docs/images`), with
 `--network host` and the node configuration mounted read-only as `/conf/VRSC.conf`, passed
-with `-conf=`. HOME, settings and cache are in the container's `/tmp` and are gone after the
-run. No public API is enabled. The app takes Carbide's start-up arguments (`-chain=`,
-`-testnet`, `-conf=`, `-datadir=`, `-rpcconnect=`, `-rpcport=`, `-rpcuser=`,
-`-rpcpassword=`, `-pollinterval=`, `-open=`); GTK does not read them.
+with `-conf=`. Each run takes its own X display, so runs can go at the same time. HOME,
+settings, cache and the bookmark file are in the container's `/tmp` and are gone after the
+run; the app runs in that home, so a file dialog does not open in the source tree. No
+public API is enabled. The app takes Carbide's start-up arguments (`-chain=`, `-testnet`,
+`-conf=`, `-datadir=`, `-rpcconnect=`, `-rpcport=`, `-rpcuser=`, `-rpcpassword=`,
+`-pollinterval=`, `-open=`); GTK does not read them.
+
+A run waits `WAIT` seconds (60 by default), then does the steps of `STEPS` in order, then
+takes the picture `<out.png>`. Steps are separated by `;` or new lines:
+
+| Step | Does |
+| --- | --- |
+| `wait 5` | waits 5 seconds |
+| `key Tab ctrl+k` | presses keys (xdotool names), 0.4 seconds apart |
+| `type text` | types a text |
+| `move x y` | moves the pointer, to show a hover state |
+| `click x y [button]`, `dclick x y` | clicks or double-clicks |
+| `scroll down 5 [x y]` | turns the wheel (up, down, left, right), at x y when given |
+| `shot name.png` | takes a picture now, into the folder of `<out.png>`; a name has no folder |
+
+Coordinates are pixels of the display. Before the first key the window gets the keyboard
+focus (Xvfb has no window manager), and each key goes to the window of the app that was
+shown last, such as a file dialog. `KEYS`, `KEYWAIT` and `MOUSE` still work and come before
+`STEPS`. The app's messages are printed after the run, a panic first, without any line
+that looks like a credential. In a dialog, `key ctrl+a; type /out/name.json; key Return`
+saves a file into the folder of the pictures. Do not click a key that changes the node
+(the peer commands), the location data download or the public API confirmation.
 
 Environment: `CARBIDE_SILICA_SETTINGS` (settings file), `CARBIDE_SILICA_RESOURCES` (fonts and
 sounds folder; default `resources/` of the source tree or `<prefix>/share/carbide-silica`).
@@ -45,16 +67,16 @@ linux/src/widgets/           design-system widgets (section 4)
 linux/src/page/              Page, Card, cursor, LoadView, shared small components
 linux/src/shell/             window, title bar, sidebar, path bar, navigation, keys, menus,
                              command list, dialogs, keyboard reference, settings
-linux/src/shared/            parts that more than one page uses, each with one owner (section 6)
-linux/src/pages/mod.rs       the registry: places and routes to build functions (fixed)
-linux/src/pages/<page>/      one folder for each page; mod.rs has the fixed build function
+linux/src/shared/            parts that more than one page uses (section 6)
+linux/src/pages/mod.rs       the registry: places and routes to build functions
+linux/src/pages/<page>/      one folder for each page; mod.rs has the build function
 macos/bridge/rust/           the bridge as a Rust library (section 9)
 ```
 
 ## 3. Inventory
 
-Status: **Done** (ported and in the app), **Partial**, **Stub** (a "not ported yet" panel),
-**Replaced**. Lines are Swift lines.
+Status: **Done** (ported and in the app), **Replaced**. Lines are Swift lines. Every Swift
+file is ported.
 
 | Swift file | Lines | Linux module | Status |
 | --- | ---: | --- | --- |
@@ -75,48 +97,48 @@ Status: **Done** (ported and in the app), **Partial**, **Stub** (a "not ported y
 | WindowPicture.swift | 35 | shot.sh, tools/shot-inside.sh | Replaced |
 | Views/ChainPulse.swift | 1124 | pages/dashboard/chain_pulse.rs | Done |
 | Views/DashboardView.swift | 534 | pages/dashboard/{mod,feed,lists}.rs | Done |
-| Views/Components.swift | 418 | page/components.rs, page/load.rs, shared/json_tree.rs | Done; JSONSection Partial |
+| Views/Components.swift | 418 | page/components.rs, page/load.rs, shared/json_tree.rs | Done |
 | Views/SettingsView.swift | 206 | shell/settings_window.rs | Done |
 | Views/SourcePrompts.swift | 96 | shell/dialogs.rs, page/components.rs | Done |
-| Views/TransferTrace.swift | 604 | pages/transaction; ConfidenceMark in shared/confidence.rs | Stub; ConfidenceMark Done |
-| Views/IdentitySupport.swift | 168 | shared/identity_support.rs | Partial (SectionLoader not) |
-| Views/CurrencyStores.swift | 155 | shared/currency_stores.rs | Partial (two stores not) |
-| Views/JSONTree.swift | 527 | shared/json_tree.rs | Stub (JSON as text) |
-| Views/InclusionCard.swift | 277 | shared/inclusion.rs | Stub |
-| Views/NodeDiagrams.swift | 181 | shared/branches.rs | Stub |
-| Views/BlockEstimator.swift | 148 | shared/estimator.rs | Stub |
-| Views/MempoolView.swift | 1320 | pages/mempool (with `background`) | Stub |
-| Views/ChartsView.swift | 985 | pages/charts | Stub |
-| Views/ChartStack.swift | 1136 | pages/charts | Stub |
-| Views/ChartPlot.swift | 385 | pages/charts | Stub |
-| Views/FeePoolChart.swift | 409 | pages/charts | Stub |
-| Views/CurrenciesView.swift | 401 | pages/currencies | Stub |
-| Views/MarketplaceView.swift | 998 | pages/marketplace | Stub |
-| Views/BookmarksView.swift | 359 | pages/bookmarks | Stub |
-| Views/NodeView.swift | 676 | pages/node | Stub |
-| Views/PeerControls.swift | 143 | pages/node | Stub |
-| Views/PeerMap.swift | 430 | pages/node | Stub |
-| Views/PeerOutlineMap.swift | 533 | pages/node | Stub |
-| Views/SourcesView.swift | 390 | pages/sources | Stub |
-| Views/BlockView.swift | 186 | pages/block | Stub |
-| Views/TransactionView.swift | 815 | pages/transaction | Stub |
-| Views/TransactionStatement.swift | 1156 | pages/transaction | Stub |
-| Views/TransactionExtras.swift | 427 | pages/transaction | Stub |
-| Views/TraceRoute.swift | 297 | pages/transaction | Stub |
-| Views/IdentityView.swift | 419 | pages/identity | Stub |
-| Views/IdentityControl.swift | 487 | pages/identity | Stub |
-| Views/IdentityEvidence.swift | 391 | pages/identity | Stub |
-| Views/IdentityExtras.swift | 142 | pages/identity | Stub |
-| Views/IdentityOrigin.swift | 209 | pages/identity | Stub |
-| Views/RegistrationPayments.swift | 141 | pages/identity | Stub |
-| Views/CurrencyView.swift | 258 | pages/currency | Stub |
-| Views/CurrencyOverTime.swift | 397 | pages/currency | Stub |
-| Views/CurrencyStateSeek.swift | 515 | pages/currency | Stub |
-| Views/NotarizationLanes.swift | 561 | pages/currency | Stub |
-| Views/NotarizationPicture.swift | 361 | pages/currency | Stub |
-| Views/PoolBatch.swift | 121 | pages/currency | Stub |
-| Views/AddressView.swift | 337 | pages/address | Stub |
-| Views/EstimateView.swift | 17 | pages/estimate | Stub |
+| Views/TransferTrace.swift | 604 | pages/transaction/{trace,trace_route}.rs, shared/confidence.rs | Done |
+| Views/IdentitySupport.swift | 168 | shared/identity_support.rs, model.rs (the AppModel extension) | Done |
+| Views/CurrencyStores.swift | 155 | shared/currency_stores.rs | Done |
+| Views/JSONTree.swift | 527 | shared/json_tree.rs | Done |
+| Views/InclusionCard.swift | 277 | shared/inclusion.rs | Done |
+| Views/NodeDiagrams.swift | 181 | shared/branches.rs | Done |
+| Views/BlockEstimator.swift | 148 | shared/estimator.rs | Done |
+| Views/MempoolView.swift | 1320 | pages/mempool | Done |
+| Views/ChartsView.swift | 985 | pages/charts | Done |
+| Views/ChartStack.swift | 1136 | pages/charts | Done |
+| Views/ChartPlot.swift | 385 | pages/charts | Done |
+| Views/FeePoolChart.swift | 409 | pages/charts | Done |
+| Views/CurrenciesView.swift | 401 | pages/currencies | Done |
+| Views/MarketplaceView.swift | 998 | pages/marketplace | Done |
+| Views/BookmarksView.swift | 359 | pages/bookmarks | Done |
+| Views/NodeView.swift | 676 | pages/node | Done |
+| Views/PeerControls.swift | 143 | pages/node | Done |
+| Views/PeerMap.swift | 430 | pages/node | Done |
+| Views/PeerOutlineMap.swift | 533 | pages/node | Done |
+| Views/SourcesView.swift | 390 | pages/sources | Done |
+| Views/BlockView.swift | 186 | pages/block | Done |
+| Views/TransactionView.swift | 815 | pages/transaction | Done |
+| Views/TransactionStatement.swift | 1156 | pages/transaction, shared/statement_words.rs | Done |
+| Views/TransactionExtras.swift | 427 | pages/transaction | Done |
+| Views/TraceRoute.swift | 297 | pages/transaction | Done |
+| Views/IdentityView.swift | 419 | pages/identity, shared/identity_support.rs (BalanceList) | Done |
+| Views/IdentityControl.swift | 487 | pages/identity | Done |
+| Views/IdentityEvidence.swift | 391 | pages/identity | Done |
+| Views/IdentityExtras.swift | 142 | pages/identity | Done |
+| Views/IdentityOrigin.swift | 209 | pages/identity | Done |
+| Views/RegistrationPayments.swift | 141 | shared/registration_payments.rs | Done |
+| Views/CurrencyView.swift | 258 | pages/currency | Done |
+| Views/CurrencyOverTime.swift | 397 | pages/currency | Done |
+| Views/CurrencyStateSeek.swift | 515 | pages/currency | Done |
+| Views/NotarizationLanes.swift | 561 | pages/currency | Done |
+| Views/NotarizationPicture.swift | 361 | pages/currency | Done |
+| Views/PoolBatch.swift | 121 | pages/currency | Done |
+| Views/AddressView.swift | 337 | pages/address, shared/address_activity.rs | Done |
+| Views/EstimateView.swift | 17 | pages/estimate | Done |
 
 ## 4. Design system
 
@@ -145,10 +167,18 @@ Status: **Done** (ported and in the app), **Partial**, **Stub** (a "not ported y
 | lamp HALATION | 0.95 0.33 0.14 | red-orange edge of a strong light |
 | lamp FACE | 0.045 grey | face of a key that is off |
 
-Text classes in `style.css`: `value label secondary tertiary present record staked mined
-good alert warning callout caption-text mono semibold medium tabular`.
+Text classes in `style.css`: `value value-soft label secondary tertiary present record
+staked mined good alert warning`; sizes `title2` (17), `title3` (15), `callout` (12),
+`subheadline` (11), `caption-text` (11.5, the panel caption), `caption-small` (10, SwiftUI's
+`.caption`); `mono` (12, `.callout.monospaced()`), `mono-body` (13, `.body.monospaced()`),
+`mono-caption` (10); `semibold medium tabular`.
 
 ### Type (`theme::font`; make labels with `theme::label(role, text, class)`)
+
+Sizes are logical pixels, as the Swift sizes. Pango takes font sizes in points (4/3 of a
+pixel at 96 dots an inch), so `theme::markup` and `theme::role_attributes` convert them
+(`theme::pango_points`); letter spacing stays in pixels. Never write a Pango `font_size` by
+hand: use `theme::markup`, `theme::text_markup(size, weight, text)` or `theme::text_label`.
 
 | Role | Font | Size | Tracking | Case |
 | --- | --- | ---: | ---: | --- |
@@ -162,12 +192,29 @@ good alert warning callout caption-text mono semibold medium tabular`.
 | PLACE (sidebar key) | Jost 500 | 11.5 | 1.6 | capitals |
 | CAPTION | Inter 400 | 11.5 | 0 | as is |
 | BODY / CALLOUT | Inter 400 | 13 / 12 | 0 | as is |
+| TITLE2 / TITLE3 | Inter 400 | 17 / 15 | 0 | as is |
+| SUBHEADLINE / TEXT_CAPTION | Inter 400 | 11 / 10 | 0 | as is |
 | MONO_CALLOUT (IDs) | IBM Plex Mono 400 | 12 | 0 | as is |
+
+A role with another weight is `font::Role { weight: 600, ..font::CALLOUT }`. A label whose
+text changes with `set_text` takes its role with `theme::set_role(&label, role)`.
 
 Futura cannot ship on Linux. Jost (SIL OFL 1.1) takes the Futura roles, Inter (OFL) takes
 the system face, IBM Plex Mono (OFL) takes the monospaced face. They are in
 `resources/fonts` with their licences and are given to fontconfig at start
-(`theme/fonts.rs`); nothing is installed on the system.
+(`theme/fonts.rs`); nothing is installed on the system. Jost is a little smaller than Futura
+at one size (capitals 0.70 of the size against 0.76, lettering 3.5% narrower), so the Jost
+roles are drawn at 1.05 of their size (`theme::DISPLAY_SCALE`). Its line is taller (1.445
+of the size against 1.328), so the Jost roles have a line height of 0.92
+(`theme::DISPLAY_LINE_HEIGHT`). With both, names and figures are within 1% to 4% of the
+widths in the macOS pictures.
+
+Glyphs that the three fonts lack (emoji, Chinese, Japanese, Korean, Arabic) come from the
+fonts of the system through fontconfig. A Linux user needs a colour emoji font and a CJK
+font, on Debian and Ubuntu `fonts-noto-color-emoji` and `fonts-noto-cjk`
+(`fonts-noto-core` for other scripts); on Fedora `google-noto-color-emoji-fonts` and
+`google-noto-sans-cjk-fonts`. Without them those names show as boxes. The Docker image has
+them.
 
 ### Components
 
@@ -179,21 +226,23 @@ the system face, IBM Plex Mono (OFL) takes the monospaced face. They are in
 | `CornerMarks` | `widgets::display::corner_marks()` | overlay of a framed area |
 | `PanelRule` | `widgets::display::rule()` / `vertical_rule()` | thin rule |
 | `Readout` | `Readout::new(label, value, class, reserve)`; `.set(label, value)` | "TARGET 25" |
-| `Plate`, `TagChip` | `display::plate(text, PlateFill::Staked)`; `signal_tag_fill(tag)` | tags |
+| `Plate`, `TagChip` | `display::plate(text, PlateFill::Staked)`; `signal_tag_fill(tag)` | tags; `PlateFill::Present` for a chosen kind |
+| outline | `display::outlined(&child, color, h, v)` | `.padding().overlay(Rectangle().strokeBorder(…))` |
+| `FlowLayout` | `widgets::flow::Flow::new(spacing)` | a row that wraps |
 | `NameText` | `display::name_text(text)` | field and column names |
 | `LampKey` | `widgets::lamp::LampKey::new(title, 30, recent, action)`; `set_chosen`, `set_figure` | sidebar keys |
-| `LampButtonStyle` | `lamp::button(title, action)` | every button of a page |
+| `LampButtonStyle` | `lamp::button(title, action)`; `lamp::button_with(title, Some(Icon::Chart), action)`; `set_button_title` | every button of a page; a mark before the legend follows the light |
 | `LampSegments` | `lamp::Segments::new(&titles, selected, changed)` | segmented control |
-| `LampToggle` | `lamp::toggle(title, lit, struck, action)` | on/off key |
+| `LampToggle` | `lamp::toggle(title, lit, struck, action)`; `lamp::set_toggle(&key, title, struck)`, `lamp::set_chosen` | on/off key |
 | `LampMenu` | `lamp::Menu::new(&titles, selected, changed)` | choice list |
 | `LampSlider` | `lamp::Slider::new(value, low, high, changed)` | slider |
-| `DisplayDisclosureStyle` | `lamp::Disclosure::new(title, expanded, changed)` | a part that opens |
+| `DisplayDisclosureStyle` | `lamp::Disclosure::new(title, expanded, changed)` | a part that opens; its contents are hidden while it is closed |
 | `PressSoundStyle` | `lamp::key_sounds(&widget, hover)` | sounds and the pressed class |
 | `DisplayLinkStyle` | `widgets::link::link(text, mono, action)` | a link |
 | `RowLight` | `widgets::row_light::row_light(&row, Some(action))` | hover light and sound of a row |
 | `FilmGrain` | `widgets::grain::film_grain()` | the shell adds it once |
 | `CircuitLoader`, `ProgressView` | `widgets::loader::{circuit(size), progress(text), small(), fraction_bar(f)}` | work in progress |
-| SF Symbols | `widgets::icons::icon(Icon::Warning, size, color)` | marks that mean something |
+| SF Symbols | `icons::icon(Icon::Warning, size, color)`, `icons::text_icon(kind, size)` (in the text colour), `icons::label(kind, text, color, classes)` (SwiftUI `Label`) | marks that mean something |
 | `Card` | `page.card(title, trailing)` → `Card { root, content }` | a section; registers with the cursor |
 | `Note` | `page::note(text, warning)` | a sentence; triangle only for a warning |
 | `SourceLine` | `page::SourceLine::new()`; `.set(prov, short, labelled)` | live or stored |
@@ -204,6 +253,9 @@ the system face, IBM Plex Mono (OFL) takes the monospaced face. They are in
 | `PageHeader`, `TagRow` | `page::page_header(title, subtitle, &tags)`, `page::tag_row(&tags)` | heading of an object page |
 | `CoinAmount` | `page::coin_markup(sats, coin, color)` | amount with ticker (Pango markup) |
 | `LoadView` | `page::LoadView::new(&model, \|ex\| async move { ex.x().await }, \|holder, v\| …)` | load with progress, error and Try Again |
+| `SectionLoader` | `shared::identity_support::SectionLoader::new(&model, text, load, content)` | load one section |
+| `JSONSection` | `shared::json_tree::json_section(&page, json, filename)`; `json_section_keeping(…, open)` | the Raw JSON card; Tab and s |
+| `JSONTreeView` | `shared::json_tree::json_tree(&page, json, filename)` | the tree of any JSON; s saves it while it shows |
 | `ConfidenceMark` | `shared::confidence::confidence_mark(level, label)` | four levels |
 | `Divider` | `page::divider()` | line between rows |
 | check box | `page::check_box(title, on, changed)` | `.toggleStyle(.checkbox)` |
@@ -211,14 +263,30 @@ the system face, IBM Plex Mono (OFL) takes the monospaced face. They are in
 Hover, press and chosen states of keys and links are CSS states in `theme/style.css`
 (`:hover`, `.pressed`, `.chosen`), with transitions that are quick up and slower down.
 
+All styles are in `theme/style.css`; a page does not load a CSS provider of its own. Shared
+classes: `table-row` (a selectable row: hover field, `.selected`), `lamp facet` and
+`lamp small compact` (filter keys), `display-link value-link` and `label-link` (links in
+the tones of the text), `plain-key` (a key with no frame, `.buttonStyle(.plain)`),
+`frameless-menu` (a menu key with no frame), `json-row`, `address-tile`, and the page
+classes `currencies-tile`, `market-offer`, `market-title` and `tx-*`.
+
+Icons (`widgets::icons::Icon`), each drawn once: Search, Dot, Ring, RingDashed, RingDotted,
+HalfFilled, Stored, Clock, Hourglass, Warning, WarningFill, ExclamationCircle,
+QuestionCircle, Copy, Save, Check, CheckCircle, CheckCircleFill, Seal, Cross, CrossCircle,
+CrossCircleFill, CrossOctagonFill, MinusCircle, SlashCircle, NoSign, Diamond, Chevron,
+ChevronLeft, ChevronRight, ChevronUp, Down, TriangleRight, TriangleDown, TriangleUp,
+ArrowLeft, ArrowRight, ArrowsLeftRight, Refresh, Circlepath, ArrowUpCircle,
+ArrowDownCircleFill, Branch, Chart, Link, Bookmark, Cube, PersonCircle, HexagonGrid,
+CreditCard, Tray, TrayFull, ServerRack, Disconnected, Menu. Each names its SF Symbol in
+its comment. Add a mark there, not in a page.
+
 ## 5. How a page module is written
 
 **Registry.** `pages/mod.rs` maps each place (`PLACES`) and each `Route` to the `build`
 function of a module, with fixed signatures: `build(&Rc<AppModel>) -> Rc<Page>` for a place,
-`build(&Rc<AppModel>, &str) -> Rc<Page>` for an object. A page is finished by editing only
-its own folder `pages/<page>/`: add files there and declare them in its `mod.rs`. Do not edit
-`pages/mod.rs`, the shell, or another page. A page's keys, commands, toggles, refresh and
-background work are declared by the page itself (below), so no shared file changes.
+`build(&Rc<AppModel>, &str) -> Rc<Page>` for an object. A page's keys, commands, toggles,
+refresh and background work are declared by the page itself (below). A part that two pages
+use goes in `shared/` or `widgets/`, once; a page does not keep a copy.
 
 **Building.** `let page = Page::scrolling(model);` gives one scroll view, a column 1,100 wide
 at most, 24 from the edges, 20 between parts. Add parts with `page.card(...)` and
@@ -262,7 +330,9 @@ commands), `keys` (one character → title and action; the page's keys come befo
 window's), `commands` (more lines for the command list), `toggle_json` (Tab), `save_json`
 (s), `shown`/`hidden`. Make each row and link a cursor stop: `page.selectable_row(id, &row,
 copy, open)` or `page.stop(&widget, id, copy, open)`; `route_link` does it for you. A part
-that takes the arrow keys sets `page.cursor.suspended`.
+that takes the arrow keys sets `page.cursor.suspended`; Left and Right are then the
+part's. A page that builds a part again wraps it in `page.cursor.keeping_selection(|| …)`,
+so the cursor stays on the same link or row, as SwiftUI keeps a view that is built again.
 
 **Sounds.** Use the widgets: `lamp::button`, `LampKey`, `Segments`, `toggle`, `link::link`,
 `row_light`. For your own key, call `lamp::key_sounds`. The setting "Play a sound for keys
@@ -271,24 +341,29 @@ and buttons" (`interfaceSounds`) turns them off.
 **Text.** Copy every string verbatim from the Swift file. New Linux-only text: short whole
 sentences, active voice, no dashes as punctuation, no figurative language.
 
-## 6. Shared parts and their owners
+## 6. Shared parts
 
-`src/shared/` holds parts that several pages use. The owner finishes the file; other pages
-call it and wait. Keep the public signatures.
+`src/shared/` holds parts that several pages use. Keep the public signatures.
 
-| File | Swift | Owner | Used by | State |
-| --- | --- | --- | --- | --- |
-| json_tree.rs `json_section(page, json, filename)` | JSONSection, JSONTree | Block | block, transaction, identity, currency, address | Partial: text, Tab, copy |
-| inclusion.rs `inclusion_card`, `block_branches_card` | InclusionCard | Transaction | transaction, block | Stub |
-| branches.rs `branches_card(page)` | BranchesCard | Node | node, block | Stub |
-| estimator.rs `block_estimator(page, query)` | BlockEstimator | Estimate | estimate, charts | Stub |
-| identity_support.rs | IDLink, ValueRow, heightAndTime, SectionLoader | Identity | identity, address | Partial |
-| currency_stores.rs | knownName, observationSource, heightText, OtherChainNote; CurrencyBrowserState, NotarizationRequests | Currency (browser state: Currencies) | currency pages, bookmarks, marketplace, identity, address | Partial |
-| confidence.rs `confidence_mark(level, label)` | ConfidenceMark | done | block, transaction, identity | Done |
+| File | Swift | Used by |
+| --- | --- | --- |
+| json_tree.rs `json_section`, `json_section_keeping`, `json_tree` | JSONSection, JSONTreeView | block, transaction, identity, currency, address |
+| inclusion.rs `inclusion_card`, `block_branches_card` | InclusionCard | transaction, block |
+| branches.rs `branches_card(page)` | BranchesCard | node, block |
+| estimator.rs `block_estimator(page, query)`, `relative` | BlockEstimator, `.relative(presentation: .named)` | estimate, charts |
+| identity_support.rs | IDLink, IDRow, ValueRow, SectionLoader, BalanceList, heightAndTime | identity, address |
+| address_activity.rs `ActivityList::new(page, address, on_stale)` | AddressActivityList, AddressTileView, FlowRow | address, identity |
+| registration_payments.rs `RegistrationPaymentsCard::new`, `for_transaction` | RegistrationPaymentsCard | identity, transaction |
+| statement_words.rs `StatementWords`, `Namer`, `brief`, `list`, `capital`, `span` | StatementWords, StatementText, MempoolText.span | transaction, mempool |
+| currency_stores.rs | knownName, observationSource, heightText, OtherChainNote, LaunchState.word, CurrencyBrowserState, CurrencySort, NotarizationRequests | currency pages, currencies, bookmarks, marketplace |
+| confidence.rs `confidence_mark(level, label)` | ConfidenceMark | block, transaction, identity |
+
+The AppModel extension of `IdentitySupport.swift` is on `AppModel` (`model.rs`):
+`currency_name`, `display_id`, `height_text`, `amount_text`. `model::currency_name_in` and
+`display_id_in` are the same rules over a set of names, for `Namer`.
 
 `pages/mempool::background(model)` is called once at start by `pages::start_background`: it
-is where the Mempool engineer runs `MempoolFeed.refresh` for the whole session, as the Swift
-sidebar does. It does nothing now.
+runs `MempoolFeed.refresh` for the whole session, as the Swift sidebar does.
 
 ## 7. Shortcuts: macOS to Linux
 
@@ -338,8 +413,13 @@ function.
 
 ## 10. Deviations from the macOS app, and open problems
 
-- Fonts: Jost, Inter and IBM Plex Mono in place of Futura, SF Pro and SF Mono.
+- Fonts: Jost, Inter and IBM Plex Mono in place of Futura, SF Pro and SF Mono (section 4).
+  Inter is approximately 4% wider than SF Pro, so a long sentence can wrap one word earlier.
 - Menus are in a menu key (section 8). Window buttons follow the desktop's layout.
+- The sidebar is 180 wide, as in the macOS pictures (Swift: 180 to 280, 210 at first). The
+  title bar is 36 high; the search field is centred nearer the page column than the
+  window, but the keys at the right of the bar keep it approximately 40 to the left of the
+  macOS place.
 - Linux words for macOS words: "Chains on this computer" (the chain menu), "this computer"
   in Settings, "Show in Files" for "Show in Finder".
 - Sounds: decoded once with rodio and Symphonia (MP3) and played through ALSA (PipeWire and
@@ -355,8 +435,12 @@ function.
   `PlaceMemory`.
 - The two dashboard lists are a FlowBox of two columns of at least 430, one column when
   narrow (`ViewThatFits`).
-- Open: the stubs in sections 3 and 6; `MempoolFeed` (the Mempool page's session record)
-  does not run yet; `HeightDates`, the permission dialog, the settings window and the
-  keyboard reference window are written but not exercised against a public API or pictured;
-  `known_chains` on Linux depends on Carbide's search paths for node configurations and was
-  not checked; Ctrl+Alt+L can be taken by a desktop for its lock screen.
+- Relative dates follow `Date.RelativeFormatStyle` with the named presentation in English
+  and the local time zone, with weeks that begin on Sunday, as the English calendar of the
+  macOS app. Byte counts follow `ByteCountFormatter` (binary) in English.
+- Open: `HeightDates`, the permission dialog, the settings window and the keyboard reference
+  window are written but not exercised against a public API or pictured; `known_chains` on
+  Linux depends on Carbide's search paths for node configurations and was not checked;
+  Ctrl+Alt+L can be taken by a desktop for its lock screen; the peer map needs the location
+  data, which the pictures do not download; the witness card's decoded report was not
+  pictured, because no transaction with signers was opened.

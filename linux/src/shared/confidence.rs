@@ -1,4 +1,4 @@
-//! Owner: shell (complete). How well a fact is established, as a mark, a colour and a word
+//! How well a fact is established, as a mark, a colour and a word
 //! (`ConfidenceMark` in `TransferTrace.swift`). Used by the block, transaction and identity
 //! pages.
 

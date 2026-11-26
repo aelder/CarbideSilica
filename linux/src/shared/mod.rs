@@ -1,6 +1,5 @@
-//! Parts that more than one page uses. Each file has one owner: the engineer of the page
-//! named in its first line finishes it, and the other pages only call its public functions,
-//! whose signatures stay as they are. See `linux/PORT.md`, "Shared parts".
+//! Parts that more than one page uses, each in one place. See `linux/PORT.md`, "Shared
+//! parts".
 
 pub mod address_activity;
 pub mod branches;
