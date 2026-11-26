@@ -1,9 +1,5 @@
 # Verus Carbide
 
-> This branch adds **Carbide Silica**, a native macOS app on the same chain logic. See the [Carbide Silica readme](macos/README.md) for pictures, a comparison with the terminal app and the build steps. The text below is Carbide's own readme, not changed.
->
-> [![The chain pulse on the Carbide Silica dashboard](macos/docs/images/chain-pulse.webp)](macos/README.md)
-
 Carbide is a terminal explorer and toolkit for Verus and PBaaS chains. It connects to your local daemon(s). Follow a transaction from its block to a recipient, inspect an identity and its currency, or trace a reserve transfer across chains. Decoded views link to the underlying transactions and RPC data. This does not use any data from the local wallet, though that may be changed in the future. There are no plans to incorporate any actions that create or sign transactions. Carbide was built as a TUI so it could be used on remote systems over ssh to interrogate the local chain data,. This software is experimental and comes with no warranty for any purpose. It has been tested only on Debian 13 so far and only lightly as I've actually been using it. I am not accepting PRs at this time, but issues with suggestions or reports are welcome.
 
 ![Dashboard with recent blocks on the left and recent transactions on the right](docs/images/dashboard.png)
