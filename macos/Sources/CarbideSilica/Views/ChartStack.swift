@@ -21,6 +21,12 @@ struct ChartStack: View {
 
     @State private var model: StackModel?
     @State private var hovered: Int?
+    /// The panels drawn one time with more light. The light layer shows parts of it.
+    @State private var lit: CGImage?
+    /// The same data with much more light: for the light of the pointer and of a click.
+    @State private var hot: CGImage?
+    /// The place of the last click on the panels, and a count that changes with each click.
+    @State private var wave: (count: Int, x: CGFloat) = (0, 0)
 
     private let leftInset: CGFloat = 66
     private let rightInset: CGFloat = 22
@@ -60,20 +66,40 @@ struct ChartStack: View {
     /// The five panels on one time axis.
     private var stack: some View {
         GeometryReader { geometry in
+            let frame = plotFrame(geometry.size.width)
             Canvas { context, size in
                 if let model { draw(context, size, model) }
             }
             .contentShape(Rectangle())
             .onContinuousHover { phase in
                 switch phase {
-                case .active(let point): hovered = model?.nearest(x: point.x, in: plotFrame(geometry.size.width))
+                case .active(let point): hovered = model?.nearest(x: point.x, in: frame)
                 case .ended: hovered = nil
                 }
             }
             .onTapGesture(coordinateSpace: .local) { point in
-                if let model, let index = model.nearest(x: point.x, in: plotFrame(geometry.size.width)) {
+                if let model, let index = model.nearest(x: point.x, in: frame) {
                     select(samples[index].hash)
+                    // A wave of light goes out from the selected block in the two directions.
+                    wave = (wave.count + 1, model.x(Double(samples[index].time), in: frame))
                 }
+            }
+            // Light on the panels: a slow front from the right to the left, light near the
+            // block under the pointer, and the wave of a click. The layer shows parts of a
+            // picture of the panels that has more light. The system moves the light.
+            .overlay {
+                ChartLight(
+                    picture: lit, hot: hot, left: frame.lowerBound, right: frame.upperBound,
+                    pointer: hovered.flatMap { index in
+                        samples.indices.contains(index) ? model?.x(Double(samples[index].time), in: frame) : nil
+                    },
+                    wave: wave.count, waveAt: wave.x
+                )
+                .allowsHitTesting(false)
+            }
+            .task(id: "\(key)|\(Int(geometry.size.width))|\(model == nil)") {
+                lit = litPicture(geometry.size, strong: false)
+                hot = litPicture(geometry.size, strong: true)
             }
         }
         .frame(height: plotHeight)
@@ -81,6 +107,26 @@ struct ChartStack: View {
     }
 
     private func plotFrame(_ width: CGFloat) -> ClosedRange<CGFloat> { leftInset...(width - rightInset) }
+
+    /// The data of the panels with more light, as a picture with nothing behind it: the lines
+    /// and the dots only. It is made one time for each range and width.
+    @MainActor
+    private func litPicture(_ size: CGSize, strong: Bool) -> CGImage? {
+        guard let model, size.width > 0 else { return nil }
+        let renderer = ImageRenderer(
+            content: Canvas { context, size in
+                draw(context, size, model, cursors: false, marksOnly: true)
+            }
+            .frame(width: size.width, height: size.height)
+            .brightness(strong ? 0.6 : 0.22)
+            // The light around a lit line, as on a phosphor screen. The strong picture has
+            // two lights: one near the line and one wide.
+            .shadow(color: Tone.present.opacity(strong ? 0.95 : 0.55), radius: strong ? 3 : 2.5)
+            .shadow(color: Tone.present.opacity(strong ? 0.6 : 0), radius: strong ? 8 : 0)
+            .environment(\.colorScheme, .dark))
+        renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+        return renderer.cgImage
+    }
 
     /// The block under the pointer, or the selected block.
     private var shownIndex: Int? {
@@ -161,13 +207,18 @@ struct ChartStack: View {
         return CGRect(x: leftInset, y: top, width: size.width - leftInset - rightInset, height: panelHeight)
     }
 
-    private func draw(_ context: GraphicsContext, _ size: CGSize, _ model: StackModel) {
+    /// `marksOnly` draws the data of the panels and nothing more: the lines and the dots, with
+    /// no bands, no grid, no names and no cursor. The light layer uses that picture, so that
+    /// light is on the chart elements only.
+    private func draw(
+        _ context: GraphicsContext, _ size: CGSize, _ model: StackModel, cursors: Bool = true, marksOnly: Bool = false
+    ) {
         let frame = plotFrame(size.width)
         let x = { (time: Double) -> CGFloat in model.x(time, in: frame) }
         let bottom = rect(.pool, size).maxY
 
         // The longest waits of the range, through all panels.
-        for wait in model.longWaits {
+        for wait in marksOnly ? [] : model.longWaits {
             let x0 = x(wait.start), x1 = max(x(wait.end), x0 + 1)
             context.fill(
                 Path(CGRect(x: x0, y: headerHeight, width: x1 - x0, height: bottom - headerHeight)),
@@ -175,7 +226,7 @@ struct ChartStack: View {
         }
 
         // Time grid and its labels.
-        for tick in model.timeTicks {
+        for tick in marksOnly ? [] : model.timeTicks {
             let tx = x(tick)
             context.rule(tx, headerHeight, tx, bottom, Tone.grid)
             context.rule(tx, bottom, tx, bottom + 3, Tone.axis)
@@ -188,6 +239,7 @@ struct ChartStack: View {
             let y = { (value: Double) -> CGFloat in
                 box.maxY - CGFloat((model.scaled(value, panel) - range.lowerBound) / (range.upperBound - range.lowerBound)) * box.height
             }
+            if !marksOnly {
             // The name on a plate, and the answer, above the panel.
             let plateWidth = context.resolve(Text(panel.title.uppercased()).font(Tone.plate).tracking(0.8))
                 .measure(in: CGSize(width: 400, height: 40)).width + 14
@@ -204,19 +256,21 @@ struct ChartStack: View {
                 context.rule(box.minX - 3, ty, box.minX, ty, Tone.axis)
                 context.name(tick.label, box.minX - 7, ty, .trailing)
             }
+            }
 
             var inner = context
             inner.clip(to: Path(box))
             switch panel {
-            case .rate: drawRate(inner, box, model, x, y)
+            case .rate: drawRate(inner, box, model, x, y, marksOnly)
             case .mining: drawDifficulty(inner, box, model.mining, model.miningAverage, Tone.mined, x, y)
             case .staking: drawDifficulty(inner, box, model.staking, model.stakingAverage, Tone.staked, x, y)
-            case .share: drawShare(inner, box, model, x, y)
-            case .pool: drawPool(inner, box, model, x, y)
+            case .share: drawShare(inner, box, model, x, y, marksOnly)
+            case .pool: drawPool(inner, box, model, x, y, marksOnly)
             }
         }
 
         // The cursor: the selected block, and the block under the pointer.
+        guard cursors, !marksOnly else { return }
         let selectedIndex = selected.flatMap { model.index[$0] }
         if let hovered, hovered != selectedIndex, samples.indices.contains(hovered) {
             cursor(context, size, model, at: hovered, strong: false)
@@ -261,16 +315,19 @@ struct ChartStack: View {
     }
 
     private func drawRate(
-        _ context: GraphicsContext, _ box: CGRect, _ model: StackModel, _ x: (Double) -> CGFloat, _ y: (Double) -> CGFloat
+        _ context: GraphicsContext, _ box: CGRect, _ model: StackModel, _ x: (Double) -> CGFloat, _ y: (Double) -> CGFloat,
+        _ marksOnly: Bool = false
     ) {
-        if let limits = model.rateLimits {
+        if !marksOnly, let limits = model.rateLimits {
             context.fill(
                 Path(CGRect(x: box.minX, y: y(limits.high), width: box.width, height: y(limits.low) - y(limits.high))),
                 with: .color(Tone.record.opacity(0.1)))
             context.rule(box.minX, y(limits.mean), box.maxX, y(limits.mean), Tone.record.opacity(0.6))
         }
-        context.rule(
-            box.minX, y(model.rateTarget), box.maxX, y(model.rateTarget), Tone.value.opacity(0.6), dash: [4, 3])
+        if !marksOnly {
+            context.rule(
+                box.minX, y(model.rateTarget), box.maxX, y(model.rateTarget), Tone.value.opacity(0.6), dash: [4, 3])
+        }
         let points = model.buckets.map { CGPoint(x: x(($0.start + $0.end) / 2), y: y(Double($0.count))) }
         context.stroke(line(points), with: .color(Tone.value), lineWidth: 1)
         for (bucket, point) in zip(model.buckets, points) {
@@ -325,15 +382,18 @@ struct ChartStack: View {
     }
 
     private func drawShare(
-        _ context: GraphicsContext, _ box: CGRect, _ model: StackModel, _ x: (Double) -> CGFloat, _ y: (Double) -> CGFloat
+        _ context: GraphicsContext, _ box: CGRect, _ model: StackModel, _ x: (Double) -> CGFloat, _ y: (Double) -> CGFloat,
+        _ marksOnly: Bool = false
     ) {
-        context.fill(
-            Path(
-                CGRect(
-                    x: box.minX, y: y(StackModel.chanceHigh), width: box.width,
-                    height: y(StackModel.chanceLow) - y(StackModel.chanceHigh))),
-            with: .color(Tone.record.opacity(0.1)))
-        context.rule(box.minX, y(0.5), box.maxX, y(0.5), Tone.value.opacity(0.6), dash: [4, 3])
+        if !marksOnly {
+            context.fill(
+                Path(
+                    CGRect(
+                        x: box.minX, y: y(StackModel.chanceHigh), width: box.width,
+                        height: y(StackModel.chanceLow) - y(StackModel.chanceHigh))),
+                with: .color(Tone.record.opacity(0.1)))
+            context.rule(box.minX, y(0.5), box.maxX, y(0.5), Tone.value.opacity(0.6), dash: [4, 3])
+        }
         context.stroke(
             line(model.share1000.map { point in point.map { CGPoint(x: x($0.time), y: y($0.value)) } }),
             with: .color(Tone.record), lineWidth: 1)
@@ -343,9 +403,11 @@ struct ChartStack: View {
     }
 
     private func drawPool(
-        _ context: GraphicsContext, _ box: CGRect, _ model: StackModel, _ x: (Double) -> CGFloat, _ y: (Double) -> CGFloat
+        _ context: GraphicsContext, _ box: CGRect, _ model: StackModel, _ x: (Double) -> CGFloat, _ y: (Double) -> CGFloat,
+        _ marksOnly: Bool = false
     ) {
         guard !model.pool.isEmpty else {
+            if marksOnly { return }
             context.draw(
                 Text(fee.loading ? "Reading fee pool checkpoints" : "No fee pool checkpoint is loaded for this range.")
                     .font(Tone.caption).foregroundStyle(Tone.label),
@@ -353,7 +415,7 @@ struct ChartStack: View {
             return
         }
         let points = model.pool.map { CGPoint(x: x($0.time), y: y($0.value)) }
-        if fee.scale != .fit, let first = points.first, let last = points.last {
+        if !marksOnly, fee.scale != .fit, let first = points.first, let last = points.last {
             var area = line(points)
             area.addLine(to: CGPoint(x: last.x, y: box.maxY))
             area.addLine(to: CGPoint(x: first.x, y: box.maxY))
@@ -848,6 +910,217 @@ private struct WaitsStrip: View {
         if let wait {
             let cx = min(position(wait), right)
             context.lit(Path(CGRect(x: cx - 0.75, y: 2, width: 1.5, height: base - 2)), Tone.present, strength: 0.6)
+        }
+    }
+}
+
+
+/// Light on the chart panels. It shows parts of a picture of the panels that has more light.
+/// There are three lights, and each has its own layer, so that one does not change another:
+///
+/// - The scan: a quiet front that goes from the right to the left in 10 seconds. The next
+///   front starts at the right at the moment when the front gets to the left.
+/// - The pointer: the stretch that the pointer moved across keeps its light for a short time
+///   and then loses it, as a phosphor does. There is no light ahead of the pointer.
+/// - The wave of a click: two fronts go out from the selected block to the two edges. Each is
+///   strong at the start, loses light with the square of its distance, and loses speed.
+///
+/// It is Core Animation: the system moves the light, and the app does no work for a frame.
+private struct ChartLight: NSViewRepresentable {
+    let picture: CGImage?
+    /// The data with much more light: the pointer and the click use it.
+    let hot: CGImage?
+    /// The left and right edges of the plot, in the coordinates of the view.
+    let left: CGFloat
+    let right: CGFloat
+    /// The place of the block under the pointer.
+    let pointer: CGFloat?
+    /// Changes with each click. `waveAt` is the place of the selected block.
+    let wave: Int
+    let waveAt: CGFloat
+
+    /// The length of the light behind a front.
+    private static let tail: CGFloat = 300
+    /// The time that a place keeps its light after the pointer leaves it.
+    private static let afterglow: CFTimeInterval = 0.9
+    /// The number of marks of light that the pointer can leave at one time.
+    private static let marks = 48
+
+    final class LightView: NSView {
+        // Each light is a copy of the bright picture with its own window.
+        let scan = CALayer()
+        let scanWindow = CALayer()
+        let scanFronts = [CAGradientLayer(), CAGradientLayer()]
+        let trace = CALayer()
+        let traceWindow = CALayer()
+        let traceMarks: [CALayer] = (0..<ChartLight.marks).map { _ in CALayer() }
+        let burst = CALayer()
+        let burstWindow = CALayer()
+        let burstLeft = CAGradientLayer()
+        let burstRight = CAGradientLayer()
+
+        var layout: String?
+        var wave: Int?
+        var lastPointer: CGFloat?
+        var nextMark = 0
+        override var isFlipped: Bool { true }
+
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+            let clear = CGColor(gray: 0, alpha: 0)
+            for (light, window) in [(scan, scanWindow), (trace, traceWindow), (burst, burstWindow)] {
+                light.contentsGravity = .resize
+                window.masksToBounds = true
+                light.mask = window
+                layer?.addSublayer(light)
+            }
+            // The scan: the front is at the left of the band, and the light goes down behind it.
+            for front in scanFronts {
+                // Full light at the front, and a third of it at the middle of the tail.
+                front.colors = [clear, CGColor(gray: 0, alpha: 1), CGColor(gray: 0, alpha: 0.32), clear]
+                front.locations = [0, 0.06, 0.45, 1]
+                front.anchorPoint = CGPoint(x: 0.06, y: 0)
+                scanWindow.addSublayer(front)
+            }
+            // A mark of the pointer: the stretch of the plot that the pointer moved across.
+            for mark in traceMarks {
+                mark.backgroundColor = .black
+                mark.anchorPoint = .zero
+                mark.opacity = 0
+                traceWindow.addSublayer(mark)
+            }
+            // The wave: each front is at the outer side of its band.
+            burstLeft.colors = [clear, CGColor(gray: 0, alpha: 1), CGColor(gray: 0, alpha: 0.35), clear]
+            burstLeft.locations = [0, 0.06, 0.4, 1]
+            burstLeft.anchorPoint = CGPoint(x: 0.06, y: 0)
+            burstRight.colors = [clear, CGColor(gray: 0, alpha: 0.35), CGColor(gray: 0, alpha: 1), clear]
+            burstRight.locations = [0, 0.6, 0.94, 1]
+            burstRight.anchorPoint = CGPoint(x: 0.94, y: 0)
+            for band in [burstLeft, burstRight] {
+                band.opacity = 0
+                burstWindow.addSublayer(band)
+            }
+            for band in scanFronts + [burstLeft, burstRight] {
+                band.startPoint = CGPoint(x: 0, y: 0.5)
+                band.endPoint = CGPoint(x: 1, y: 0.5)
+            }
+        }
+
+        required init?(coder: NSCoder) { nil }
+    }
+
+    func makeNSView(context: Context) -> LightView { LightView() }
+
+    func updateNSView(_ view: LightView, context: Context) {
+        let bounds = view.bounds
+        let width = max(right - left, 0)
+        let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+
+        // The layers get their places only when the picture or the size changes. A change of
+        // the pointer does nothing to the scan.
+        let layout = "\(Int(left))|\(Int(width))|\(Int(bounds.height))|\(still)|"
+            + "\(picture.map { "\($0.width)x\($0.height)|\(Unmanaged.passUnretained($0).toOpaque())" } ?? "none")|"
+            + "\(hot.map { "\(Unmanaged.passUnretained($0).toOpaque())" } ?? "none")"
+        if view.layout != layout {
+            view.layout = layout
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            let plot = CGRect(x: left, y: 0, width: width, height: bounds.height)
+            for (light, window) in [(view.scan, view.scanWindow), (view.trace, view.traceWindow), (view.burst, view.burstWindow)] {
+                light.frame = bounds
+                light.contents = light === view.scan ? picture : (hot ?? picture)
+                window.frame = plot
+            }
+            let tall = bounds.height
+            for front in view.scanFronts {
+                front.bounds = CGRect(x: 0, y: 0, width: Self.tail / 0.94, height: tall)
+                front.removeAnimation(forKey: "scan")
+                front.opacity = still || picture == nil ? 0 : 1
+            }
+            view.burstLeft.bounds = CGRect(x: 0, y: 0, width: Self.tail / 0.94, height: tall)
+            view.burstRight.bounds = CGRect(x: 0, y: 0, width: Self.tail / 0.94, height: tall)
+            CATransaction.commit()
+
+            // Two fronts, one plot width apart. When the first gets to the left edge it
+            // starts again at the right edge, and the second has the light that the first
+            // left behind. Thus there is always one front in the plot, with no stop.
+            if !still, width > 0, picture != nil {
+                for (number, front) in view.scanFronts.enumerated() {
+                    let move = CABasicAnimation(keyPath: "position.x")
+                    move.fromValue = width - CGFloat(number) * width
+                    move.toValue = -CGFloat(number) * width
+                    move.duration = 10
+                    move.repeatCount = .infinity
+                    move.timingFunction = CAMediaTimingFunction(name: .linear)
+                    front.add(move, forKey: "scan")
+                }
+            }
+        }
+
+        // The pointer leaves light on the stretch that it moved across, and no light ahead
+        // of it. The light of a stretch goes down slowly: the afterglow of a phosphor.
+        if let pointer, picture != nil {
+            let at = pointer - left
+            if let before = view.lastPointer, abs(before - at) >= 0.5 {
+                let mark = view.traceMarks[view.nextMark]
+                view.nextMark = (view.nextMark + 1) % Self.marks
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                mark.frame = CGRect(x: min(before, at), y: 0, width: abs(before - at), height: bounds.height)
+                CATransaction.commit()
+                let glow = CAKeyframeAnimation(keyPath: "opacity")
+                // A strong light at the moment of the pointer, which goes down quickly to the
+                // quiet afterglow and then to nothing.
+                glow.values = [1, 0.34, 0.11, 0]
+                glow.keyTimes = [0, 0.12, 0.35, 1]
+                glow.duration = Self.afterglow
+                mark.removeAnimation(forKey: "glow")
+                mark.add(glow, forKey: "glow")
+            }
+            view.lastPointer = at
+        } else {
+            view.lastPointer = nil
+        }
+
+        // A click: two fronts go out from the selected block. Each front is strong at the
+        // start. Its light goes down with the square of its distance from the block, and
+        // its speed goes down as it goes out, as a wave that spreads does.
+        guard view.wave != wave else { return }
+        let first = view.wave == nil
+        view.wave = wave
+        guard !first, !still, width > 0, picture != nil else { return }
+        let origin = waveAt - left
+        // The distance at which the light is half of its start.
+        let half = max(width * 0.16, 60)
+        let steps = 24
+        for (band, target) in [(view.burstLeft, -Self.tail), (view.burstRight, width + Self.tail)] {
+            let distance = target - origin
+            var places: [CGFloat] = []
+            var lights: [Double] = []
+            var times: [NSNumber] = []
+            for step in 0...steps {
+                let time = Double(step) / Double(steps)
+                // Quick at the start and slower to the end.
+                let gone = 1 - pow(1 - time, 2.4)
+                let travelled = distance * CGFloat(gone)
+                places.append(origin + travelled)
+                lights.append(1 / (1 + pow(Double(abs(travelled)) / Double(half), 2)))
+                times.append(NSNumber(value: time))
+            }
+            let move = CAKeyframeAnimation(keyPath: "position.x")
+            move.values = places
+            move.keyTimes = times
+            let light = CAKeyframeAnimation(keyPath: "opacity")
+            light.values = lights
+            light.keyTimes = times
+            let group = CAAnimationGroup()
+            group.animations = [move, light]
+            // A wave that has more plot to cross has more time.
+            group.duration = 0.9 + 1.5 * Double(abs(distance) / (width + Self.tail))
+            band.removeAnimation(forKey: "wave")
+            band.removeAnimation(forKey: "show")
+            band.add(group, forKey: "wave")
         }
     }
 }

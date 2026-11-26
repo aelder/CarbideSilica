@@ -91,6 +91,9 @@ struct RootView: View {
                         .safeAreaInset(edge: .top, spacing: 0) { Breadcrumb() }
                 }
             }
+            // A button of a page that sets no style is a key of the display. The buttons of
+            // the bar at the top keep the form of the system.
+            .buttonStyle(.lamp)
         }
         // Film grain over all of the display.
         .overlay { FilmGrain().ignoresSafeArea() }
@@ -266,11 +269,15 @@ struct Sidebar: View {
         VStack(alignment: .leading, spacing: 0) {
             NameText(name)
                 .padding(.horizontal, 16)
-                .padding(.top, 18)
+                .padding(.top, 4)
                 .padding(.bottom, 6)
             Rectangle().fill(Tone.rule).frame(height: 1).padding(.leading, 16).padding(.bottom, 5)
             content()
         }
+        // A group is one row of the list, and the list cuts each row at its edge. The room
+        // below the last key is in the row, so that the light of a lit key has its place.
+        .padding(.top, 2)
+        .padding(.bottom, 16)
     }
 
     /// One place, as a key with a lamp. Nothing is selected while an object page is open on

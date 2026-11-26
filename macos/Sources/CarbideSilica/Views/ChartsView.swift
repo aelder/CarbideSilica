@@ -73,12 +73,9 @@ struct ChartsView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 NameText("Span")
-                Picker("Span", selection: Binding(get: { state.span }, set: { state.setSpan($0) })) {
-                    ForEach(ChartState.Span.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 280)
+                LampSegments(
+                    options: ChartState.Span.allCases.map { ($0, $0.title) },
+                    selection: Binding(get: { state.span }, set: { state.setSpan($0) }))
                 Spacer(minLength: 16)
             }
             HStack(spacing: 8) {
@@ -117,7 +114,7 @@ struct ChartsView: View {
                 }
                 .help("Load this range again and check that its newest block is on the active chain (⌘R)")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.lamp)
             .controlSize(.small)
         }
     }
@@ -831,7 +828,7 @@ private struct SelectedBlockCard: View {
                     Button("Open block") { model.open(.block(id: sample.hash)) }
                     Spacer()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.lamp)
                 .controlSize(.small)
                 FieldRow(label: "Height", value: Format.integer(sample.height), route: .block(id: sample.hash))
                 FieldRow(label: "Hash", value: sample.hash, route: .block(id: sample.hash), monospaced: true)

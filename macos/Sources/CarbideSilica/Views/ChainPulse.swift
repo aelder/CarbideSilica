@@ -478,7 +478,6 @@ struct ChainPulse: View {
     private func drawWaits(_ context: GraphicsContext, _ size: CGSize, _ current: Double?) {
         let right = size.width - rightInset
         let base = waitsBase
-        let dot: CGFloat = 5
         let high = waitsEnd(current)
         let position = { (seconds: Double) -> CGFloat in
             waitX(seconds, width: size.width, high: high)

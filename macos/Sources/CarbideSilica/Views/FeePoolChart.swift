@@ -333,7 +333,7 @@ struct FeePoolSection: View {
                 Button("Open block") { model.open(.block(id: sample.hash)) }
                 Spacer()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.lamp)
             .controlSize(.small)
             FieldRow(label: "Height", value: Format.integer(sample.height), route: .block(id: sample.hash))
             FieldRow(label: "Time", value: Format.date(sample.time))

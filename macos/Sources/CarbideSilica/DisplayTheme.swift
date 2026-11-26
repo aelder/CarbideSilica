@@ -355,3 +355,111 @@ struct FilmGrain: View {
             provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
     }()
 }
+
+// MARK: - Illuminated buttons and segments
+
+/// The face of a small key with a lamp: dark with an outline when it is off, a cool blue
+/// light under the pointer, a cream light with halation when it is pressed or selected.
+struct LampFace: View {
+    enum Lamp { case off, blue, amber }
+    let lamp: Lamp
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(Color(white: 0.045))
+            face(LampTone.blueCentre, LampTone.blueEdge).opacity(lamp == .blue ? 1 : 0)
+            face(LampTone.amberCentre, LampTone.amberEdge).opacity(lamp == .amber ? 1 : 0)
+        }
+        .overlay(Rectangle().strokeBorder(Tone.axis.opacity(lamp == .off ? 1 : 0), lineWidth: 1))
+        .shadow(color: LampTone.blueEdge.opacity(lamp == .blue ? 0.3 : 0), radius: 3)
+        .shadow(color: LampTone.halation.opacity(lamp == .amber ? 0.7 : lamp == .blue ? 0.25 : 0), radius: 4)
+        .shadow(color: LampTone.halation.opacity(lamp == .off ? 0 : 0.22), radius: 9)
+        // Quick up, slower down, as the filament of a lamp.
+        .animation(lamp == .off ? .easeOut(duration: 0.34) : .easeOut(duration: 0.1), value: lamp)
+    }
+
+    private func face(_ center: Color, _ edge: Color) -> some View {
+        Rectangle()
+            .fill(EllipticalGradient(colors: [center, edge], center: .center, startRadiusFraction: 0.05, endRadiusFraction: 0.75))
+            .overlay(Rectangle().strokeBorder(Color.black.opacity(0.22), lineWidth: 1))
+    }
+}
+
+/// The style of a button of the display: a small square key with a lamp.
+struct LampButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Key(configuration: configuration)
+    }
+
+    private struct Key: View {
+        let configuration: Configuration
+        @Environment(\.isEnabled) private var enabled
+        @State private var hovering = false
+
+        private var lamp: LampFace.Lamp {
+            guard enabled else { return .off }
+            return configuration.isPressed ? .amber : hovering ? .blue : .off
+        }
+
+        var body: some View {
+            configuration.label
+                .font(Tone.futura(10.5))
+                .tracking(1.2)
+                .textCase(.uppercase)
+                .labelStyle(.titleAndIcon)
+                .lineLimit(1)
+                .foregroundStyle(lamp == .off ? Tone.value.opacity(enabled ? 0.9 : 0.35) : LampTone.legend)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(LampFace(lamp: lamp).opacity(enabled ? 1 : 0.5))
+                .contentShape(Rectangle())
+                .onHover { hovering = $0 }
+        }
+    }
+}
+
+extension ButtonStyle where Self == LampButtonStyle {
+    static var lamp: LampButtonStyle { LampButtonStyle() }
+}
+
+/// A row of keys of which one is on: the display's form of a segmented control.
+struct LampSegments<Value: Hashable>: View {
+    let options: [(value: Value, title: String)]
+    @Binding var selection: Value
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                Segment(title: option.title, chosen: option.value == selection) { selection = option.value }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private struct Segment: View {
+        let title: String
+        let chosen: Bool
+        let action: () -> Void
+        @State private var hovering = false
+
+        private var lamp: LampFace.Lamp { chosen ? .amber : hovering ? .blue : .off }
+
+        var body: some View {
+            Button(action: action) {
+                Text(title.uppercased())
+                    .font(Tone.futura(10.5))
+                    .tracking(1.2)
+                    .lineLimit(1)
+                    .foregroundStyle(lamp == .off ? Tone.value.opacity(0.9) : LampTone.legend)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(LampFace(lamp: lamp))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(chosen ? .isSelected : [])
+        }
+    }
+}
