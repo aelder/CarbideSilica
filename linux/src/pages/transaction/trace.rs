@@ -214,7 +214,7 @@ impl TraceCard {
     }
 
     /// The searched range, and the controls to search other windows of the destination chain.
-    fn search_controls(self: &Rc<Self>, search: &api::TraceSearch, trace: &api::TransferTrace, live: bool, namer: &super::words::Namer) -> gtk::Box {
+    fn search_controls(self: &Rc<Self>, search: &api::TraceSearch, trace: &api::TransferTrace, live: bool, namer: &crate::shared::statement_words::Namer) -> gtk::Box {
         let column = gtk::Box::new(gtk::Orientation::Vertical, 8);
         let windows = search.windows;
         column.append(&page::paragraph(
@@ -666,7 +666,7 @@ fn small(link: gtk::Button) -> gtk::Button {
     link
 }
 
-fn pool_help(leg: &api::TraceLeg, executed_here: bool, namer: &super::words::Namer) -> String {
+fn pool_help(leg: &api::TraceLeg, executed_here: bool, namer: &crate::shared::statement_words::Namer) -> String {
     if let Some(height) = leg.import_height
         && executed_here
     {
@@ -714,7 +714,7 @@ fn amount_column(page: &Page, title: &str, amounts: &[api::CurrencyAmount], unkn
 }
 
 /// The net amounts of a conversion, its effective rate and the import batch's named prices.
-fn rate_lines(page: &Page, rate: &api::TraceRate, namer: &super::words::Namer) -> gtk::Box {
+fn rate_lines(page: &Page, rate: &api::TraceRate, namer: &crate::shared::statement_words::Namer) -> gtk::Box {
     let column = gtk::Box::new(gtk::Orientation::Vertical, 3);
     let labelled = |label: &str| {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);

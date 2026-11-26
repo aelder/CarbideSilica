@@ -255,7 +255,7 @@ impl VersionStrip {
         let Some(version) = version else { return String::new() };
         match version.time {
             Some(time) if !crate::display::shows_dates() => abbreviated_date(time),
-            _ => support::height_text(&self.model, version.height, version.time),
+            _ => self.model.height_text(version.height, version.time),
         }
     }
 
@@ -310,7 +310,7 @@ fn draw_lanes(
     }
     draw::stroke(snapshot, &leaders.to_path(), tone::AXIS, 0.6);
 
-    let display = |id: &str| support::display_id(model, id);
+    let display = |id: &str| model.display_id(id);
     for lane in 0..LANES.len() {
         let y = TIME_HEIGHT + lane as f32 * LANE_HEIGHT;
         let lock = lane == 3;

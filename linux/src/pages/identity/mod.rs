@@ -8,7 +8,6 @@
 //! starts at the current version, and the version strip, the history list and the Go
 //! menu's Previous Version and Next Version step through the others.
 
-mod activity;
 mod control;
 mod evidence;
 mod extras;
@@ -24,11 +23,12 @@ use std::time::Duration;
 use gtk::glib;
 use gtk::prelude::*;
 
-use crate::bridge::{self, api};
+use crate::bridge;
 use crate::bridge::api::{AddressOverview, IdentityOffers, IdentityState, IdentityTimeline, Route, Timelock};
 use crate::format;
 use crate::model::{AppModel, Topic};
 use crate::page::{self, load::clear, Adjacent, Card, Investigations, LoadView, Page};
+use crate::shared::address_activity;
 use crate::shared::identity_support::{self as support, height_and_time, small_progress, SectionLoader};
 use crate::shared::json_tree::json_section;
 use crate::theme::{self, font, tone, Color};
@@ -36,7 +36,6 @@ use crate::widgets::display::{self, PlateFill};
 use crate::widgets::icons::{self, Icon};
 use crate::widgets::{lamp, link};
 
-use activity::ActivityList;
 use evidence::{EvidenceCard, EvidenceState};
 use extras::TokenControlCard;
 use lanes::VersionStrip;
@@ -157,7 +156,6 @@ struct IdentityView {
     origin: RefCell<Option<Rc<SectionLoader>>>,
     payments: RefCell<Option<Rc<RegistrationPaymentsCard>>>,
     history: gtk::Box,
-    activity_list: RefCell<Option<Rc<ActivityList>>>,
     json: gtk::Box,
 }
 
@@ -194,7 +192,6 @@ impl IdentityView {
             origin: RefCell::new(None),
             payments: RefCell::new(None),
             history: slot(),
-            activity_list: RefCell::new(None),
             json: slot(),
         });
         let column = gtk::Box::new(gtk::Orientation::Vertical, 20);
@@ -250,10 +247,8 @@ impl IdentityView {
 
         column.append(&view.history);
         let transactions = page.card("Transactions", None);
-        let list = ActivityList::new(page, &timeline.identity_address);
-        transactions.append(&list.root);
+        transactions.append(&address_activity::ActivityList::new(page, &timeline.identity_address, None));
         column.append(&transactions.root);
-        view.activity_list.replace(Some(list));
         column.append(&view.json);
 
         // The menu command and the key v run the historical reverse request.
@@ -727,52 +722,9 @@ impl IdentityView {
         } else if activity.balances.is_empty() {
             card.append(&page::text("No balances.", &["secondary"]));
         } else {
-            card.append(&self.balance_list(&activity.balances));
+            card.append(&support::balance_list(&self.model, &activity.balances));
         }
         card.append(&page::paragraph(&activity_summary(activity), &["secondary"]));
-    }
-
-    /// Balances by currency, the chain's own coin first (`BalanceList`).
-    fn balance_list(&self, balances: &[api::AddressBalance]) -> gtk::Box {
-        let list = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        let coin = self.model.coin();
-        for balance in balances {
-            let label = if balance.native {
-                coin.clone()
-            } else if crate::display::shows_names()
-                && let Some(name) = self.model.state().names.get(&balance.currency_id)
-            {
-                name.strip_suffix('@').unwrap_or(name).to_string()
-            } else {
-                balance.name.clone()
-            };
-            let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-            let weak = Rc::downgrade(&self.model);
-            let target = if balance.native { coin.clone() } else { balance.currency_id.clone() };
-            let open = link::link(&label, false, move || {
-                if let Some(model) = weak.upgrade() {
-                    model.open(Route::Currency { name: target.clone() });
-                }
-            });
-            if let Some(text) = link::label_of(&open) {
-                text.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                text.set_single_line_mode(true);
-            }
-            open.set_tooltip_text(Some(&balance.currency_id));
-            open.set_size_request(170, -1);
-            let cell = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-            cell.set_size_request(170, -1);
-            cell.append(&open);
-            row.append(&cell);
-            let amount = page::text(&format::coins(balance.amount_sats), &["tabular"]);
-            amount.set_valign(gtk::Align::Baseline);
-            row.append(&amount);
-            let name = page::text(&label, &["secondary"]);
-            name.set_valign(gtk::Align::Baseline);
-            row.append(&name);
-            list.append(&row);
-        }
-        list
     }
 
     fn render_token(self: &Rc<Self>) {
@@ -842,7 +794,7 @@ fn timelock_text(model: &Rc<AppModel>, timelock: &Timelock) -> String {
             format::integer(*blocks),
             if *blocks == 1 { "" } else { "s" }
         ),
-        Timelock::UnlocksAt { height } => format!("Locked until {}", support::height_text(model, *height, None)),
+        Timelock::UnlocksAt { height } => format!("Locked until {}", model.height_text(*height, None)),
     }
 }
 

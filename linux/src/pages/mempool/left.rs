@@ -17,7 +17,8 @@ use crate::widgets::link;
 use super::feed::{self, Feed, LEFT_BLOCKS, LEFT_SHOWN};
 use super::rows::MempoolRow;
 use super::text::{count, span};
-use super::words::{self, Names};
+use super::words;
+use crate::shared::statement_words::Namer;
 
 /// What one row shows, to see whether the list changed.
 #[derive(Clone, Debug, PartialEq)]
@@ -60,7 +61,7 @@ impl LeftList {
 
     pub fn update(&self) {
         let Some(model) = self.model.upgrade() else { return };
-        let names = Names::of(&model);
+        let names = Namer::from_model(&model);
         let arrivals = model.state().arrivals.clone();
         let lines = feed::with(|feed| lines(feed, &names, &arrivals));
         if *self.shown.borrow() == lines {
@@ -139,7 +140,7 @@ impl LeftList {
 }
 
 /// The lines of the list, from the feed.
-fn lines(feed: &Feed, names: &Names, arrivals: &std::collections::HashMap<String, f64>) -> Vec<Line> {
+fn lines(feed: &Feed, names: &Namer, arrivals: &std::collections::HashMap<String, f64>) -> Vec<Line> {
     let rows: Vec<&api::RecentTransaction> = feed.took.iter().take(LEFT_SHOWN).collect();
     let mut gone: Vec<&feed::Sighting> = feed.sightings.values().filter(|s| s.gone).collect();
     gone.sort_by(|a, b| b.arrival.total_cmp(&a.arrival));

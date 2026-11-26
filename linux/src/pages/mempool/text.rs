@@ -1,17 +1,7 @@
 //! Words and figures of the Mempool page (`MempoolText` and the small formats of
 //! `MempoolView.swift`).
 
-/// A length of time in words: seconds to two minutes, then minutes (`MempoolText.span`).
-pub fn span(seconds: f64) -> String {
-    let seconds = if seconds.is_finite() { seconds.round().max(0.0) as i64 } else { 0 };
-    if seconds < 120 {
-        return format!("{seconds} s");
-    }
-    if seconds < 3600 {
-        return format!("{} min", seconds / 60);
-    }
-    format!("{} h {} min", seconds / 3600, seconds % 3600 / 60)
-}
+pub use crate::shared::statement_words::span;
 
 /// "1 transaction", "2 transactions" (`MempoolText.count`).
 pub fn count(number: usize, one: &str, many: &str) -> String {
@@ -37,24 +27,6 @@ pub fn fill_percent(waiting: usize, share: f64) -> String {
         format!("{percent:.2}%")
     } else {
         format!("{percent:.0}%")
-    }
-}
-
-/// "a, b and c" (`StatementText.list`).
-pub fn list(parts: &[String]) -> String {
-    match parts.len() {
-        0 => String::new(),
-        1 => parts[0].clone(),
-        n => format!("{} and {}", parts[..n - 1].join(", "), parts[n - 1]),
-    }
-}
-
-/// The first letter in capitals (`StatementText.capital`).
-pub fn capital(text: &str) -> String {
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => String::new(),
     }
 }
 
@@ -88,6 +60,8 @@ mod tests {
         assert_eq!(fill_percent(2, 0.456), "46%");
         assert_eq!(fill_percent(2, 1.5), "150%");
     }
+
+    use crate::shared::statement_words::{capital, list};
 
     #[test]
     fn lists() {

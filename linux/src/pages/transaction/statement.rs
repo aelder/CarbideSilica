@@ -24,7 +24,7 @@ use crate::widgets::{lamp, link};
 use super::flow::Flow;
 use super::layout::{RowStyle, Selection, Spread, StatementLayout, StatementRow};
 use super::overview::callout;
-use super::words::{self, Namer, StatementWords};
+use crate::shared::statement_words::{self as words, Namer, StatementWords};
 use super::Ctx;
 
 /// True shows the statement as a flow picture, false as the table (`statementShowsFlow`).

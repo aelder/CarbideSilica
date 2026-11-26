@@ -23,7 +23,8 @@ use super::logic::{self, Context, MANY_ROWS};
 use super::record::TimeRecord;
 use super::rows::{KeyedRows, MempoolRow};
 use super::text::span;
-use super::words::{self, Names};
+use super::words;
+use crate::shared::statement_words::Namer;
 
 pub struct WaitingRoom {
     pub root: gtk::Box,
@@ -110,7 +111,7 @@ impl WaitingRoom {
         let now = format::now();
         let coin = model.coin();
         let tip = model.state().status.as_ref().map(|s| s.blocks);
-        let names = Names::of(&model);
+        let names = Namer::from_model(&model);
         let waits = wait_record::with(|r| r.history.as_ref().map(|h| h.waits.clone()));
         feed::with(|feed| {
             let context = Context { now, coin: &coin, tip, waits: waits.as_deref() };

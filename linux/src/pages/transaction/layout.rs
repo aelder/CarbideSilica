@@ -66,7 +66,7 @@ pub struct StatementLayout {
 }
 
 impl StatementLayout {
-    pub const MAX_RECEIVERS: usize = 8;
+    pub const MAX_RECEIVERS: usize = crate::shared::statement_words::MAX_RECEIVERS;
     pub const KEPT_RECEIVERS: usize = 5;
     pub const MAX_COLUMNS: usize = 5;
 

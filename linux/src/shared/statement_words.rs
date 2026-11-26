@@ -1,15 +1,16 @@
 //! The words of a statement (`StatementText` and `StatementWords` in
-//! `TransactionStatement.swift`): amounts in brief, lists in words, the names of parties
-//! and currencies, and the sentence that says what the transaction did. The Transaction
-//! page and the Mempool page use the same words.
+//! `TransactionStatement.swift`, `MempoolText.span` in `MempoolView.swift`): amounts in
+//! brief, lists in words, the names of parties and currencies, and the sentence that says
+//! what the transaction did. The Transaction page and the Mempool page use the same words.
 
 use std::collections::HashMap;
 
 use crate::bridge::api::{ClosingKind, PartyKind, StatementAmount, StatementParty, TransactionStatement};
 use crate::format;
-use crate::model::AppModel;
+use crate::model::{self, AppModel};
 
-use super::layout::StatementLayout;
+/// More receiving addresses than this are counted, not named (`StatementLayout.maxReceivers`).
+pub const MAX_RECEIVERS: usize = 8;
 
 /// An amount with as many decimals as its size needs. The full amount is in the help text.
 pub fn brief(sats: i64) -> String {
@@ -58,7 +59,7 @@ pub fn capital(text: &str) -> String {
 
 /// A length of time in words: seconds to two minutes, then minutes (`MempoolText.span`).
 pub fn span(seconds: f64) -> String {
-    let seconds = (seconds.round() as i64).max(0);
+    let seconds = if seconds.is_finite() { seconds.round().max(0.0) as i64 } else { 0 };
     if seconds < 120 {
         return format!("{seconds} s");
     }
@@ -94,27 +95,13 @@ impl Namer {
     /// A currency's name: the coin for the chain itself, the name without "@", or a short
     /// ID (`AppModel.currencyName`).
     pub fn currency_name(&self, id: &str) -> String {
-        if Some(id) == self.chain_id.as_deref() || id == self.coin {
-            return self.coin.clone();
-        }
-        if !self.shows_names {
-            return format::short(id, 8, 6);
-        }
-        match self.names.get(id) {
-            Some(name) => name.strip_suffix('@').unwrap_or(name).to_string(),
-            None => format::short(id, 8, 6),
-        }
+        model::currency_name_in(&self.names, self.shows_names, self.chain_id.as_deref(), &self.coin, id)
     }
 
     /// An identity or currency ID as the "Show Names for IDs" setting says: the name, or a
     /// shortened ID (`AppModel.displayID`).
     pub fn display_id(&self, id: &str) -> String {
-        if self.shows_names
-            && let Some(name) = self.names.get(id)
-        {
-            return name.clone();
-        }
-        format::short(id, 8, 6)
+        model::display_id_in(&self.names, self.shows_names, id)
     }
 
     /// A currency's name with a shorter ID when no name is known (`currencyName` of
@@ -157,7 +144,7 @@ impl StatementWords<'_> {
     }
 
     pub fn amount(&self, amount: &StatementAmount) -> String {
-        format!("{} {}", format::coins(amount.sats.abs()), self.currency(amount.currency_id.as_deref()))
+        format!("{} {}", format::coins(amount.sats.saturating_abs()), self.currency(amount.currency_id.as_deref()))
     }
 
     /// A party in the middle of a sentence.
@@ -196,7 +183,7 @@ impl StatementWords<'_> {
         let net = |p: &StatementParty| -> i64 {
             p.net.iter().find(|a| a.currency_id.as_deref() == column).map(|a| a.sats).unwrap_or(0)
         };
-        let money = |sats: i64| format!("{} {}", format::coins(sats.abs()), self.currency(column));
+        let money = |sats: i64| format!("{} {}", format::coins(sats.saturating_abs()), self.currency(column));
         let mut parts: Vec<String> = Vec::new();
 
         if self.coinbase {
@@ -278,7 +265,7 @@ impl StatementWords<'_> {
             if let Some(pool) = pool {
                 parts.push(if net(pool) > 0 { "The recipient in the pool is hidden." } else { "The sender in the pool is hidden." }.into());
             }
-            if addresses.len() > StatementLayout::MAX_RECEIVERS && one_column {
+            if addresses.len() > MAX_RECEIVERS && one_column {
                 let mut sorted: Vec<i64> = addresses.iter().map(|p| net(p)).collect();
                 sorted.sort();
                 parts.push(format!("Half of the addresses received less than {}.", money(sorted[sorted.len() / 2])));

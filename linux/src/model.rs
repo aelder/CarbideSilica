@@ -236,6 +236,38 @@ impl AppModel {
             .unwrap_or_else(|| "VRSC".into())
     }
 
+    // The AppModel extension of `IdentitySupport.swift`.
+
+    /// A currency's display name: the chain's own coin, a resolved name without "@", or a
+    /// shortened ID (`currencyName`).
+    pub fn currency_name(&self, id: &str) -> String {
+        let coin = self.coin();
+        let state = self.state();
+        let chain_id = state.status.as_ref().and_then(|s| s.chain_id.as_deref());
+        currency_name_in(&state.names, crate::display::shows_names(), chain_id, &coin, id)
+    }
+
+    /// An identity or currency ID as "Show Names for IDs" says: the name, or a shortened
+    /// ID (`displayID`).
+    pub fn display_id(&self, id: &str) -> String {
+        display_id_in(&self.state().names, crate::display::shows_names(), id)
+    }
+
+    /// A block height as "Show Dates for Heights" says (`heightText`). `time` is the
+    /// block's time when it is known.
+    pub fn height_text(self: &Rc<Self>, height: u64, time: Option<u64>) -> String {
+        if crate::display::shows_dates() {
+            crate::display::height_text(height, time, self)
+        } else {
+            format!("block {}", crate::format::integer(height))
+        }
+    }
+
+    /// An amount in satoshis with its ticker (`amountText`).
+    pub fn amount_text(&self, sats: i64, currency: &str) -> String {
+        format!("{} {}", crate::format::coins(sats), self.currency_name(currency))
+    }
+
     pub fn current_chain(&self) -> String {
         self.state()
             .connection
@@ -883,3 +915,29 @@ impl AppModel {
         self.explorer().ok_or_else(|| self.state().status_error.clone().unwrap_or_else(|| "Not connected.".into()))
     }
 }
+
+/// `AppModel.currencyName` over a set of names: the chain's own coin, a resolved name
+/// without "@", or a shortened ID.
+pub fn currency_name_in(names: &HashMap<String, String>, shows_names: bool, chain_id: Option<&str>, coin: &str, id: &str) -> String {
+    if chain_id == Some(id) || id == coin {
+        return coin.to_string();
+    }
+    if !shows_names {
+        return crate::format::short(id, 8, 6);
+    }
+    match names.get(id) {
+        Some(name) => name.strip_suffix('@').unwrap_or(name).to_string(),
+        None => crate::format::short(id, 8, 6),
+    }
+}
+
+/// `AppModel.displayID` over a set of names: the name, or a shortened ID.
+pub fn display_id_in(names: &HashMap<String, String>, shows_names: bool, id: &str) -> String {
+    if shows_names
+        && let Some(name) = names.get(id)
+    {
+        return name.clone();
+    }
+    crate::format::short(id, 8, 6)
+}
+

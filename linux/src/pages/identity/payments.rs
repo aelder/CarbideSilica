@@ -157,8 +157,8 @@ fn content(page: &Rc<Page>, card: &Card, payments: &RegistrationPayments) {
             card.append(&heading);
             let rows = gtk::Box::new(gtk::Orientation::Vertical, 0);
             let referral_amount = match payments.referrals.first() {
-                Some(first) => support::amount_text(&model, payments.referral_total_sats, &first.currency),
-                None => support::amount_text(&model, 0, payments.issuer.as_deref().unwrap_or(&model.coin())),
+                Some(first) => model.amount_text(payments.referral_total_sats, &first.currency),
+                None => model.amount_text(0, payments.issuer.as_deref().unwrap_or(&model.coin())),
             };
             rows.append(&row(&format!("Referrals ({})", payments.referrals.len()), &referral_amount, false));
             for referral in &payments.referrals {
@@ -182,7 +182,7 @@ fn content(page: &Rc<Page>, card: &Card, payments: &RegistrationPayments) {
             rows.append(&row("Transaction fee", &format!("{} {coin}", format::coins(payments.fee_sats)), false));
             let native = format!("{} {coin}", format::coins(payments.total_native_sats));
             let total = match (payments.total_issuer_sats, &payments.issuer) {
-                (Some(sats), Some(issuer)) => format!("{} + {native}", support::amount_text(&model, sats, issuer)),
+                (Some(sats), Some(issuer)) => format!("{} + {native}", model.amount_text(sats, issuer)),
                 _ => native,
             };
             rows.append(&row("Total", &total, true));
@@ -206,7 +206,7 @@ fn payment_row(page: &Rc<Page>, payment: &PaymentRow) -> gtk::Box {
     let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
     line.append(&spacer);
-    let amount = page::text(&support::amount_text(&page.model, payment.amount_sats, &payment.currency), &["tabular"]);
+    let amount = page::text(&page.model.amount_text(payment.amount_sats, &payment.currency), &["tabular"]);
     amount.set_valign(gtk::Align::Baseline);
     line.append(&amount);
     line

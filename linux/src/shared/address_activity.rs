@@ -1,6 +1,7 @@
 //! An address's transactions, newest first, a page at a time (`AddressActivityList`,
 //! `AddressTileView` and `FlowRow` in `AddressView.swift`). Each tile shows the
-//! transaction's inputs and outputs, with the viewed address first.
+//! transaction's inputs and outputs. Used by the Address page and by the Identity page for
+//! the identity's address.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -11,7 +12,6 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use crate::bridge::{self, api, api::Route};
-use crate::display;
 use crate::format;
 use crate::model::{AppModel, Topic};
 use crate::page::{self, Page};
@@ -327,7 +327,7 @@ impl Tile {
         spacer.set_hexpand(true);
         head.append(&spacer);
         if let Some(height) = tile.height {
-            let text = height_text(height, tile.time, model);
+            let text = model.height_text(height, tile.time);
             let route = Route::Block { id: tile.block_hash.clone().unwrap_or_else(|| height.to_string()) };
             let link = page::route_link(page, &text, route, false);
             link.set_valign(gtk::Align::Center);
@@ -408,7 +408,7 @@ fn flow_row(page: &Rc<Page>, flow: &api::AddressFlow, output: bool, viewed: &str
         who.set_valign(gtk::Align::Baseline);
         for address in &flow.addresses {
             if address == viewed {
-                let own = page::text(&display_id(model, address), &["callout", "semibold"]);
+                let own = page::text(&model.display_id(address), &["callout", "semibold"]);
                 own.set_tooltip_text(Some(&format!("{address} (this page)")));
                 who.append(&own);
             } else {
@@ -430,7 +430,7 @@ fn flow_row(page: &Rc<Page>, flow: &api::AddressFlow, output: bool, viewed: &str
     } else if flow.amounts.is_empty() {
         page::text("value unavailable", &["callout", "secondary"])
     } else {
-        let text: Vec<String> = flow.amounts.iter().map(|a| amount_text(model, a.sats, &a.currency)).collect();
+        let text: Vec<String> = flow.amounts.iter().map(|a| model.amount_text(a.sats, &a.currency)).collect();
         page::text(&text.join(", "), &["callout", "tabular"])
     };
     row.append(&baseline(amount));
@@ -504,47 +504,6 @@ fn paint_status(snapshot: &gtk::Snapshot, kind: Status, w: f32, h: f32) {
             draw::fill_rect(snapshot, cx - 0.65, cy + r * 0.36, 1.3, 1.3, c);
         }
     }
-}
-
-/// A block height as the "Show Dates for Heights" setting says (`AppModel.heightText`).
-fn height_text(height: u64, time: Option<u64>, model: &Rc<AppModel>) -> String {
-    if display::shows_dates() {
-        display::height_text(height, time, model)
-    } else {
-        format!("block {}", format::integer(height))
-    }
-}
-
-/// An identity or currency ID as the "Show Names for IDs" setting says: the name, or a
-/// shortened ID (`AppModel.displayID`).
-fn display_id(model: &AppModel, id: &str) -> String {
-    if display::shows_names()
-        && let Some(name) = model.state().names.get(id)
-    {
-        return name.clone();
-    }
-    format::short(id, 8, 6)
-}
-
-/// A currency's display name: the chain's own coin, a resolved name without "@", or a
-/// shortened ID (`AppModel.currencyName`).
-fn currency_name(model: &AppModel, id: &str) -> String {
-    let coin = model.coin();
-    if model.state().status.as_ref().and_then(|s| s.chain_id.as_deref()) == Some(id) || id == coin {
-        return coin;
-    }
-    if !display::shows_names() {
-        return format::short(id, 8, 6);
-    }
-    match model.state().names.get(id) {
-        Some(name) => name.strip_suffix('@').unwrap_or(name).to_string(),
-        None => format::short(id, 8, 6),
-    }
-}
-
-/// An amount in satoshis with its ticker (`AppModel.amountText`).
-fn amount_text(model: &AppModel, sats: i64, currency: &str) -> String {
-    format!("{} {}", format::coins(sats), currency_name(model, currency))
 }
 
 #[cfg(test)]

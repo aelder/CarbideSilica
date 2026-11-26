@@ -16,7 +16,7 @@ use crate::format;
 use crate::model::{AppModel, Topic};
 use crate::page::{self, Page};
 use crate::shared::confidence::confidence_mark;
-use crate::shared::identity_support::{self as support, abbreviated_date, SectionLoader};
+use crate::shared::identity_support::{abbreviated_date, SectionLoader};
 use crate::theme::{self, draw, font, tone, Color};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display;
@@ -103,7 +103,7 @@ fn amount(model: &AppModel, payment: &Payment) -> String {
     if payment.currency.is_empty() {
         format!("{} {}", format::coins(payment.sats), model.coin())
     } else {
-        support::amount_text(model, payment.sats, &payment.currency)
+        model.amount_text(payment.sats, &payment.currency)
     }
 }
 
@@ -177,7 +177,7 @@ pub fn origin_card(page: &Rc<Page>, txid: &str, height: u64, time: Option<u64>, 
 fn when_text(model: &Rc<AppModel>, height: u64, time: Option<u64>) -> String {
     match time {
         Some(time) => abbreviated_date(time),
-        None => support::height_text(model, height, None),
+        None => model.height_text(height, None),
     }
 }
 
@@ -223,7 +223,7 @@ fn fill(page: &Rc<Page>, holder: &gtk::Box, txid: &str, height: u64, time: Optio
     let update = {
         let (sentence_label, canvas, origin) = (sentence_label.clone(), canvas.clone(), origin.clone());
         move |model: &Rc<AppModel>| {
-            let display = |id: &str| support::display_id(model, id);
+            let display = |id: &str| model.display_id(id);
             let amount = |payment: &Payment| amount(model, payment);
             let text = sentence(&origin, &when_text(model, height, time), &model.coin(), &display, &amount);
             sentence_label.set_text(&text);
@@ -252,7 +252,7 @@ fn draw_origin(canvas: &Canvas, snapshot: &gtk::Snapshot, width: f32, height: f3
     let centre = (width / 2.0 - 80.0, mid_y - 28.0, 160.0, 56.0);
     let side = (width * 0.27).min(220.0);
     let slot = |index: usize, count: usize| height * (index as f32 + 0.5) / count.max(1) as f32;
-    let display = |id: &str| support::display_id(model, id);
+    let display = |id: &str| model.display_id(id);
     let line = |x0: f32, y0: f32, x1: f32, y1: f32, color: Color, dashed: bool| {
         let builder = gsk::PathBuilder::new();
         builder.move_to(x0, y0);

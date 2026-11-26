@@ -17,7 +17,6 @@ mod statement;
 mod style;
 mod trace;
 mod trace_route;
-pub mod words;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
@@ -29,6 +28,7 @@ use gtk::prelude::*;
 
 use crate::bridge::{self, api, api::Route};
 use crate::model::AppModel;
+use crate::shared::statement_words::Namer;
 use crate::page::{self, Adjacent, Investigations, LoadView, Page};
 use crate::shared::{inclusion, json_tree};
 use crate::theme::{self, draw, font, tone};
@@ -144,8 +144,8 @@ impl Ctx {
         self.page.upgrade()
     }
 
-    pub fn namer(&self) -> words::Namer {
-        words::Namer::from_model(&self.model)
+    pub fn namer(&self) -> Namer {
+        Namer::from_model(&self.model)
     }
 
     pub fn chain_id(&self) -> Option<String> {

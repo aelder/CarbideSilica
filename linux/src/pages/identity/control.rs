@@ -15,7 +15,7 @@ use gtk::prelude::*;
 use crate::bridge::api::{self, IdentityState, Route, Timelock};
 use crate::format;
 use crate::page::{self, Page};
-use crate::shared::identity_support::{self as support, abbreviated_date};
+use crate::shared::identity_support::abbreviated_date;
 use crate::theme::{self, font, tone, Color};
 use crate::widgets::canvas::Canvas;
 use crate::widgets::display::{self, PlateFill};
@@ -185,7 +185,7 @@ pub fn control_card(page: &Rc<Page>, identity: &IdentityState) -> gtk::Box {
     let model = page.model.clone();
     let card = page.card("Control", Some("at the viewed version"));
     let facts = Facts::of(identity);
-    let display = |id: &str| support::display_id(&model, id);
+    let display = |id: &str| model.display_id(id);
 
     // `.title3`: 15.
     let sentence_label = theme::text_label(font::TITLE3, &sentence(&facts, &display), &[]);
@@ -397,7 +397,7 @@ fn history_row(
     when_label.set_valign(gtk::Align::Baseline);
     heading.append(&when_label);
     let block_id = version.block_hash.clone().unwrap_or_else(|| version.height.to_string());
-    let height = support::height_text(&model, version.height, version.time);
+    let height = model.height_text(version.height, version.time);
     heading.append(&height_link(page, &height, Route::Block { id: block_id }));
     if version.on_active_chain == Some(false) {
         let warning = gtk::Box::new(gtk::Orientation::Horizontal, 4);

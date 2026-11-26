@@ -1,11 +1,11 @@
 //! Owner: the Identity page (`pages/identity`). Small parts of the identity and address
 //! pages (`IdentitySupport.swift`): `IDLink`, `IDRow`, `ValueRow`, `SectionLoader`,
-//! `heightAndTime` and the `AppModel` extension (`currencyName`, `displayID`, `heightText`,
-//! `amountText`). Used by the Identity page and the Address page.
+//! `heightAndTime`, `BalanceList` (`IdentityView.swift`) and the `AppModel` extension
+//! (`heightText`, `amountText`). Used by the Identity page and the Address page.
 
 use std::cell::{Cell, RefCell};
 use std::future::Future;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -16,7 +16,7 @@ use crate::model::{AppModel, Topic};
 use crate::page::{self, Page};
 use crate::theme::tone;
 use crate::widgets::icons::{self, Icon};
-use crate::widgets::{display, lamp, loader};
+use crate::widgets::{display, lamp, link, loader};
 
 /// A link to an identity, address, currency or transaction, with its name when the name
 /// is known and "Show Names for IDs" is on (`IDLink`). It is a stop of the page's cursor.
@@ -90,11 +90,11 @@ pub fn small_progress(text: &str) -> gtk::Box {
 
 /// Loads data for one section and shows progress or an error in the section, not over
 /// the whole page (`SectionLoader`). It loads again after a new connection and after
-/// Try Again.
+/// Try Again. The section keeps working while its widget lives, also when the page does
+/// not keep this value.
 pub struct SectionLoader {
     pub root: gtk::Box,
-    attempt: Cell<u64>,
-    reload: RefCell<Option<Rc<dyn Fn()>>>,
+    reload: Rc<dyn Fn()>,
 }
 
 impl SectionLoader {
@@ -108,108 +108,123 @@ impl SectionLoader {
     {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 8);
         root.set_hexpand(true);
-        let loader = Rc::new(Self { root, attempt: Cell::new(0), reload: RefCell::default() });
-        let (load, content) = (Rc::new(load), Rc::new(content));
-        let loading_text = loading_text.to_string();
-        let (weak, weak_model) = (Rc::downgrade(&loader), Rc::downgrade(model));
-        let reload: Rc<dyn Fn()> = Rc::new(move || {
-            let (Some(this), Some(model)) = (weak.upgrade(), weak_model.upgrade()) else { return };
-            let attempt = this.attempt.get() + 1;
-            this.attempt.set(attempt);
-            page::load::clear(&this.root);
-            this.root.append(&small_progress(&loading_text));
-            let explorer = match model.require_explorer() {
-                Ok(explorer) => explorer,
-                Err(message) => {
-                    this.show_failure(&message);
-                    return;
-                }
-            };
-            let (load, content) = (load.clone(), content.clone());
-            let generation = model.generation();
-            let (weak, weak_model) = (Rc::downgrade(&this), Rc::downgrade(&model));
-            glib::spawn_future_local(async move {
-                let result = bridge::run(load(explorer)).await;
-                let (Some(this), Some(model)) = (weak.upgrade(), weak_model.upgrade()) else { return };
-                if this.attempt.get() != attempt || model.generation() != generation {
-                    return;
-                }
-                page::load::clear(&this.root);
-                match result {
-                    Ok(value) => content(&this.root, value),
-                    Err(error) => this.show_failure(&bridge::describe(&error)),
-                }
-            });
+        let attempt = Rc::new(Cell::new(0u64));
+        let (load, content, loading_text) = (Rc::new(load), Rc::new(content), loading_text.to_string());
+        // The load holds itself weakly, for its Try Again key. The watcher of the
+        // connection, which lives with the widget, holds it strongly.
+        let this: Rc<RefCell<Weak<dyn Fn()>>> = Rc::new(RefCell::new(Weak::<fn()>::new()));
+        let reload: Rc<dyn Fn()> = Rc::new({
+            let (holder, model, this) = (root.downgrade(), Rc::downgrade(model), this.clone());
+            move || {
+                let (Some(holder), Some(model)) = (holder.upgrade(), model.upgrade()) else { return };
+                let again = this.borrow().upgrade();
+                let current = attempt.get() + 1;
+                attempt.set(current);
+                page::load::clear(&holder);
+                holder.append(&small_progress(&loading_text));
+                let explorer = match model.require_explorer() {
+                    Ok(explorer) => explorer,
+                    Err(message) => return show_failure(&holder, &message, again),
+                };
+                let (load, content, attempt) = (load.clone(), content.clone(), attempt.clone());
+                let generation = model.generation();
+                let (holder_weak, model_weak) = (holder.downgrade(), Rc::downgrade(&model));
+                glib::spawn_future_local(async move {
+                    let result = bridge::run(load(explorer)).await;
+                    let (Some(holder), Some(model)) = (holder_weak.upgrade(), model_weak.upgrade()) else { return };
+                    if attempt.get() != current || model.generation() != generation {
+                        return;
+                    }
+                    page::load::clear(&holder);
+                    match result {
+                        Ok(value) => content(&holder, value),
+                        Err(error) => show_failure(&holder, &bridge::describe(&error), again),
+                    }
+                });
+            }
         });
-        *loader.reload.borrow_mut() = Some(reload.clone());
+        *this.borrow_mut() = Rc::downgrade(&reload);
         let again = reload.clone();
-        model.watch(&[Topic::Connection], &loader.root, move |_| again());
+        model.watch(&[Topic::Connection], &root, move |_| again());
         reload();
-        loader
+        Rc::new(Self { root, reload })
     }
 
     pub fn reload(&self) {
-        let reload = self.reload.borrow().clone();
-        if let Some(reload) = reload {
-            reload();
+        (self.reload)();
+    }
+}
+
+/// The failure of a section: the message as a warning and Try Again.
+fn show_failure(holder: &gtk::Box, message: &str, again: Option<Rc<dyn Fn()>>) {
+    page::load::clear(holder);
+    holder.append(&page::note(message, true));
+    holder.append(&lamp::button("Try Again", move || {
+        if let Some(again) = &again {
+            again();
         }
-    }
+    }));
+}
 
-    fn show_failure(self: &Rc<Self>, message: &str) {
-        page::load::clear(&self.root);
-        self.root.append(&page::note(message, true));
-        let weak = Rc::downgrade(self);
-        self.root.append(&lamp::button("Try Again", move || {
-            if let Some(this) = weak.upgrade() {
-                this.reload();
+/// Balances by currency, the chain's own coin first (`BalanceList`). The names follow
+/// "Show Names for IDs" and arrive after the list.
+pub fn balance_list(model: &Rc<AppModel>, balances: &[api::AddressBalance]) -> gtk::Box {
+    let list = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let fill = {
+        let (list, balances, model) = (list.downgrade(), balances.to_vec(), Rc::downgrade(model));
+        move || {
+            let (Some(model), Some(list)) = (model.upgrade(), list.upgrade()) else { return };
+            page::load::clear(&list);
+            for balance in &balances {
+                let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+                let name = balance_label(&model, balance);
+                let route = Route::Currency {
+                    name: if balance.native { model.coin() } else { balance.currency_id.clone() },
+                };
+                let weak = Rc::downgrade(&model);
+                let key = link::link(&name, false, move || {
+                    if let Some(model) = weak.upgrade() {
+                        model.open(route.clone());
+                    }
+                });
+                key.set_tooltip_text(Some(&balance.currency_id));
+                if let Some(label) = link::label_of(&key) {
+                    label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                    label.set_single_line_mode(true);
+                }
+                // The name has a column of 170, and a long name is cut in it.
+                let cell = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+                cell.set_size_request(170, -1);
+                key.set_hexpand(false);
+                cell.append(&key);
+                row.append(&cell);
+                let amount = page::text(&format::coins(balance.amount_sats), &["tabular"]);
+                amount.set_valign(gtk::Align::Baseline);
+                row.append(&amount);
+                let ticker = page::text(&name, &["secondary"]);
+                ticker.set_valign(gtk::Align::Baseline);
+                row.append(&ticker);
+                list.append(&row);
             }
-        }));
-    }
+        }
+    };
+    fill();
+    model.watch(&[Topic::Names, Topic::Display], &list, move |_| fill());
+    list
 }
 
-// MARK: - The AppModel extension of IdentitySupport.swift
-
-/// A currency's display name: the chain's own coin, a resolved name without "@", or a
-/// shortened ID (`currencyName`).
-pub fn currency_name(model: &AppModel, id: &str) -> String {
-    let coin = model.coin();
-    let chain_id = model.state().status.as_ref().and_then(|s| s.chain_id.clone());
-    if chain_id.as_deref() == Some(id) || id == coin {
-        return coin;
+/// The name of a balance's currency: the chain's coin, the resolved name without "@", or
+/// the name that the source gave.
+fn balance_label(model: &AppModel, balance: &api::AddressBalance) -> String {
+    if balance.native {
+        return model.coin();
     }
-    if !crate::display::shows_names() {
-        return format::short(id, 8, 6);
-    }
-    match model.state().names.get(id) {
-        Some(name) => name.strip_suffix('@').unwrap_or(name).to_string(),
-        None => format::short(id, 8, 6),
-    }
-}
-
-/// An identity or currency ID as "Show Names for IDs" says: the name, or a shortened ID
-/// (`displayID`).
-pub fn display_id(model: &AppModel, id: &str) -> String {
     if crate::display::shows_names()
-        && let Some(name) = model.state().names.get(id)
+        && let Some(name) = model.state().names.get(&balance.currency_id)
     {
-        return name.clone();
+        return name.strip_suffix('@').unwrap_or(name).to_string();
     }
-    format::short(id, 8, 6)
-}
-
-/// A block height as "Show Dates for Heights" says (`heightText`). `time` is the block's
-/// time when it is known.
-pub fn height_text(model: &Rc<AppModel>, height: u64, time: Option<u64>) -> String {
-    if crate::display::shows_dates() {
-        crate::display::height_text(height, time, model)
-    } else {
-        format!("block {}", format::integer(height))
-    }
-}
-
-/// An amount in satoshis with its ticker (`amountText`).
-pub fn amount_text(model: &AppModel, sats: i64, currency: &str) -> String {
-    format!("{} {}", format::coins(sats), currency_name(model, currency))
+    balance.name.clone()
 }
 
 /// A height and the date of its block, as Carbide's `format_identity_height_time`: the date

@@ -25,7 +25,7 @@ use crate::widgets::{lamp, link};
 
 use super::flow_scene::{acts, choice, ease_in_out, Choice, Levels, Node, Scene, BAR, CORE};
 use super::layout::{RowStyle, Selection, StatementLayout, StatementRow};
-use super::words;
+use crate::shared::statement_words as words;
 use super::Ctx;
 
 const LEFT_WIDTH: i32 = 236;

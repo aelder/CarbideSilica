@@ -338,7 +338,7 @@ fn evidence_body(page: &Rc<Page>, name: &str, report: &IdentityEvidenceReport, a
         column.append(&page::note("The live refresh failed. These links come from stored evidence.", true));
     }
     if report.saved {
-        let mut text = format!("Stored with the version at {}", support::height_text(&model, report.version_height, None));
+        let mut text = format!("Stored with the version at {}", model.height_text(report.version_height, None));
         if let Some(block) = &report.block_hash {
             text.push_str(&format!(", anchored to block {}", format::short(block, 10, 8)));
         }
@@ -434,7 +434,7 @@ fn evidence_source(page: &Rc<Page>, source: &str) -> gtk::Box {
     let name = display::name_text("Source");
     name.set_valign(gtk::Align::Baseline);
     row.append(&name);
-    let display = |id: &str| support::display_id(&model, id);
+    let display = |id: &str| model.display_id(id);
     for piece in pieces(source, crate::display::shows_names(), &display) {
         match piece {
             Piece::Text(text) => {
@@ -613,8 +613,8 @@ impl HistoricalLookup {
         };
         let window = format!(
             "From {} to {}",
-            support::height_text(&self.model, result.from_height, None),
-            support::height_text(&self.model, result.to_height, None)
+            self.model.height_text(result.from_height, None),
+            self.model.height_text(result.to_height, None)
         );
         self.result.append(&page::paragraph(&summary(result.found, &window), &[]));
         if result.index_missing {

@@ -33,7 +33,8 @@ use crate::widgets::display::{self, Readout};
 use super::feed::{self, Sighting};
 use super::logic::BLOCK_LIMIT;
 use super::text::{clock, count, fill_percent, span};
-use super::words::{self, Names};
+use super::words;
+use crate::shared::statement_words::Namer;
 
 pub const SPAN: f64 = 15.0 * 60.0;
 pub const GUTTER: f32 = 92.0;
@@ -607,7 +608,7 @@ fn caption(target: &Target, state: &State, model: &Rc<AppModel>) -> String {
     let coin = model.coin();
     match target {
         Target::Transaction(txid) => {
-            let names = Names::of(model);
+            let names = Namer::from_model(model);
             feed::with(|feed| {
                 let mut parts: Vec<String> = Vec::new();
                 if let Some(sentence) = words::sentence(feed.details.get(txid), &names)

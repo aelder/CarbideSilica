@@ -17,7 +17,7 @@ use crate::widgets::canvas::Canvas;
 use crate::widgets::display;
 
 use super::extras::arrow;
-use super::words::{self, Namer};
+use crate::shared::statement_words::{self as words, Namer};
 
 /// The stages of one block. A stage with no known block is a mark of its own.
 #[derive(Clone, Debug, PartialEq)]

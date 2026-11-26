@@ -2,21 +2,17 @@
 //! transparent address, its balances, the identities that use it as a primary address, and
 //! its transactions as tiles of inputs and outputs.
 
-mod activity;
 
-use std::cell::{Cell, RefCell};
-use std::future::Future;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 
-use gtk::glib;
 use gtk::prelude::*;
 
-use crate::bridge::{self, api, api::Route, Explorer};
+use crate::bridge::{api, api::Route};
 use crate::format;
-use crate::model::{AppModel, Topic};
+use crate::model::AppModel;
 use crate::page::{self, LoadView, Page};
-use crate::shared::{identity_support, json_tree};
-use crate::widgets::{lamp, link, loader};
+use crate::shared::{address_activity, identity_support, json_tree};
+use crate::widgets::link;
 
 /// The page. Its signature is fixed by `pages/mod.rs`.
 pub fn build(model: &Rc<AppModel>, address: &str) -> Rc<Page> {
@@ -69,7 +65,7 @@ fn show(page: &Rc<Page>, holder: &gtk::Box, overview: api::AddressOverview, relo
     } else if overview.balances.is_empty() {
         balances.append(&page::text("No balances.", &["secondary"]));
     } else {
-        balances.append(&balance_list(&model, &overview.balances));
+        balances.append(&identity_support::balance_list(&model, &overview.balances));
     }
     column.append(&balances.root);
 
@@ -87,7 +83,7 @@ fn show(page: &Rc<Page>, holder: &gtk::Box, overview: api::AddressOverview, relo
     column.append(&primary_address_card(page, &overview.address).root);
 
     let transactions = page.card("Transactions", None);
-    transactions.append(&activity::ActivityList::new(page, &overview.address, Some(reload)));
+    transactions.append(&address_activity::ActivityList::new(page, &overview.address, Some(reload)));
     column.append(&transactions.root);
 
     column.append(&json_tree::json_section(page, &overview.json, &format!("address-{}.json", overview.address)));
@@ -95,67 +91,12 @@ fn show(page: &Rc<Page>, holder: &gtk::Box, overview: api::AddressOverview, relo
     model.resolve_names(overview.balances.iter().map(|b| b.currency_id.clone()));
 }
 
-/// Balances by currency, the chain's own coin first (`BalanceList`). The names follow the
-/// setting and arrive after the page.
-fn balance_list(model: &Rc<AppModel>, balances: &[api::AddressBalance]) -> gtk::Box {
-    let list = gtk::Box::new(gtk::Orientation::Vertical, 4);
-    let fill = {
-        let (list, balances, model) = (list.clone(), balances.to_vec(), Rc::downgrade(model));
-        move || {
-            let Some(model) = model.upgrade() else { return };
-            page::load::clear(&list);
-            for balance in &balances {
-                let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-                let name = balance_label(&model, balance);
-                let route = Route::Currency {
-                    name: if balance.native { model.coin() } else { balance.currency_id.clone() },
-                };
-                let weak = Rc::downgrade(&model);
-                let key = link::link(&name, false, move || {
-                    if let Some(model) = weak.upgrade() {
-                        model.open(route.clone());
-                    }
-                });
-                key.set_tooltip_text(Some(&balance.currency_id));
-                key.set_size_request(170, -1);
-                if let Some(label) = link::label_of(&key) {
-                    label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                    label.set_max_width_chars(20);
-                }
-                row.append(&key);
-                let amount = page::text(&format::coins(balance.amount_sats), &["tabular"]);
-                amount.set_valign(gtk::Align::Baseline);
-                row.append(&amount);
-                let ticker = page::text(&name, &["secondary"]);
-                ticker.set_valign(gtk::Align::Baseline);
-                row.append(&ticker);
-                list.append(&row);
-            }
-        }
-    };
-    fill();
-    model.watch(&[Topic::Names, Topic::Display], &list, move |_| fill());
-    list
-}
-
-fn balance_label(model: &AppModel, balance: &api::AddressBalance) -> String {
-    if balance.native {
-        return model.coin();
-    }
-    if crate::display::shows_names()
-        && let Some(name) = model.state().names.get(&balance.currency_id)
-    {
-        return name.strip_suffix('@').unwrap_or(name).to_string();
-    }
-    balance.name.clone()
-}
-
 /// The identities that have this address as a primary address now. The request needs the
 /// identity index.
 fn primary_address_card(page: &Rc<Page>, address: &str) -> page::Card {
     let card = page.card("Primary address for", None);
     let address = address.to_string();
-    let loader = section_loader(
+    let loader = identity_support::SectionLoader::new(
         &page.model,
         "Requesting identities…",
         move |explorer| {
@@ -202,73 +143,6 @@ fn primary_address_card(page: &Rc<Page>, address: &str) -> page::Card {
             }
         },
     );
-    card.append(&loader);
+    card.append(&loader.root);
     card
-}
-
-/// Loads data for one section and shows progress or an error in the section, not over the
-/// whole page (`SectionLoader` in `IdentitySupport.swift`). It loads again on a new
-/// connection and on Try Again.
-fn section_loader<T, Work, Fut, Show>(model: &Rc<AppModel>, loading_text: &str, work: Work, show: Show) -> gtk::Box
-where
-    T: Send + 'static,
-    Work: Fn(Explorer) -> Fut + 'static,
-    Fut: Future<Output = Result<T, api::CarbideError>> + Send + 'static,
-    Show: Fn(&gtk::Box, T) + 'static,
-{
-    let holder = gtk::Box::new(gtk::Orientation::Vertical, 8);
-    holder.set_hexpand(true);
-    let attempt = Rc::new(Cell::new(0u64));
-    let (work, show, loading_text) = (Rc::new(work), Rc::new(show), loading_text.to_string());
-    // The load holds itself weakly, for its Try Again key. The watcher below holds it
-    // while the section exists.
-    let this: Rc<RefCell<Weak<dyn Fn()>>> = Rc::new(RefCell::new(Weak::<fn()>::new()));
-    let load: Rc<dyn Fn()> = Rc::new({
-        let (holder, model, this) = (holder.downgrade(), Rc::downgrade(model), this.clone());
-        move || {
-            let (Some(holder), Some(model)) = (holder.upgrade(), model.upgrade()) else { return };
-            let again = this.borrow().upgrade();
-            let current = attempt.get() + 1;
-            attempt.set(current);
-            page::load::clear(&holder);
-            let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-            row.append(&loader::small());
-            row.append(&page::text(&loading_text, &["secondary"]));
-            holder.append(&row);
-            let explorer = match model.require_explorer() {
-                Ok(explorer) => explorer,
-                Err(message) => return failed(&holder, &message, again),
-            };
-            let (work, show, attempt) = (work.clone(), show.clone(), attempt.clone());
-            let generation = model.generation();
-            let (holder_weak, model_weak) = (holder.downgrade(), Rc::downgrade(&model));
-            glib::spawn_future_local(async move {
-                let result = bridge::run(work(explorer)).await;
-                let (Some(holder), Some(model)) = (holder_weak.upgrade(), model_weak.upgrade()) else { return };
-                if attempt.get() != current || model.generation() != generation {
-                    return;
-                }
-                page::load::clear(&holder);
-                match result {
-                    Ok(value) => show(&holder, value),
-                    Err(error) => failed(&holder, &bridge::describe(&error), again),
-                }
-            });
-        }
-    });
-    *this.borrow_mut() = Rc::downgrade(&load);
-    let again = load.clone();
-    model.watch(&[Topic::Connection], &holder, move |_| again());
-    load();
-    holder
-}
-
-fn failed(holder: &gtk::Box, message: &str, again: Option<Rc<dyn Fn()>>) {
-    page::load::clear(holder);
-    holder.append(&page::note(message, true));
-    holder.append(&lamp::button("Try Again", move || {
-        if let Some(again) = &again {
-            again();
-        }
-    }));
 }
