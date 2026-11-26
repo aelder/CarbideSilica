@@ -140,14 +140,15 @@ headerbar windowcontrols button { padding: 2px; }
 .lamp.recent { color: @label; }
 .lamp.recent.chosen, .lamp.recent:hover, .lamp.recent.pressed { color: @legend; }
 
-/* The small key of a page: LampButtonStyle, LampSegments, LampToggle, LampMenu. */
-.lamp.small { padding: 5px 10px; }
-.lamp.segment { padding: 5px 12px; }
+/* The small key of a page: LampButtonStyle, LampSegments, LampToggle, LampMenu. SwiftUI
+   draws the frame inside the padding of 5 and CSS outside it, so the padding is 4. */
+.lamp.small { padding: 4px 10px; }
+.lamp.segment { padding: 4px 12px; }
 .lamp.small:hover, .lamp.segment:hover { box-shadow: 0 0 3px alpha(@blue_edge, 0.3), 0 0 4px alpha(@halation, 0.25), 0 0 9px alpha(@halation, 0.22); }
 .lamp.small.pressed, .lamp.small.chosen, .lamp.segment.chosen { box-shadow: 0 0 4px alpha(@halation, 0.7), 0 0 9px alpha(@halation, 0.22); }
 .lamp.struck { color: @alert; border-color: alpha(@alert, 0.8); }
 .lamp.struck.chosen { color: @legend; }
-.lamp.menu-key { padding: 5px 10px; }
+.lamp.menu-key { padding: 4px 10px; }
 
 /* A link: pale blue text with no underline. Under the pointer it gets light and a line
    below it. */

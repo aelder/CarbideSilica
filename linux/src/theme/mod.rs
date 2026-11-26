@@ -247,6 +247,11 @@ pub fn pango_spacing(pixels: f64) -> i64 {
 /// approximately 2%, and the capitals are approximately 3% lower.
 pub const DISPLAY_SCALE: f64 = 1.05;
 
+/// The line height of Jost against its own size, to give a Jost line the height of a
+/// Futura line: Futura's line is 1.328 of its size (ascent, descent and gap), Jost's 1.445.
+/// Without it each line of a name or a key is 9% taller than on macOS.
+pub const DISPLAY_LINE_HEIGHT: f64 = 0.92;
+
 /// The size in pixels at which a role is drawn: its Swift size, times [`DISPLAY_SCALE`] for
 /// the Jost roles.
 pub fn drawn_size(role: font::Role) -> f64 {
@@ -257,13 +262,15 @@ pub fn drawn_size(role: font::Role) -> f64 {
 pub fn markup(role: font::Role, text: &str) -> String {
     let text = if role.uppercase { text.to_uppercase() } else { text.to_string() };
     let features = if role.tabular { " font_features=\"tnum\"" } else { "" };
+    let line = if role.family == font::DISPLAY { format!(" line_height=\"{DISPLAY_LINE_HEIGHT}\"") } else { String::new() };
     format!(
-        "<span font_family=\"{}\" font_size=\"{}\" font_weight=\"{}\" letter_spacing=\"{}\"{}>{}</span>",
+        "<span font_family=\"{}\" font_size=\"{}\" font_weight=\"{}\" letter_spacing=\"{}\"{}{}>{}</span>",
         role.family,
         pango_points(drawn_size(role)),
         role.weight,
         pango_spacing(role.tracking),
         features,
+        line,
         gtk::glib::markup_escape_text(&text)
     )
 }
@@ -300,6 +307,9 @@ pub fn role_attributes(role: font::Role) -> gtk::pango::AttrList {
     }
     if role.tabular {
         attributes.insert(pango::AttrFontFeatures::new("tnum"));
+    }
+    if role.family == font::DISPLAY {
+        attributes.insert(pango::AttrFloat::new_line_height(DISPLAY_LINE_HEIGHT));
     }
     attributes
 }
