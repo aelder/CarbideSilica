@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgtk-4-dev libasound2-dev libfontconfig-dev \
         xvfb xauth imagemagick x11-utils xdotool \
         fontconfig dbus-x11 \
+        fonts-noto-color-emoji fonts-noto-cjk fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
 
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH

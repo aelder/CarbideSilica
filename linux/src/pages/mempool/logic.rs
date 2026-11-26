@@ -408,9 +408,9 @@ mod tests {
         };
         assert_eq!(
             facts(&e, 190.0, "VRSC", Some(&detail), Some(100), &waiting),
-            "Waited 90 s · fee 0.00012345 VRSC · 1000 bytes · expires in 20 blocks · spends from 1 transaction that also waits"
+            "Waited 90 s · fee 0.00012345 VRSC · 1,000 bytes · expires in 20 blocks · spends from 1 transaction that also waits"
         );
-        assert_eq!(facts(&e, 190.0, "VRSC", Some(&detail), Some(120), &HashSet::new()), "Waited 90 s · fee 0.00012345 VRSC · 1000 bytes · at its expiry height");
+        assert_eq!(facts(&e, 190.0, "VRSC", Some(&detail), Some(120), &HashSet::new()), "Waited 90 s · fee 0.00012345 VRSC · 1,000 bytes · at its expiry height");
     }
 
     #[test]

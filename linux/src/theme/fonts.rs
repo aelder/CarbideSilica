@@ -6,7 +6,10 @@
 //! - IBM Plex Mono (SIL OFL 1.1) for IDs and hashes, in place of the macOS monospaced face.
 //!
 //! The fonts are given to fontconfig as application fonts before GTK starts. They are not
-//! installed on the system.
+//! installed on the system. They are added to the configuration that fontconfig loaded, so
+//! the fonts of the system stay in it: Pango takes a glyph that Jost, Inter and Plex Mono do
+//! not have (an emoji, a Chinese or Arabic letter) from a system font, such as Noto Color
+//! Emoji and Noto Sans CJK.
 
 use std::ffi::CString;
 use std::path::PathBuf;

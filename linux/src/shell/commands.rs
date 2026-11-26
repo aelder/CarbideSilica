@@ -247,7 +247,7 @@ pub fn install(app: &gtk::Application, shell: &Rc<Shell>) -> gio::Menu {
     };
     let owner = shell.window.clone();
     update(&shell.model);
-    shell.model.watch(&[Topic::Path, Topic::Display, Topic::Status], &owner, update);
+    shell.model.watch(&[Topic::Path, Topic::Display, Topic::Status, Topic::Node], &owner, update);
 
     menus()
 }

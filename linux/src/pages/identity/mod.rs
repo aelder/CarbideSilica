@@ -28,7 +28,7 @@ use crate::model::{AppModel, Topic};
 use crate::page::{self, load::clear, Adjacent, Card, Investigations, LoadView, Page};
 use crate::shared::address_activity;
 use crate::shared::identity_support::{self as support, height_and_time, small_progress, SectionLoader};
-use crate::shared::json_tree::json_section;
+use crate::shared::json_tree::json_section_keeping;
 use crate::theme::{self, font, tone, Color};
 use crate::widgets::display::{self, PlateFill};
 use crate::widgets::icons::{self, Icon};
@@ -154,6 +154,8 @@ struct IdentityView {
     payments: RefCell<Option<Rc<RegistrationPaymentsCard>>>,
     history: gtk::Box,
     json: gtk::Box,
+    /// Whether the raw JSON is open. It stays open when another version shows.
+    json_open: Rc<Cell<bool>>,
 }
 
 fn slot() -> gtk::Box {
@@ -190,6 +192,7 @@ impl IdentityView {
             payments: RefCell::new(None),
             history: slot(),
             json: slot(),
+            json_open: Rc::new(Cell::new(false)),
         });
         let column = gtk::Box::new(gtk::Orientation::Vertical, 20);
         holder.append(&column);
@@ -300,7 +303,17 @@ impl IdentityView {
         }
         let changed = index != self.viewed.get();
         self.viewed.set(index);
-        self.render_version(changed);
+        self.render_kept(changed);
+    }
+
+    /// Builds the parts of the viewed version again and keeps the keyboard cursor on the
+    /// same link or row.
+    fn render_kept(self: &Rc<Self>, version_changed: bool) {
+        let Some(page) = self.page.upgrade() else { return };
+        page.cursor.keeping_selection(|| {
+            self.render_version(version_changed);
+            self.render_balances();
+        });
     }
 
     // MARK: Watching and loading
@@ -335,8 +348,7 @@ impl IdentityView {
         glib::idle_add_local_once(move || {
             if let Some(view) = weak.upgrade() {
                 view.pending.set(false);
-                view.render_version(false);
-                view.render_balances();
+                view.render_kept(false);
             }
         });
     }
@@ -474,10 +486,11 @@ impl IdentityView {
         self.render_history();
         if version_changed {
             clear(&self.json);
-            self.json.append(&json_section(
+            self.json.append(&json_section_keeping(
                 &page,
                 &self.state().json,
                 &format!("id-{}.json", self.timeline.identity_address),
+                self.json_open.clone(),
             ));
         }
         // Previous and next version: n and p, Ctrl+Alt+[ and ], and the Go menu.

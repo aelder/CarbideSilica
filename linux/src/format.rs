@@ -111,11 +111,17 @@ pub fn age(unix: u64, now: f64) -> String {
     }
 }
 
-/// A byte count in binary units, as `ByteCountFormatter` with `.binary`.
+/// A byte count in binary units, as `ByteCountFormatter.string(fromByteCount:countStyle:
+/// .binary)` writes it in English: "Zero KB", "1 byte", "1,023 bytes", then KB with no
+/// decimals, MB with one and GB and larger with two, without trailing zeros. Halves round
+/// up, and a value that rounds to 1,024 of a unit is one of the next unit.
 pub fn bytes(count: u64) -> String {
-    const UNITS: [&str; 5] = ["KB", "MB", "GB", "TB", "PB"];
-    if count < 1024 {
-        return format!("{count} bytes");
+    const UNITS: [&str; 6] = ["KB", "MB", "GB", "TB", "PB", "EB"];
+    match count {
+        0 => return "Zero KB".into(),
+        1 => return "1 byte".into(),
+        2..=1023 => return format!("{} bytes", integer(count)),
+        _ => {}
     }
     let mut value = count as f64 / 1024.0;
     let mut unit = 0;
@@ -123,12 +129,22 @@ pub fn bytes(count: u64) -> String {
         value /= 1024.0;
         unit += 1;
     }
-    let places = match unit {
+    let places = |unit: usize| match unit {
         0 => 0,
         1 => 1,
         _ => 2,
     };
-    format!("{} {}", decimal(value, places), UNITS[unit])
+    let round = |value: f64, places: usize| {
+        let scale = 10f64.powi(places as i32);
+        // A little more than a half of the last place goes up, as the formatter does.
+        (value * scale + 0.5 + 1e-9).floor() / scale
+    };
+    let mut rounded = round(value, places(unit));
+    if rounded >= 1024.0 && unit < UNITS.len() - 1 {
+        unit += 1;
+        rounded = round(value / 1024.0, places(unit));
+    }
+    format!("{} {}", decimal(rounded, places(unit)), UNITS[unit])
 }
 
 /// A long hash or address shortened in the middle.
@@ -166,6 +182,36 @@ pub fn percent1(value: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bytes_as_the_byte_count_formatter() {
+        // Each pair is what ByteCountFormatter (binary) printed on macOS for the count.
+        let printed = [
+            (0, "Zero KB"),
+            (1, "1 byte"),
+            (2, "2 bytes"),
+            (539, "539 bytes"),
+            (1_000, "1,000 bytes"),
+            (1_023, "1,023 bytes"),
+            (1_024, "1 KB"),
+            (1_536, "2 KB"),
+            (2_047, "2 KB"),
+            (2_560, "3 KB"),
+            (3_584, "4 KB"),
+            (1_048_575, "1 MB"),
+            (1_100_000, "1 MB"),
+            (1_572_864, "1.5 MB"),
+            (1_625_292, "1.5 MB"),
+            (1_073_741_824, "1 GB"),
+            (1_288_490_188, "1.2 GB"),
+            (1_342_177_280, "1.25 GB"),
+            (5_000_000_000_000, "4.55 TB"),
+            (1_125_899_906_842_624, "1 PB"),
+        ];
+        for (count, text) in printed {
+            assert_eq!(bytes(count), text, "{count}");
+        }
+    }
 
     #[test]
     fn groups_and_coins() {

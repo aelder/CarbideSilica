@@ -5,7 +5,7 @@
 //! the terminal app also reads.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -69,6 +69,11 @@ fn state_meaning(row: &api::SourceRow) -> &'static str {
     }
 }
 
+/// The age of a source's last answer in this session, or "None".
+fn age_text(row: &api::SourceRow) -> String {
+    row.last_success_age.map(|a| format!("{} ago", short_age(a))).unwrap_or_else(|| "None".into())
+}
+
 fn traffic_word(traffic: api::SourceTraffic) -> &'static str {
     match traffic {
         api::SourceTraffic::Off => "Off",
@@ -116,8 +121,15 @@ struct Sources {
     model: std::rc::Weak<AppModel>,
     page: std::rc::Weak<Page>,
     overview: RefCell<Option<api::SourcesOverview>>,
-    /// The overview as drawn, to draw again only when it changed.
+    /// The overview as drawn, without the traffic and the ages, to draw again only when
+    /// it changed.
     signature: RefCell<String>,
+    /// The cells of each row that change while the page shows: the traffic and the age of
+    /// the last answer, with the traffic that the cell shows. They change in place, so
+    /// the pointer's light on a row and the keys stays.
+    cells: RefCell<HashMap<String, (gtk::Box, gtk::Label, String)>>,
+    /// The chain check of the row whose detail shows, by the row's key.
+    chain_check: RefCell<Option<(String, gtk::Label)>>,
     selected_key: RefCell<Option<String>>,
     message: RefCell<Option<String>>,
     holder: gtk::Box,
@@ -135,6 +147,8 @@ pub fn build(model: &Rc<AppModel>) -> Rc<Page> {
         page: Rc::downgrade(&page),
         overview: RefCell::default(),
         signature: RefCell::default(),
+        cells: RefCell::default(),
+        chain_check: RefCell::default(),
         selected_key: RefCell::default(),
         message: RefCell::default(),
         holder,
@@ -187,14 +201,45 @@ impl Sources {
         let fresh = explorer.sources_overview();
         // A PBaaS chain's folder is its hex ID. Learn its name from its identity.
         let unnamed: Vec<String> = fresh.rows.iter().filter(|r| r.name.is_none()).map(|r| r.system_id.clone()).collect();
-        let signature = format!("{fresh:?}");
+        let mut skeleton = fresh.clone();
+        for row in &mut skeleton.rows {
+            row.traffic = api::SourceTraffic::Off;
+            row.last_success_age = None;
+            // The chain check says how long ago it ran. Its text changes in place.
+            row.chain_check = row.chain_check.as_ref().map(|_| String::new());
+        }
+        let signature = format!("{skeleton:?}");
         *self.overview.borrow_mut() = Some(fresh);
         if force || *self.signature.borrow() != signature {
             *self.signature.borrow_mut() = signature;
             self.draw();
+        } else {
+            self.update_cells();
         }
         if !unnamed.is_empty() {
             model.resolve_names(unnamed);
+        }
+    }
+
+    /// Shows the traffic and the age of each row in the cells that are there.
+    fn update_cells(&self) {
+        let overview = self.overview.borrow();
+        let Some(overview) = overview.as_ref() else { return };
+        let mut cells = self.cells.borrow_mut();
+        for row in &overview.rows {
+            let Some((holder, age, shown)) = cells.get_mut(&row.key) else { continue };
+            let traffic = format!("{:?}", row.traffic);
+            if *shown != traffic {
+                clear(holder);
+                holder.append(&traffic_mark(row.traffic));
+                *shown = traffic;
+            }
+            age.set_text(&age_text(row));
+        }
+        if let Some((key, label)) = self.chain_check.borrow().as_ref()
+            && let Some(check) = overview.rows.iter().find(|r| &r.key == key).and_then(|r| r.chain_check.as_ref())
+        {
+            label.set_text(check);
         }
     }
 
@@ -206,6 +251,8 @@ impl Sources {
     fn draw(self: &Rc<Self>) {
         let (Some(page), Some(model)) = (self.page.upgrade(), self.model.upgrade()) else { return };
         clear(&self.holder);
+        self.cells.borrow_mut().clear();
+        self.chain_check.replace(None);
         let overview = self.overview.borrow().clone();
         let Some(overview) = overview else {
             let card = page.card("Nodes and APIs", None);
@@ -315,12 +362,14 @@ impl Sources {
             endpoint.set_size_request(-1, -1);
             grid.attach(&endpoint, 2, y, 1, 1);
             grid.attach(&self.state_picker(row), 3, y, 1, 1);
-            let traffic = traffic_mark(row.traffic);
+            let traffic = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+            traffic.append(&traffic_mark(row.traffic));
             grid.attach(&traffic, 4, y, 1, 1);
-            let age = page::text(&row.last_success_age.map(|a| format!("{} ago", short_age(a))).unwrap_or_else(|| "None".into()), &["tabular", "secondary"]);
+            let age = page::text(&age_text(row), &["tabular", "secondary"]);
             age.set_xalign(1.0);
             age.set_halign(gtk::Align::End);
             grid.attach(&age, 5, y, 1, 1);
+            self.cells.borrow_mut().insert(row.key.clone(), (traffic.clone(), age.clone(), format!("{:?}", row.traffic)));
             for cell in [name_cell.upcast_ref::<gtk::Widget>(), kind.upcast_ref(), endpoint.upcast_ref(), traffic.upcast_ref(), age.upcast_ref()] {
                 cell.set_valign(gtk::Align::Center);
             }
@@ -453,7 +502,11 @@ impl Sources {
         };
         card.append(&line("State", page::paragraph(state_meaning(row), &[]).upcast_ref()));
         if let Some(check) = &row.chain_check {
-            card.append(&line("Chain check", page::note(check, row.chain_check_problem).upcast_ref()));
+            let note = page::note(check, row.chain_check_problem);
+            if let Some(label) = note.last_child().and_downcast::<gtk::Label>() {
+                self.chain_check.replace(Some((row.key.clone(), label)));
+            }
+            card.append(&line("Chain check", note.upcast_ref()));
         }
         if row.kind == api::SourceKind::LocalNode && !row.has_credentials {
             card.append(&page::note("The configuration file has no RPC user and password. The app cannot use this node.", true));

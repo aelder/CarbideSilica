@@ -166,6 +166,47 @@ impl PageCursor {
         placed
     }
 
+    /// Runs `rebuild`, which builds a part of the page again, and keeps the selection: a
+    /// stop with a generated ID is found again in the new part by its card, its copy value
+    /// and its place among the stops of that card with the same value. SwiftUI keeps a view
+    /// that is built again, and with it the cursor; this does the same for GTK widgets.
+    pub fn keeping_selection(&self, rebuild: impl FnOnce()) {
+        let mark = self.remember();
+        rebuild();
+        self.restore(mark);
+    }
+
+    /// The card, the copy value and the place of the selected stop.
+    fn remember(&self) -> Option<(String, String, Option<String>, usize)> {
+        let selection = self.selection.borrow().clone()?;
+        let stops = self.stops.borrow();
+        let stop = stops.iter().find(|s| s.id == selection)?;
+        let group = self.group_of(&stop.widget.upgrade()?);
+        let ordinal = stops
+            .iter()
+            .filter(|s| s.copy == stop.copy && s.widget.upgrade().is_some_and(|w| self.group_of(&w) == group))
+            .position(|s| s.id == selection)?;
+        Some((selection, group, stop.copy.clone(), ordinal))
+    }
+
+    fn restore(&self, mark: Option<(String, String, Option<String>, usize)>) {
+        let Some((id, group, copy, ordinal)) = mark else { return };
+        let found = {
+            let stops = self.stops.borrow();
+            if stops.iter().any(|s| s.id == id && s.widget.upgrade().is_some_and(|w| w.parent().is_some())) {
+                return;
+            }
+            let same: Vec<&Stop> = stops
+                .iter()
+                .filter(|s| s.copy == copy && s.widget.upgrade().is_some_and(|w| w.parent().is_some() && self.group_of(&w) == group))
+                .collect();
+            same.get(ordinal).or_else(|| same.last()).map(|s| s.id.clone())
+        };
+        if let Some(found) = found {
+            self.select(Some(&found), false);
+        }
+    }
+
     /// Selects a stop by its ID. With `scroll`, the page scrolls to show it.
     pub fn select(&self, id: Option<&str>, scroll: bool) {
         let previous = self.selection.replace(id.map(str::to_string));

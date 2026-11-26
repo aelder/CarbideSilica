@@ -432,6 +432,13 @@ const HINT_HIDE: &str = "Hide";
 
 /// The "Raw JSON" card. `filename` is the file name that Save offers, with the object in it.
 pub fn json_section(page: &Rc<Page>, json: &str, filename: &str) -> gtk::Box {
+    json_section_keeping(page, json, filename, Rc::new(Cell::new(false)))
+}
+
+/// The "Raw JSON" card of a page that builds it again with another document, such as the
+/// Identity page for another version. `open` says whether it opens at once, and the card
+/// keeps it up to date, as the Swift section keeps its state while the page shows it.
+pub fn json_section_keeping(page: &Rc<Page>, json: &str, filename: &str, open: Rc<Cell<bool>>) -> gtk::Box {
     let card = page.card("Raw JSON", None);
     // The label of the disclosure is in the style of the disclosure: small capitals, here
     // in the secondary colour, with the copy key at the right.
@@ -454,10 +461,20 @@ pub fn json_section(page: &Rc<Page>, json: &str, filename: &str) -> gtk::Box {
             holder.set_visible(open);
         })
     };
-    let disclosure = Disclosure::new("", false, {
+    let set_open: Rc<dyn Fn(bool)> = {
+        let (set_open, state) = (set_open.clone(), open.clone());
+        Rc::new(move |now: bool| {
+            state.set(now);
+            set_open(now);
+        })
+    };
+    let disclosure = Disclosure::new("", open.get(), {
         let set_open = set_open.clone();
         move |open| set_open(open)
     });
+    if open.get() {
+        set_open(true);
+    }
     disclosure.header.append(&hint);
     let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
