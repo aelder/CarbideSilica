@@ -11,6 +11,7 @@ use gtk::prelude::*;
 
 use crate::bridge::{self, api, api::Confidence, api::Route};
 use crate::format;
+use crate::shared::json_tree::json_tree;
 use crate::page::{self, load::clear, Card, Page};
 use crate::shared::confidence::confidence_mark;
 use crate::theme::{self, draw, font, tone, Color};
@@ -377,9 +378,20 @@ impl WitnessCard {
                 "These groups are not a quorum count. The investigation covers reachable evidence. It does not find every witness broadcast, and it does not verify signatures, proofs, quorum membership or consensus.",
                 &["caption-text", "secondary"],
             ));
-            let disclosure = lamp::Disclosure::new("Decoded report", false, |_| {});
+            // The tree is made the first time the part opens, as SwiftUI makes the contents
+            // of a DisclosureGroup.
+            let content: Rc<RefCell<Option<gtk::Box>>> = Rc::default();
+            let (holder, json, ctx) = (content.clone(), report.json.clone(), self.ctx.clone());
+            let disclosure = lamp::Disclosure::new("Decoded report", false, move |open| {
+                let Some(content) = holder.borrow().clone() else { return };
+                if open && content.first_child().is_none()
+                    && let Some(page) = ctx.upgrade().and_then(|c| c.page())
+                {
+                    content.append(&json_tree(&page, &json, "carbide.json"));
+                }
+            });
             disclosure.content.set_margin_top(6);
-            disclosure.content.append(&json_text(&report.json));
+            *content.borrow_mut() = Some(disclosure.content.clone());
             self.content.append(&disclosure.root);
             // The disclosure lives as long as the card shows it.
             *self.disclosure.borrow_mut() = Some(disclosure);
@@ -402,22 +414,6 @@ impl WitnessCard {
             self.content.append(&row);
         }
     }
-}
-
-/// JSON as monospaced text, on the black of the display.
-pub fn json_text(json: &str) -> gtk::Box {
-    let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    frame.add_css_class("tx-json");
-    let pretty = serde_json::from_str::<serde_json::Value>(json)
-        .ok()
-        .and_then(|v| serde_json::to_string_pretty(&v).ok())
-        .unwrap_or_else(|| json.to_string());
-    let text = page::text(&pretty, &["mono"]);
-    text.set_selectable(true);
-    text.set_wrap(true);
-    text.set_wrap_mode(gtk::pango::WrapMode::Char);
-    frame.append(&text);
-    frame
 }
 
 /// One identity's signatures over one target, with the key signatures and the outputs that

@@ -11,6 +11,7 @@ use gtk::prelude::*;
 use crate::bridge::api::{self, Route};
 use crate::format;
 use crate::model::{AppModel, Topic};
+use crate::shared::json_tree::json_tree;
 use crate::page::{self, load::clear, Page};
 use crate::route as routes;
 use crate::theme::{draw, tone};
@@ -474,11 +475,12 @@ fn output_row(page: &Page, ctx: &Rc<Ctx>, output: &api::TransactionOutput) -> gt
         key.set_tooltip_text(Some("Show the JSON of this output"));
         key.update_property(&[gtk::accessible::Property::Label(&format!("Show JSON for output {}", output.index))]);
         lamp::key_sounds(&key, false);
-        let (json, holder) = (output.json.clone(), json_holder.downgrade());
+        let (json, holder, ctx) = (output.json.clone(), json_holder.downgrade(), Rc::downgrade(ctx));
         key.connect_clicked(move |_| {
             let Some(holder) = holder.upgrade() else { return };
             if holder.first_child().is_none() {
-                holder.append(&json_view(&json));
+                let Some(page) = ctx.upgrade().and_then(|c| c.page()) else { return };
+                holder.append(&json_view(&page, &json));
             }
             holder.set_visible(!holder.is_visible());
         });
@@ -488,19 +490,11 @@ fn output_row(page: &Page, ctx: &Rc<Ctx>, output: &api::TransactionOutput) -> gt
     outer
 }
 
-/// The JSON of one output, on the black of the display in a thin frame.
-fn json_view(json: &str) -> gtk::Box {
+/// The JSON of one output as a tree, on the black of the display in a thin frame.
+fn json_view(page: &Rc<Page>, json: &str) -> gtk::Box {
     let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
     frame.add_css_class("tx-json");
-    let pretty = serde_json::from_str::<serde_json::Value>(json)
-        .ok()
-        .and_then(|v| serde_json::to_string_pretty(&v).ok())
-        .unwrap_or_else(|| json.to_string());
-    let text = page::text(&pretty, &["mono"]);
-    text.set_selectable(true);
-    text.set_wrap(true);
-    text.set_wrap_mode(gtk::pango::WrapMode::Char);
-    frame.append(&text);
+    frame.append(&json_tree(page, json, "carbide.json"));
     frame
 }
 

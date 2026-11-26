@@ -90,6 +90,8 @@ fn handle(shell: &Rc<Shell>, keyval: Key, modifiers: ModifierType) -> bool {
     // Keys with no character.
     match keyval {
         Key::Escape => return shell.navigator.go_back(),
+        // A part that takes the arrow keys keeps Left, as it keeps Right.
+        Key::Left if suspended => return false,
         Key::BackSpace | Key::Left => {
             if model.state().path.is_empty() {
                 return false;

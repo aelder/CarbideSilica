@@ -20,20 +20,22 @@ export DISPLAY=":$display"
 sleep 1
 set -- "-conf=/conf/VRSC.conf"
 [ -n "$object" ] && set -- "$@" "-open=$object"
-"$binary" "$@" >/tmp/app.log 2>&1 &
+# The app runs in its home folder, so a file dialog does not open in the source tree and a
+# file saved during a run is gone with the container.
+(cd "$HOME" && exec "$binary" "$@") >/tmp/app.log 2>&1 &
 app=$!
 
-# The window of the app, when it is on the display.
+# The window of the app that was shown last: the main window, or a dialog over it.
 window=""
 find_window() {
-    if [ -z "$window" ]; then
-        window=$(xdotool search --sync --onlyvisible --name "Carbide Silica" 2>/dev/null | head -1 || true)
-    fi
+    xdotool search --sync --onlyvisible --name "Carbide Silica" >/dev/null 2>&1 || true
+    window=$(xdotool search --onlyvisible --pid "$app" 2>/dev/null | tail -1 || true)
 }
 
-# Gives the window the keyboard. Xvfb has no window manager, so the window does not get the
-# focus by itself, and without the focus the first key goes to the root window. The focus is
-# set directly, and a Shift press makes GTK take the focus before a real key comes.
+# Gives the last window of the app the keyboard. Xvfb has no window manager, so a window
+# does not get the focus by itself, and without the focus the first key goes to the root
+# window. The focus is set directly, and the first time a Shift press makes GTK take the
+# focus before a real key comes.
 focused=0
 focus() {
     find_window
@@ -107,7 +109,6 @@ step() {
 }
 
 sleep "$WAIT"
-find_window
 
 # The older variables, as steps before STEPS.
 if [ -n "${KEYS:-}" ]; then

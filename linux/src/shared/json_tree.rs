@@ -441,24 +441,17 @@ pub fn json_section(page: &Rc<Page>, json: &str, filename: &str) -> gtk::Box {
     let holder = gtk::Box::new(gtk::Orientation::Vertical, 0);
     holder.set_margin_top(8);
     holder.set_visible(false);
-    let tree: Rc<RefCell<Option<Rc<JsonTree>>>> = Rc::default();
-
     // Opens or closes the part. The tree is made when it opens and is gone when it
     // closes, as in the Swift app, so it opens with only the root expanded.
     let set_open: Rc<dyn Fn(bool)> = {
-        let (page, holder, hint, tree) = (Rc::downgrade(page), holder.clone(), hint.clone(), tree.clone());
+        let (page, holder, hint) = (Rc::downgrade(page), holder.clone(), hint.clone());
         let (json, filename) = (json.to_string(), filename.to_string());
         Rc::new(move |open: bool| {
             let Some(page) = page.upgrade() else { return };
             theme::set_label(&hint, font::SMALL, if open { HINT_HIDE } else { HINT_SHOW });
             page::load::clear(&holder);
             if open {
-                let made = JsonTree::new(&page, &json, &filename);
-                holder.append(&made.root);
-                *tree.borrow_mut() = Some(made);
-            } else {
-                *tree.borrow_mut() = None;
-                page.hooks().save_json = None;
+                holder.append(&json_tree(&page, &json, &filename));
             }
             holder.set_visible(open);
         })
@@ -504,6 +497,20 @@ pub fn json_section(page: &Rc<Page>, json: &str, filename: &str) -> gtk::Box {
     card.root
 }
 
+/// The tree of a JSON document, with its toolbar (Expand All, Collapse All, Copy All,
+/// Save), for a page to put where it shows JSON (`JSONTreeView`). Each line is a stop of
+/// the page's cursor. While the tree is on screen, s saves its document as `filename`.
+pub fn json_tree(page: &Rc<Page>, json: &str, filename: &str) -> gtk::Box {
+    install_style();
+    let tree = JsonTree::new(page, json, filename);
+    let root = tree.root.upgrade().expect("the tree's root is new");
+    // The tree lives as long as its widgets.
+    root.connect_destroy(move |_| {
+        let _ = &tree;
+    });
+    root
+}
+
 /// Style of the lines of the tree. The selected line has a faint light of the present.
 fn install_style() {
     thread_local!(static DONE: Cell<bool> = const { Cell::new(false) });
@@ -528,7 +535,8 @@ struct JsonTree {
     model: Rc<AppModel>,
     json: String,
     filename: String,
-    root: gtk::Box,
+    /// Weak: the root's own handler keeps the tree.
+    root: glib::WeakRef<gtk::Box>,
     body: gtk::Box,
     document: RefCell<Option<JsonNode>>,
     expanded: RefCell<HashSet<String>>,
@@ -556,7 +564,7 @@ impl JsonTree {
             model: page.model.clone(),
             json: json.to_string(),
             filename: filename.to_string(),
-            root: root.clone(),
+            root: root.downgrade(),
             body: body.clone(),
             document: RefCell::new(None),
             expanded: RefCell::new(HashSet::from([String::new()])),
@@ -574,13 +582,28 @@ impl JsonTree {
         progress.set_halign(gtk::Align::Start);
         body.append(&progress);
 
-        // s saves the document while the tree is on the page.
+        // s saves the document while the tree is on screen (`saveJSON` of the cursor).
         let weak = Rc::downgrade(&tree);
-        page.hooks().save_json = Some(Rc::new(move || {
+        let save: page::Action = Rc::new(move || {
             if let Some(tree) = weak.upgrade() {
                 tree.save();
             }
-        }));
+        });
+        let (weak_page, hook) = (Rc::downgrade(page), save.clone());
+        root.connect_map(move |_| {
+            if let Some(page) = weak_page.upgrade() {
+                page.hooks().save_json = Some(hook.clone());
+            }
+        });
+        let (weak_page, hook) = (Rc::downgrade(page), save);
+        root.connect_unmap(move |_| {
+            if let Some(page) = weak_page.upgrade() {
+                let mut hooks = page.hooks();
+                if hooks.save_json.as_ref().is_some_and(|h| Rc::ptr_eq(h, &hook)) {
+                    hooks.save_json = None;
+                }
+            }
+        });
 
         // Read the document off the main thread.
         let (weak, text) = (Rc::downgrade(&tree), json.to_string());
@@ -996,7 +1019,7 @@ impl JsonTree {
     /// Saves the document. The bridge's documents are already pretty; others are indented
     /// here.
     fn save(self: &Rc<Self>) {
-        let Some(window) = self.root.root().and_downcast::<gtk::Window>() else { return };
+        let Some(window) = self.root.upgrade().and_then(|r| r.root()).and_downcast::<gtk::Window>() else { return };
         let dialog = gtk::FileDialog::new();
         dialog.set_initial_name(Some(&self.filename));
         dialog.set_modal(true);
