@@ -23,15 +23,13 @@ struct IdentityControlCard: View {
                 .textSelection(.enabled)
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 7) {
                 GridRow {
-                    Text("Power")
-                    Text("Held by")
-                    Text("What it does")
+                    NameText("Power")
+                    NameText("Held by")
+                    NameText("What it does")
                 }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
                 Divider()
                 GridRow {
-                    Text("Spend and update").fontWeight(.semibold)
+                    NameText("Spend and update")
                     VStack(alignment: .leading, spacing: 2) {
                         Text(keys.count <= 1 ? "1 key" : "\(required) of \(keys.count) keys")
                         ForEach(keys, id: \.self) { key in
@@ -42,19 +40,19 @@ struct IdentityControlCard: View {
                 }
                 Divider()
                 GridRow {
-                    Text("Revoke").fontWeight(.semibold)
+                    NameText("Revoke")
                     holder(identity.revocationAuthority, isSelf: selfRevoke)
                     Text("Stops all use of the identity at once.").foregroundStyle(.secondary)
                 }
                 Divider()
                 GridRow {
-                    Text("Recover").fontWeight(.semibold)
+                    NameText("Recover")
                     holder(identity.recoveryAuthority, isSelf: selfRecover)
                     Text("Sets new keys for a revoked identity.").foregroundStyle(.secondary)
                 }
                 Divider()
                 GridRow {
-                    Text("Lock").fontWeight(.semibold)
+                    NameText("Lock")
                     Text(lockHolder)
                     Text(lockEffect).foregroundStyle(.secondary)
                 }
@@ -91,7 +89,7 @@ struct IdentityControlCard: View {
 
     private func outcome(_ title: String, _ text: String, warning: Bool) -> some View {
         (Text(title + ": ").fontWeight(.semibold) + Text(text))
-            .foregroundStyle(warning ? Color.orange : Color.primary)
+            .foregroundStyle(warning ? Tone.mined : Color.primary)
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
     }
@@ -199,60 +197,61 @@ struct VersionStrip: View {
     private let timeHeight: CGFloat = 34
     private let laneHeight: CGFloat = 24
     private static let lanes = ["Keys", "Revoke", "Recover", "Lock"]
-    private static let palette: [Color] = [.accentColor, .purple, .orange, .green, .gray]
+    /// The holders of a lane, in order of their first version.
+    private static let palette: [Color] = Tone.series
 
     var body: some View {
         let _ = showsNames
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 0) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Time").frame(height: timeHeight, alignment: .top)
-                    ForEach(Self.lanes, id: \.self) { lane in
-                        Text(lane).frame(height: laneHeight)
-                    }
-                }
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .frame(width: labelWidth, alignment: .leading)
-                ZStack(alignment: .topLeading) {
-                    Canvas { context, size in
-                        draw(context, size)
-                    }
-                    .accessibilityHidden(true)
-                    // One button for each version: the selection, the help text and the
-                    // accessible name.
-                    HStack(spacing: 0) {
-                        ForEach(Array(versions.enumerated()), id: \.offset) { index, version in
-                            Button {
-                                selection = index
-                            } label: {
-                                Color.clear.contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .frame(maxWidth: .infinity)
-                            .help("Version \(index + 1): \(heightAndTime(version.height, version.time, model: model)). \(version.changes.joined(separator: ". "))")
-                            .accessibilityLabel("Version \(index + 1), \(spoken(version))")
+        DisplayPanel(padding: 10) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        NameText("Time").frame(height: timeHeight, alignment: .top)
+                        ForEach(Self.lanes, id: \.self) { lane in
+                            Plate(lane).frame(height: laneHeight)
                         }
                     }
-                    .padding(.top, timeHeight)
+                    .frame(width: labelWidth, alignment: .leading)
+                    ZStack(alignment: .topLeading) {
+                        Canvas { context, size in
+                            draw(context, size)
+                        }
+                        .accessibilityHidden(true)
+                        // One button for each version: the selection, the help text and the
+                        // accessible name.
+                        HStack(spacing: 0) {
+                            ForEach(Array(versions.enumerated()), id: \.offset) { index, version in
+                                Button {
+                                    selection = index
+                                } label: {
+                                    Color.clear.contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .frame(maxWidth: .infinity)
+                                .help("Version \(index + 1): \(heightAndTime(version.height, version.time, model: model)). \(version.changes.joined(separator: ". "))")
+                                .accessibilityLabel("Version \(index + 1), \(spoken(version))")
+                            }
+                        }
+                        .padding(.top, timeHeight)
+                    }
+                    .frame(height: timeHeight + laneHeight * CGFloat(Self.lanes.count))
                 }
-                .frame(height: timeHeight + laneHeight * CGFloat(Self.lanes.count))
+                PanelRule()
+                HStack {
+                    Text(edge(versions.first)).font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.label)
+                    Spacer()
+                    Text(selectedText).font(Tone.caption.weight(.semibold)).foregroundStyle(Tone.present)
+                    Spacer()
+                    Text(edge(versions.last)).font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.label)
+                }
+                Text(
+                    "Each step is one version, and the line at the top shows its true block. A change of colour in a lane "
+                        + "is a change of holder. In the lock lane, a solid bar is a lock with a delay and a striped bar is a "
+                        + "lock to a set block. A red band is a revoked version. Select a step to view that version.")
+                    .font(Tone.caption).foregroundStyle(Tone.label)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            HStack {
-                Text(edge(versions.first)).font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Text(selectedText).font(.caption.weight(.semibold))
-                Spacer()
-                Text(edge(versions.last)).font(.caption).foregroundStyle(.secondary)
-            }
-            Text(
-                "Each step is one version, and the line at the top shows its true block. A change of colour in a lane "
-                    + "is a change of holder. In the lock lane, a solid bar is a lock with a delay and a striped bar is a "
-                    + "lock to a set block. A red band is a revoked version. Select a step to view that version.")
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 8)
     }
 
     // MARK: The values of the lanes
@@ -295,7 +294,7 @@ struct VersionStrip: View {
         func time(_ height: UInt64) -> CGFloat {
             last > first ? 4 + CGFloat(Double(height - first) / Double(last - first)) * (size.width - 8) : size.width / 2
         }
-        context.fill(Path(CGRect(x: 4, y: 7.5, width: size.width - 8, height: 1)), with: .color(.secondary.opacity(0.6)))
+        context.rule(4, 8, size.width - 4, 8, Tone.axis)
         var leaders = Path()
         var ticks = Path()
         for (index, version) in versions.enumerated() {
@@ -304,15 +303,15 @@ struct VersionStrip: View {
             leaders.move(to: CGPoint(x: x, y: 13))
             leaders.addLine(to: CGPoint(x: (CGFloat(index) + 0.5) * step, y: timeHeight - 3))
         }
-        context.fill(ticks, with: .color(.primary))
-        context.stroke(leaders, with: .color(.secondary.opacity(0.45)), lineWidth: 0.6)
+        context.fill(ticks, with: .color(Tone.value))
+        context.stroke(leaders, with: .color(Tone.axis), lineWidth: 0.6)
 
         for lane in 0..<Self.lanes.count {
             let y = timeHeight + CGFloat(lane) * laneHeight
             let lock = lane == 3
             context.fill(
                 Path(CGRect(x: 0, y: y + 3, width: size.width, height: laneHeight - 6)),
-                with: .color(.secondary.opacity(0.1)))
+                with: .color(Tone.grid))
             let values = values(lane)
             var seen: [String] = []
             var start = 0
@@ -324,9 +323,9 @@ struct VersionStrip: View {
                 if lock {
                     switch versions[start].timelock {
                     case .unlocked: break
-                    case .delay: context.fill(Path(bar), with: .color(.accentColor.opacity(0.9)))
+                    case .delay: context.fill(Path(bar), with: .color(Tone.record.opacity(0.9)))
                     case .unlocksAt:
-                        context.fill(Path(bar), with: .color(.accentColor.opacity(0.25)))
+                        context.fill(Path(bar), with: .color(Tone.record.opacity(0.25)))
                         var stripes = Path()
                         var x = bar.minX - bar.height
                         while x < bar.maxX {
@@ -336,14 +335,15 @@ struct VersionStrip: View {
                         }
                         var clipped = context
                         clipped.clip(to: Path(bar))
-                        clipped.stroke(stripes, with: .color(.accentColor), lineWidth: 2)
+                        clipped.stroke(stripes, with: .color(Tone.record), lineWidth: 2)
                     }
                 } else {
                     if !seen.contains(value) { seen.append(value) }
                     let color = Self.palette[min(seen.firstIndex(of: value) ?? 0, Self.palette.count - 1)]
                     context.fill(Path(bar), with: .color(color.opacity(0.85)))
                     let label = String(value.split(separator: "|").first ?? "")
-                    let text = context.resolve(Text(label).font(.caption.weight(.semibold)).foregroundStyle(.white))
+                    let text = context.resolve(
+                        Text(label).font(.caption.weight(.semibold)).foregroundStyle(Tone.screen))
                     if text.measure(in: size).width + 10 < bar.width {
                         context.draw(text, at: CGPoint(x: bar.minX + 5, y: bar.midY), anchor: .leading)
                     }
@@ -355,19 +355,21 @@ struct VersionStrip: View {
         for (index, version) in versions.enumerated() where version.revoked {
             context.fill(
                 Path(CGRect(x: CGFloat(index) * step, y: timeHeight, width: step, height: lanesHeight)),
-                with: .color(.red.opacity(0.3)))
+                with: .color(Tone.alert.opacity(0.3)))
         }
         // Thin gaps between the steps, and the selected step.
         if count <= 80 {
             for index in 1..<max(count, 1) {
                 context.fill(
                     Path(CGRect(x: CGFloat(index) * step - 0.5, y: timeHeight, width: 1, height: lanesHeight)),
-                    with: .color(Color(nsColor: .windowBackgroundColor).opacity(0.7)))
+                    with: .color(Tone.screen.opacity(0.7)))
             }
         }
         if versions.indices.contains(selection) {
             let column = CGRect(x: CGFloat(selection) * step, y: timeHeight + 1, width: step, height: lanesHeight - 2)
-            context.stroke(Path(column.insetBy(dx: 0.5, dy: 0)), with: .color(.primary), lineWidth: 2)
+            // The selected version is the present: a lit outline.
+            let outline = Path(column.insetBy(dx: 1, dy: 0)).strokedPath(StrokeStyle(lineWidth: 2))
+            context.lit(outline, Tone.present, strength: 0.7)
         }
     }
 
@@ -411,7 +413,7 @@ struct IdentityHistoryCard: View {
                 Button(showAll ? "Show fewer" : "Show all \(newestFirst.count)") {
                     showAll.toggle()
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.displayLink)
             }
             if !timeline.historyComplete {
                 Note(text: "The source did not return every earlier version.", warning: true)
@@ -434,12 +436,13 @@ private struct HistoryRow: View {
         HStack(alignment: .top, spacing: 12) {
             // The line and its dot.
             VStack(spacing: 0) {
-                Rectangle().fill(isFirst ? Color.clear : Color.secondary.opacity(0.4))
-                    .frame(width: 2, height: 8)
-                Circle().fill(version.revoked ? Color.red : Color.accentColor)
-                    .frame(width: selected ? 13 : 10, height: selected ? 13 : 10)
-                Rectangle().fill(isLast ? Color.clear : Color.secondary.opacity(0.4))
-                    .frame(width: 2)
+                Rectangle().fill(isFirst ? Color.clear : Tone.axis)
+                    .frame(width: 1, height: 8)
+                Rectangle().fill(version.revoked ? Tone.alert : selected ? Tone.present : Tone.record)
+                    .frame(width: selected ? 11 : 8, height: selected ? 11 : 8)
+                    .shadow(color: selected ? Tone.present.opacity(0.7) : .clear, radius: selected ? 3 : 0)
+                Rectangle().fill(isLast ? Color.clear : Tone.axis)
+                    .frame(width: 1)
                     .frame(maxHeight: .infinity)
             }
             .frame(width: 13)
@@ -447,10 +450,10 @@ private struct HistoryRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
                     Button("Version \(number)", action: select)
-                        .buttonStyle(.link)
+                        .buttonStyle(.displayLink)
                         .fontWeight(.semibold)
                     if selected {
-                        Text("viewed").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Plate("Viewed")
                     }
                     Text(when).foregroundStyle(.secondary)
                     RouteLink(
@@ -458,7 +461,7 @@ private struct HistoryRow: View {
                         route: .block(id: version.blockHash ?? "\(version.height)"), shorten: false)
                     if version.onActiveChain == false {
                         Label("Not on the active chain", systemImage: "exclamationmark.triangle")
-                            .font(.caption).foregroundStyle(.orange)
+                            .font(.caption).foregroundStyle(Tone.mined)
                     }
                 }
                 ForEach(version.changes, id: \.self) { change in

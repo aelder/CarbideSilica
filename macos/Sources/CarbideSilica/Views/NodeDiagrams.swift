@@ -29,31 +29,36 @@ struct BranchesCard: View {
             } else if let active {
                 Text(summary(active))
                 if !recent.isEmpty {
-                    GeometryReader { geometry in
-                        Canvas { context, size in
-                            draw(context, size, active)
-                        }
-                        .contentShape(Rectangle())
-                        .onContinuousHover { phase in
-                            if case .active(let point) = phase {
-                                let row = Int((point.y - 44) / 26 + 0.5)
-                                hovered = recent.indices.contains(row) && point.y > 30 ? recent[row].hash : nil
-                            } else {
-                                hovered = nil
+                    DisplayPanel {
+                        VStack(alignment: .leading, spacing: 10) {
+                            GeometryReader { geometry in
+                                Canvas { context, size in
+                                    draw(context, size, active)
+                                }
+                                .contentShape(Rectangle())
+                                .onContinuousHover { phase in
+                                    if case .active(let point) = phase {
+                                        let row = Int((point.y - 44) / 26 + 0.5)
+                                        hovered = recent.indices.contains(row) && point.y > 30 ? recent[row].hash : nil
+                                    } else {
+                                        hovered = nil
+                                    }
+                                }
+                                .onTapGesture(coordinateSpace: .local) { point in
+                                    let row = Int((point.y - 44) / 26 + 0.5)
+                                    if recent.indices.contains(row), point.y > 30 {
+                                        model.open(.block(id: recent[row].hash))
+                                    }
+                                }
                             }
-                        }
-                        .onTapGesture(coordinateSpace: .local) { point in
-                            let row = Int((point.y - 44) / 26 + 0.5)
-                            if recent.indices.contains(row), point.y > 30 {
-                                model.open(.block(id: recent[row].hash))
-                            }
+                            .frame(height: CGFloat(52 + recent.count * 26))
+                            PanelRule()
+                            Text(caption)
+                                .font(Tone.caption)
+                                .foregroundStyle(hovered == nil ? Tone.label : Tone.value)
+                                .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
                         }
                     }
-                    .frame(height: CGFloat(52 + recent.count * 26))
-                    Text(caption)
-                        .font(.callout)
-                        .foregroundStyle(hovered == nil ? .secondary : .primary)
-                        .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
                 }
                 Button("Refresh") {
                     loaded = false
@@ -143,17 +148,12 @@ struct BranchesCard: View {
             left + CGFloat(Double(height - min(height, start)) / Double(window)) * (right - left)
         }
         let top: CGFloat = 18
-        context.stroke(
-            Path { path in
-                path.move(to: CGPoint(x: left, y: top))
-                path.addLine(to: CGPoint(x: x(active.height), y: top))
-            }, with: .color(.accentColor), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-        context.draw(
-            Text("tip").font(.caption2).foregroundStyle(.secondary),
-            at: CGPoint(x: x(active.height) + 6, y: top), anchor: .leading)
-        context.draw(
-            Text("\(window) blocks ago").font(.caption2).foregroundStyle(.secondary),
-            at: CGPoint(x: left, y: top - 12), anchor: .leading)
+        let tipX = x(active.height)
+        // The active chain, and its tip: the present.
+        context.rule(left, top, tipX, top, Tone.value, width: 1.5)
+        context.lit(Path(CGRect(x: tipX - 0.75, y: top - 7, width: 1.5, height: 14)), Tone.present, strength: 0.7)
+        context.name("tip", tipX + 6, top, .leading, color: Tone.present)
+        context.name("\(window) blocks ago", left, top - 12, .leading)
 
         for (row, tip) in recent.enumerated() {
             let y = top + 26 + CGFloat(row) * 26
@@ -161,20 +161,21 @@ struct BranchesCard: View {
             let forkX = x(max(fork, start))
             let endX = max(x(tip.height), forkX + 6)
             let validated = tip.status == "valid-fork"
-            let color: Color = tip.status == "invalid" ? .red : validated ? .orange : .secondary
+            let color: Color = tip.status == "invalid" ? Tone.alert : validated ? Tone.mined : Tone.axis
             let selected = hovered == tip.hash
             context.stroke(
                 Path { path in
                     path.move(to: CGPoint(x: forkX, y: top))
                     path.addLine(to: CGPoint(x: forkX, y: y))
                     path.addLine(to: CGPoint(x: endX, y: y))
-                }, with: .color(color),
-                style: StrokeStyle(lineWidth: selected ? 3 : 2, lineJoin: .round, dash: validated ? [] : [4, 3]))
-            context.fill(
-                Path(ellipseIn: CGRect(x: endX - 4, y: y - 4, width: 8, height: 8)), with: .color(color))
-            context.draw(
-                Text("\(tip.branchLength)").font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: endX + 8, y: y), anchor: .leading)
+                }, with: .color(selected ? Tone.present : color),
+                style: StrokeStyle(lineWidth: selected ? 1.5 : 1, lineJoin: .miter, dash: validated ? [] : [4, 3]))
+            let end = Path(CGRect(x: endX - 3.5, y: y - 3.5, width: 7, height: 7))
+            context.lit(end, color, strength: selected ? 0.9 : 0)
+            if selected {
+                context.stroke(end, with: .color(Tone.present), lineWidth: 1.5)
+            }
+            context.figure("\(tip.branchLength)", endX + 9, y, .leading, color: selected ? Tone.present : Tone.value)
         }
     }
 }

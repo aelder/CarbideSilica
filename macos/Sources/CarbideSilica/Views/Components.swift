@@ -71,6 +71,7 @@ struct Page<Content: View>: View {
                 .frame(maxWidth: .infinity)
             }
             .modifier(CursorHost(cursor: cursor, proxy: proxy))
+            .background(Tone.screen)
             .onAppear { cursor.enabled = keys }
         }
     }
@@ -93,14 +94,15 @@ struct Card<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Divider()
+            PanelRule()
             HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.title3.weight(.semibold))
+                Text(title.uppercased()).font(Tone.heading).tracking(2.2).foregroundStyle(Tone.value)
                 Spacer()
                 if let trailing {
-                    Text(trailing).font(.subheadline).foregroundStyle(.secondary)
+                    NameText(trailing)
                 }
             }
+            .padding(.top, 2)
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -124,7 +126,8 @@ struct PageHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.title.weight(.semibold))
+                .font(Tone.title)
+                .foregroundStyle(Tone.value)
                 .textSelection(.enabled)
                 .lineLimit(2)
             if let subtitle {
@@ -157,14 +160,20 @@ struct TagChip: View {
     var color: Color = .accentColor
 
     var body: some View {
-        Text(text)
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .foregroundStyle(color)
-            .background(color.opacity(0.14), in: Capsule())
-            .lineLimit(1)
-            .fixedSize()
+        Plate(text, fill: fill)
+    }
+
+    /// The signal colour of the plate. A tag with no signal is an outline.
+    private var fill: Color? {
+        switch color {
+        case .accentColor, .secondary, .primary, .gray: nil
+        case .purple, .indigo: Tone.staked
+        case .orange, .yellow: Tone.mined
+        case .teal, .blue, .cyan: Tone.record
+        case .green: Tone.good
+        case .red: Tone.alert
+        default: color
+        }
     }
 }
 
@@ -185,8 +194,7 @@ struct FieldRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label)
-                .foregroundStyle(.secondary)
+            NameText(label)
                 .frame(width: 170, alignment: .leading)
             if let route {
                 // A known name is shown before the raw ID; the ID stays one hover or copy away.
@@ -195,7 +203,7 @@ struct FieldRow: View {
                     Button(isCurrency(route) && name.hasSuffix("@") ? String(name.dropLast()) : name) {
                         model.open(route)
                     }
-                        .buttonStyle(.link)
+                        .buttonStyle(.displayLink)
                         .lineLimit(1)
                         .help(value)
                         .cursorStop(token: "\(route)", copy: value) { model.open(route) }
@@ -204,7 +212,7 @@ struct FieldRow: View {
                         .foregroundStyle(.tertiary)
                 } else {
                     Button(value) { model.open(route) }
-                        .buttonStyle(.link)
+                        .buttonStyle(.displayLink)
                         .font(monospaced ? .body.monospaced() : .body)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -282,12 +290,12 @@ struct RouteLink: View {
                 Button(isCurrency && name.hasSuffix("@") ? String(name.dropLast()) : name) {
                     model.open(route)
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.displayLink)
                 .lineLimit(1)
                 .help(text)
             } else {
                 Button(shorten ? Format.short(text) : text) { model.open(route) }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                     .font(.body.monospaced())
                     .lineLimit(1)
                     .help(text)

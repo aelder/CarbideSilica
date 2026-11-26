@@ -25,7 +25,7 @@ struct DashboardView: View {
                         Note(text: error, warning: true)
                     }
                     if !model.blocks.isEmpty {
-                        Card("Chain pulse", trailing: "blocks of the last 25 minutes") {
+                        Card("Chain pulse") {
                             ChainPulse(
                                 blocks: model.blocks,
                                 live: model.syncFraction == nil && !status.provenance.retained,
@@ -196,14 +196,19 @@ private struct StatusLine: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             VStack(alignment: .leading, spacing: 6) {
-            SourceLine(provenance: status.provenance)
+            SourceLine(provenance: status.provenance, short: model.currentChain)
             HStack(spacing: 18) {
                 item("Height", value: Format.integer(status.blocks), detail: behind)
-                item(
-                    "Last block",
-                    value: status.tipTime.map { Format.age($0, now: context.date) } ?? "unknown",
-                    detail: nil)
-                state("Node", on: nodeOn)
+                // The chain pulse shows the time since the last block. When the node is
+                // not at the tip, the pulse does not, thus the line shows it.
+                if !live {
+                    item(
+                        "Last block",
+                        value: status.tipTime.map { Format.age($0, now: context.date) } ?? "unknown",
+                        detail: nil)
+                }
+                // The usual state has no label. The line says when the node is off.
+                if !nodeOn { state("Node", on: false) }
                 state("Public API", on: model.connection?.apiEndpoint != nil, inUse: status.source == .publicApi)
                 item("Peers", value: status.connections.map { "\($0)" } ?? "unknown", detail: nil)
                 if let difficulty = status.difficulty {
@@ -221,6 +226,9 @@ private struct StatusLine: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// True when the node is at the tip and the data is not a stored observation.
+    private var live: Bool { model.syncFraction == nil && !status.provenance.retained }
+
     private var nodeOn: Bool {
         status.source == .localDaemon && model.statusError == nil && !status.provenance.retained
     }
@@ -233,8 +241,8 @@ private struct StatusLine: View {
     }
 
     private func item(_ label: String, value: String, detail: String?) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Text(label).foregroundStyle(.secondary)
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            NameText(label)
             Text(value).fontWeight(.semibold).monospacedDigit()
             if let detail {
                 Text(detail).foregroundStyle(.secondary)
@@ -244,11 +252,11 @@ private struct StatusLine: View {
 
     /// State is a shape, a colour and a word.
     private func state(_ label: String, on: Bool, inUse: Bool = false) -> some View {
-        HStack(spacing: 5) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: on ? "circle.fill" : "circle")
                 .font(.system(size: 8))
-                .foregroundStyle(on ? .green : .secondary)
-            Text(label).foregroundStyle(.secondary)
+                .foregroundStyle(on ? Tone.good : Tone.label)
+            NameText(label)
             Text(on ? (inUse ? "in use" : "on") : "off").fontWeight(.semibold)
         }
     }
@@ -274,7 +282,8 @@ private struct SyncBanner: View {
             Button("Show progress") { model.show(.node) }
         }
         .padding(14)
-        .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .background(Tone.screen)
+        .overlay(Rectangle().strokeBorder(Tone.rule, lineWidth: 1))
     }
 
     private var detail: String {
@@ -398,14 +407,14 @@ private struct BlockLine: View {
         HStack(spacing: 10) {
             Text(Format.integer(block.height)).fontWeight(.medium).monospacedDigit()
                 .frame(width: 84, alignment: .leading)
-            TagChip(text: block.staked ? "Staked" : "Mined", color: block.staked ? .purple : .orange)
+            Plate(block.staked ? "Staked" : "Mined", fill: block.staked ? Tone.staked : Tone.mined)
                 .frame(width: 64, alignment: .leading)
             Text(Format.age(block.time, now: now)).foregroundStyle(.secondary).monospacedDigit()
                 .frame(width: 76, alignment: .leading)
             Text("\(block.transactionCount) tx").monospacedDigit()
                 .frame(width: 44, alignment: .trailing)
             Button(Format.short(block.hash, head: 8, tail: 6)) { model.open(.block(id: block.hash)) }
-                .buttonStyle(.link)
+                .buttonStyle(.displayLink)
                 .font(.callout.monospaced())
                 .help(block.hash)
             Spacer(minLength: 0)
@@ -426,18 +435,18 @@ private struct TransactionLine: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
                 Button(Format.short(row.txid, head: 10, tail: 6)) { model.open(.transaction(txid: row.txid)) }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                     .font(.callout.monospaced())
                     .help(row.txid)
                 Spacer(minLength: 4)
                 Button("Block \(Format.integer(row.blockHeight))") { model.open(.block(id: row.blockHash)) }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                     .foregroundStyle(.secondary)
                 Text(Format.age(row.blockTime, now: now)).foregroundStyle(.secondary).monospacedDigit()
             }
             HStack(spacing: 6) {
                 if row.loaded {
-                    ForEach(row.tags.prefix(4), id: \.self) { TagChip(text: $0) }
+                    ForEach(row.tags.prefix(4), id: \.self) { Plate($0, fill: signalTagFill($0)) }
                     Text("\(row.inputCount) in, \(row.outputCount) out").foregroundStyle(.secondary)
                     if let sats = row.outputSats, sats > 0 {
                         CoinAmount(sats: sats).foregroundStyle(.secondary)
@@ -450,6 +459,16 @@ private struct TransactionLine: View {
         }
         .padding(.vertical, 3)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// The signal colour of a transaction tag: violet for staked, amber for mined. Other tags
+/// have no colour and show as an outline.
+func signalTagFill(_ tag: String) -> Color? {
+    switch tag.lowercased() {
+    case "staked", "stake": Tone.staked
+    case "mined": Tone.mined
+    default: nil
     }
 }
 

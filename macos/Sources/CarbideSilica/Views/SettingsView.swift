@@ -31,7 +31,7 @@ struct SettingsView: View {
                     Button("Choose…", action: chooseConfigFile)
                 }
             } header: {
-                Text("Local node")
+                SettingsHeading("Local node")
             } footer: {
                 Text(daemonSummary)
                     .footerStyle()
@@ -41,7 +41,7 @@ struct SettingsView: View {
                 TextField("API address", text: $apiURL, prompt: Text(SettingsKey.defaultAPI))
                 Toggle("Allow this API without asking", isOn: $apiEnabled)
             } header: {
-                Text("Public API")
+                SettingsHeading("Public API")
             } footer: {
                 Text(
                     "Sources lists this API. When the local node cannot answer a page that you open, the app asks before it sends the request to the API. "
@@ -56,7 +56,7 @@ struct SettingsView: View {
                 Toggle("Show dates for block heights and times", isOn: $showsDates)
                 Toggle("Show times in UTC", isOn: $useUTC)
             } header: {
-                Text("Display")
+                SettingsHeading("Display")
             } footer: {
                 Text("The settings apply at the latest to pages that you open after the change.").footerStyle()
             }
@@ -93,10 +93,10 @@ struct SettingsView: View {
                         .disabled(cache == nil)
                 }
                 if let cacheMessage {
-                    Text(cacheMessage).foregroundStyle(.secondary)
+                    Text(cacheMessage).foregroundStyle(Tone.label)
                 }
             } header: {
-                Text("Cache")
+                SettingsHeading("Cache")
             } footer: {
                 Text(
                     "The cache keeps every answer from your sources, with the source and the time. The app uses it to show stored data when no source answers, and for block history. "
@@ -113,6 +113,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Tone.screen)
+        .environment(\.colorScheme, .dark)
         .task(id: model.generation) { cache = model.explorer?.cacheInfo() }
         .confirmationDialog("Clear the cache?", isPresented: $confirmingClear) {
             Button("Clear Cache", role: .destructive) {
@@ -177,11 +180,24 @@ struct SettingsView: View {
     }
 }
 
+/// The heading of a section of the settings, as the heading of a card.
+private struct SettingsHeading: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title.uppercased()).font(Tone.heading).tracking(2.2).foregroundStyle(Tone.value)
+    }
+}
+
 extension View {
     /// A section footer: secondary text from the leading edge. A grouped form otherwise
     /// aligns a footer of several lines to the trailing edge.
     fileprivate func footerStyle() -> some View {
-        foregroundStyle(.secondary)
+        foregroundStyle(Tone.label)
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
     }

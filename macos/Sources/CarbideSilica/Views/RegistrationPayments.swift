@@ -83,7 +83,7 @@ struct RegistrationPaymentsCard: View {
             HStack(spacing: 10) {
                 ConfidenceMark(level: .verified, label: "Verified against the issuer's rules")
                 if let issuer = payments.issuer {
-                    Text("Issuer").foregroundStyle(.secondary)
+                    NameText("Issuer")
                     IDLink(id: issuer, route: .currency(name: issuer))
                 }
             }
@@ -127,9 +127,14 @@ struct RegistrationPaymentsCard: View {
 
     private func row(label: String, amount: String, bold: Bool = false) -> some View {
         HStack {
-            Text(label).foregroundStyle(bold ? .primary : .secondary).fontWeight(bold ? .semibold : .regular)
+            if bold {
+                Text(label.uppercased()).font(Tone.small).tracking(1.1).foregroundStyle(Tone.value)
+            } else {
+                NameText(label)
+            }
             Spacer()
             Text(amount).monospacedDigit().fontWeight(bold ? .semibold : .regular)
+                .foregroundStyle(bold ? Tone.value : Color.primary)
         }
         .padding(.vertical, 4)
     }

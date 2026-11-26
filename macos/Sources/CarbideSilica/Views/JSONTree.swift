@@ -355,6 +355,7 @@ struct JSONTreeView: View {
                     } label: {
                         Image(systemName: expanded.contains(row.pointer) ? "chevron.down" : "chevron.right")
                             .font(.caption2)
+                            .foregroundStyle(Tone.label)
                             .frame(width: 12)
                     }
                     .buttonStyle(.borderless)
@@ -364,14 +365,14 @@ struct JSONTreeView: View {
                 }
             }
             if !row.label.isEmpty {
-                Text(row.label + ":").foregroundStyle(.secondary)
+                Text(row.label + ":").foregroundStyle(Tone.label)
             }
             value(row)
             Spacer(minLength: 0)
         }
         .padding(.leading, CGFloat(row.depth) * 16)
         .padding(.vertical, 1)
-        .background(selected == row.pointer ? Color.accentColor.opacity(0.12) : .clear)
+        .background(selected == row.pointer ? Tone.present.opacity(0.1) : .clear)
         .contentShape(Rectangle())
         .onTapGesture { selected = row.pointer }
         .contextMenu { menu(row) }
@@ -390,20 +391,20 @@ struct JSONTreeView: View {
     @ViewBuilder private func value(_ row: JSONRow) -> some View {
         switch row.node {
         case .object(let members):
-            Text("{\(members.count)}").foregroundStyle(.orange)
+            Text("{\(members.count)}").foregroundStyle(Tone.label)
         case .array(let items):
-            Text("[\(items.count)]").foregroundStyle(.orange)
+            Text("[\(items.count)]").foregroundStyle(Tone.label)
         case .string(let text):
             stringValue(text, row: row)
         case .number(let text):
             HStack(spacing: 6) {
-                Text(text).foregroundStyle(.blue).textSelection(.enabled)
+                Text(text).foregroundStyle(Tone.record).textSelection(.enabled)
                 date(row)
             }
         case .bool(let flag):
-            Text(flag ? "true" : "false").foregroundStyle(.purple)
+            Text(flag ? "true" : "false").foregroundStyle(Tone.mined)
         case .null:
-            Text("null").foregroundStyle(.tertiary)
+            Text("null").foregroundStyle(Tone.mined)
         }
     }
 
@@ -416,11 +417,11 @@ struct JSONTreeView: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let mark, let target = mark.target, let route = Self.route(mark, target: target) {
                 Button(display(text, mark: mark, label: row.label)) { model.open(route) }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                     .help(target)
             } else {
                 Text(JSONNode.quote(shown))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Tone.value)
                     .textSelection(.enabled)
                     .lineLimit(open ? nil : 1)
             }
@@ -428,7 +429,7 @@ struct JSONTreeView: View {
                 Button(open ? "Collapse" : "Show all \(text.count) characters") {
                     if open { openStrings.remove(row.pointer) } else { openStrings.insert(row.pointer) }
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.displayLink)
                 .font(.caption)
             }
             date(row)
@@ -447,7 +448,7 @@ struct JSONTreeView: View {
         if dates, let date = marks[row.pointer]?.date {
             Text((marks[row.pointer]?.estimated == true ? "est. " : "") + Format.date(date))
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Tone.label)
         }
     }
 

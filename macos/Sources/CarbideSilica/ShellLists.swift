@@ -34,6 +34,7 @@ struct PlacePage<Content: View>: View {
                 .frame(maxWidth: .infinity)
             }
             .modifier(CursorHost(cursor: cursor, proxy: proxy))
+            .background(Tone.screen)
             .scrollPosition($position)
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, offset in
                 // Until the saved position is restored, the first offsets are the top.
@@ -130,6 +131,9 @@ extension View {
 /// is live or a stored observation, as a shape, a colour and a word.
 struct SourceLine: View {
     let provenance: Provenance?
+    /// A short name to show in place of the full source, such as the chain. The full
+    /// source is then in the help text.
+    var short: String?
 
     var body: some View {
         if let provenance, !provenance.source.isEmpty {
@@ -137,15 +141,20 @@ struct SourceLine: View {
                 Image(systemName: provenance.retained ? "clock.arrow.circlepath" : "circle.fill")
                     .font(.system(size: provenance.retained ? 10 : 8))
                     .foregroundStyle(provenance.retained ? .orange : .green)
-                Text("Source").foregroundStyle(.secondary)
-                Text(provenance.source).fontWeight(.semibold)
+                if let short {
+                    Text(short).fontWeight(.semibold)
+                } else {
+                    Text("Source").foregroundStyle(.secondary)
+                    Text(provenance.source).fontWeight(.semibold)
+                }
                 Text(provenance.retained ? "stored, reported \(Format.age(provenance.observedAt))" : "live")
                     .foregroundStyle(provenance.retained ? .orange : .secondary)
             }
             .help(
-                provenance.retained
-                    ? "No source answered now. This is the latest stored observation."
-                    : "The source answered this request now.")
+                (short == nil ? "" : "Source: \(provenance.source). ")
+                    + (provenance.retained
+                        ? "No source answered now. This is the latest stored observation."
+                        : "The source answered this request now."))
         }
     }
 }

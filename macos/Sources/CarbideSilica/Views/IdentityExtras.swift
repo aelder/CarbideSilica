@@ -45,21 +45,24 @@ struct TokenControlCard: View {
     private func trail(_ result: TokenControl) -> some View {
         let hops = Int(result.hops)
         let shown = min(hops, 40)
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
-                Text("Issued").font(.caption.weight(.semibold))
-                ForEach(0..<shown, id: \.self) { _ in
-                    Circle().fill(Color.accentColor.opacity(0.7)).frame(width: 6, height: 6)
+        return DisplayPanel(padding: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 4) {
+                    NameText("Issued")
+                    ForEach(0..<shown, id: \.self) { _ in
+                        Rectangle().fill(Tone.record).frame(width: 6, height: 6)
+                    }
+                    if hops > shown {
+                        Text("+\(hops - shown)").font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.label)
+                    }
+                    Image(systemName: "arrow.right").foregroundStyle(Tone.axis)
+                    Text(endWord(result.state).uppercased()).font(Tone.small).tracking(1.1)
+                        .foregroundStyle(endColor(result.state))
                 }
-                if hops > shown {
-                    Text("+\(hops - shown)").font(.caption).foregroundStyle(.secondary)
-                }
-                Image(systemName: "arrow.right").foregroundStyle(.secondary)
-                Text(endWord(result.state)).font(.caption.weight(.semibold))
-                    .foregroundStyle(endColor(result.state))
+                PanelRule()
+                Text("Each dot is one transfer of the token that the trail followed.")
+                    .font(Tone.caption).foregroundStyle(Tone.label)
             }
-            Text("Each dot is one transfer of the token that the trail followed.")
-                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -92,7 +95,7 @@ struct TokenControlCard: View {
         }
         if let frontier = result.frontier {
             HStack(spacing: 6) {
-                Text("Last output checked").foregroundStyle(.secondary)
+                NameText("Last output checked")
                 RouteLink(text: frontier.txid, route: .transaction(txid: frontier.txid))
                 Text("output \(frontier.output)").foregroundStyle(.secondary)
             }
@@ -114,9 +117,9 @@ struct TokenControlCard: View {
 
     private func endColor(_ state: TokenControlState) -> Color {
         switch state {
-        case .unspent: .green
-        case .paused: .orange
-        case .unresolved: .red
+        case .unspent: Tone.good
+        case .paused: Tone.mined
+        case .unresolved: Tone.alert
         }
     }
 

@@ -75,9 +75,9 @@ private struct PrimaryAddressCard: View {
                             if index > 0 { Divider() }
                             HStack {
                                 Button(entry.name) { model.open(.identity(name: entry.id)) }
-                                    .buttonStyle(.link)
+                                    .buttonStyle(.displayLink)
                                 Spacer()
-                                Text(entry.id).font(.callout.monospaced()).foregroundStyle(.secondary)
+                                Text(entry.id).font(.callout.monospaced()).foregroundStyle(Tone.label)
                                     .textSelection(.enabled)
                             }
                             .padding(.vertical, 5)
@@ -218,7 +218,7 @@ private struct AddressTileView: View {
                         text: model.heightText(height, time: tile.time),
                         route: .block(id: tile.blockHash ?? "\(height)"), shorten: false)
                 }
-                Text(when).foregroundStyle(.secondary).monospacedDigit()
+                Text(when).foregroundStyle(Tone.label).monospacedDigit()
             }
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 24) {
@@ -234,7 +234,7 @@ private struct AddressTileView: View {
             }
         }
         .padding(12)
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25)))
+        .overlay(Rectangle().strokeBorder(Tone.rule, lineWidth: 1))
     }
 
     private var when: String {
@@ -246,8 +246,8 @@ private struct AddressTileView: View {
     private func column(_ title: String, _ flows: [AddressFlow], more: UInt32, outputs: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(outputs ? .green : .orange)
+                .font(Tone.small).tracking(1.1)
+                .foregroundStyle(outputs ? Tone.good : Tone.mined)
             if flows.isEmpty {
                 Text("none").font(.callout).foregroundStyle(.secondary)
             }
@@ -255,7 +255,7 @@ private struct AddressTileView: View {
                 FlowRow(flow: flow, output: outputs, viewed: viewed)
             }
             if more > 0 {
-                Text("… \(more) more not shown").font(.callout).foregroundStyle(.orange)
+                Text("… \(more) more not shown").font(.callout).foregroundStyle(Tone.mined)
             }
         }
     }
@@ -272,7 +272,7 @@ private struct FlowRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if output { statusMark }
-            Text("#\(flow.index)").font(.callout.monospaced()).foregroundStyle(.secondary)
+            Text("#\(flow.index)").font(.callout.monospaced()).foregroundStyle(Tone.label)
             who
             Spacer(minLength: 8)
             amount
@@ -283,17 +283,17 @@ private struct FlowRow: View {
     @ViewBuilder
     private var statusMark: some View {
         if flow.private {
-            Image(systemName: "diamond.fill").foregroundStyle(.purple).help("Private")
+            Image(systemName: "diamond.fill").foregroundStyle(Tone.label).help("Private")
         } else {
             switch flow.status {
             case .unspent:
-                Image(systemName: "circle.fill").foregroundStyle(.green).help("Unspent")
+                Image(systemName: "circle.fill").foregroundStyle(Tone.good).help("Unspent")
                     .accessibilityLabel("Unspent")
             case .spent:
-                Image(systemName: "xmark").foregroundStyle(.red).help("Spent")
+                Image(systemName: "xmark").foregroundStyle(Tone.alert).help("Spent")
                     .accessibilityLabel("Spent")
             case .unknown:
-                Image(systemName: "questionmark.circle").foregroundStyle(.secondary)
+                Image(systemName: "questionmark.circle").foregroundStyle(Tone.label)
                     .help("Not known if spent").accessibilityLabel("Not known if spent")
             }
         }
@@ -302,9 +302,9 @@ private struct FlowRow: View {
     @ViewBuilder
     private var who: some View {
         if flow.coinbase {
-            Text("Coinbase").foregroundStyle(.orange)
+            Text("Coinbase").foregroundStyle(Tone.mined)
         } else if flow.private {
-            Text(output ? "Private Output" : "Private Input").foregroundStyle(.purple)
+            Text(output ? "Private Output" : "Private Input").foregroundStyle(Tone.label)
         } else if flow.addresses.isEmpty {
             Text("address unavailable").foregroundStyle(.secondary)
         } else {

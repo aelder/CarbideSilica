@@ -44,6 +44,7 @@ struct CommandPalette: View {
                 TextField("Go to or do", text: $query, prompt: Text("Type a command, a place or a card of this page"))
                     .textFieldStyle(.plain)
                     .font(.title3)
+                    .foregroundStyle(Tone.value)
                     .padding(12)
                     .focused($focused)
                     .onSubmit { run(rows) }
@@ -51,7 +52,7 @@ struct CommandPalette: View {
                     .onKeyPress(.downArrow) { move(1, rows.count) }
                     .onKeyPress(.upArrow) { move(-1, rows.count) }
                     .onChange(of: query) { selection = 0 }
-                Divider()
+                PanelRule()
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -64,7 +65,7 @@ struct CommandPalette: View {
                                     }
                             }
                             if rows.isEmpty {
-                                Text("No command has these letters.").foregroundStyle(.secondary).padding(14)
+                                Text("No command has these letters.").foregroundStyle(Tone.label).padding(14)
                             }
                         }
                         .padding(.vertical, 4)
@@ -76,9 +77,10 @@ struct CommandPalette: View {
                 }
             }
             .frame(width: 560)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator))
-            .shadow(radius: 18, y: 6)
+            .background(Tone.screen, in: RoundedRectangle(cornerRadius: 4))
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Tone.rule, lineWidth: 1))
+            .overlay(CornerMarks().stroke(Tone.value.opacity(0.55), lineWidth: 1).padding(5).allowsHitTesting(false))
+            .environment(\.colorScheme, .dark)
             .padding(.top, 70)
         }
         .onAppear {
@@ -89,16 +91,19 @@ struct CommandPalette: View {
 
     private func line(_ item: PaletteItem, selected: Bool) -> some View {
         HStack(spacing: 10) {
-            Text(item.title)
-            Text(item.group).font(.caption).foregroundStyle(.secondary)
+            Text(item.title).foregroundStyle(Tone.value)
+            NameText(item.group)
             Spacer()
             if !item.key.isEmpty {
-                Text(item.key).font(.callout.monospaced()).foregroundStyle(.secondary)
+                KeyboardReference.key(item.key)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(selected ? Color.accentColor.opacity(0.22) : .clear, in: RoundedRectangle(cornerRadius: 5))
+        .background(selected ? Tone.present.opacity(0.14) : .clear, in: Rectangle())
+        .overlay(alignment: .leading) {
+            if selected { Rectangle().fill(Tone.present).frame(width: 2) }
+        }
         .padding(.horizontal, 4)
         .contentShape(Rectangle())
     }

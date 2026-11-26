@@ -161,7 +161,7 @@ struct TransactionView: View {
 
     /// The fill of a row that the statement marks.
     private func mark(_ on: Bool) -> Color {
-        on ? Color.accentColor.opacity(0.1) : .clear
+        on ? Tone.present.opacity(0.08) : .clear
     }
 
     /// The menu's investigation commands: each scrolls to its card and starts it.
@@ -271,10 +271,10 @@ private struct TransactionHeader: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 statusMark
                 if transaction.inMempool {
-                    TagChip(text: "Mempool", color: .orange)
+                    Plate("Mempool", fill: Tone.mined)
                 }
                 if transaction.fromPublicApi {
-                    TagChip(text: "Public API", color: .secondary)
+                    Plate("Public API")
                         .help("A public API supplied this transaction, not the local node.")
                 }
                 Spacer()
@@ -374,7 +374,7 @@ private struct ValueLines: View {
         TotalRow(label: "Inputs (\(accounting.inputCount))", total: accounting.inputs)
         TotalRow(label: "Outputs (\(accounting.outputCount))", total: accounting.outputs)
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text("Fee").foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+            NameText("Fee").frame(width: 170, alignment: .leading)
             switch accounting.feeKind {
             case .known:
                 Text(accounting.feeLabel).monospacedDigit().textSelection(.enabled)
@@ -390,7 +390,7 @@ private struct ValueLines: View {
         }
         if accounting.showPublicDelta {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("Public native delta").foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+                NameText("Public native delta").frame(width: 170, alignment: .leading)
                 if let delta = accounting.publicNativeDelta {
                     (Text(Format.coins(delta)).monospacedDigit() + Text(" \(transaction.coin)").foregroundStyle(.secondary))
                         .textSelection(.enabled)
@@ -411,7 +411,7 @@ private struct TotalRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label).foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+            NameText(label).frame(width: 170, alignment: .leading)
             VStack(alignment: .leading, spacing: 3) {
                 Text(total.label).monospacedDigit().textSelection(.enabled)
                 ForEach(total.reserves, id: \.currency) { reserve in
@@ -449,7 +449,7 @@ private struct RegistrationLine: View {
             FieldRow(label: pair.0, value: pair.1, route: .identity(name: pair.1))
         } else {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("Identity").foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+                NameText("Identity").frame(width: 170, alignment: .leading)
                 Text(line).textSelection(.enabled)
                 Spacer(minLength: 0)
             }
@@ -481,11 +481,11 @@ private struct AnnotationRow: View {
     var body: some View {
         if !annotations.isEmpty || !badges.isEmpty {
             HStack(spacing: 6) {
-                ForEach(annotations, id: \.self) { TagChip(text: $0, color: .teal) }
+                ForEach(annotations, id: \.self) { Plate($0, fill: Tone.record) }
                 ForEach(badges, id: \.self) { badge in
                     Label(badge, systemImage: "hourglass")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Tone.mined)
                         .help(badge == "Immature"
                             ? "A coinbase output cannot be spent until it is 100 blocks deep."
                             : "An output can stake only after 150 confirmations.")
@@ -505,7 +505,7 @@ private struct InputRow: View {
             IndexLabel(index: input.index)
             VStack(alignment: .leading, spacing: 4) {
                 if input.coinbase {
-                    TagChip(text: "Coinbase", color: .orange)
+                    Plate("Coinbase", fill: Tone.mined)
                 } else if let pool = input.shieldedPool {
                     Text("Shielded pool · \(pool)").foregroundStyle(.secondary)
                     Text("The address is unknown (shielded).").font(.callout).foregroundStyle(.secondary)
@@ -664,7 +664,8 @@ private struct OutputRow: View {
             if showingJSON {
                 JSONTreeView(json: output.json)
                     .padding(10)
-                    .background(.background.tertiary, in: RoundedRectangle(cornerRadius: 6))
+                    .background(Tone.screen, in: Rectangle())
+                    .overlay(Rectangle().strokeBorder(Tone.rule, lineWidth: 1))
                     .padding(.leading, 40)
             }
         }
@@ -699,7 +700,7 @@ private struct OutputRow: View {
                     Button {
                         open(target)
                     } label: {
-                        TagChip(text: tag.label + " ↗")
+                        Plate(tag.label + " ↗")
                     }
                     .buttonStyle(.plain)
                     .help("Open output \(target.output) of \(Format.short(target.txid))")
@@ -707,12 +708,12 @@ private struct OutputRow: View {
                     Button {
                         model.open(.currency(name: currency))
                     } label: {
-                        TagChip(text: "\(tag.label): \(currencyName(currency))")
+                        Plate("\(tag.label): \(currencyName(currency))")
                     }
                     .buttonStyle(.plain)
                     .help(currency)
                 } else {
-                    TagChip(text: tag.label)
+                    Plate(tag.label)
                         .help(tag.traceable ? "The transfer trace for this output is above." : "")
                 }
             }
@@ -766,7 +767,7 @@ private struct ReferenceRow: View {
                 Button(showingBytes ? "Hide bytes" : "View \(hex.count / 2) bytes (\(scriptBody ? "script bytes" : "payload"))") {
                     showingBytes.toggle()
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.displayLink)
             }
         }
         .font(.callout)

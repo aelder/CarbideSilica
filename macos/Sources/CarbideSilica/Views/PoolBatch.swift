@@ -38,50 +38,76 @@ struct PoolBatchView: View {
         let flows = flows
         let largest = max(flows.compactMap(\.value).max() ?? 0, 1e-12)
         VStack(alignment: .leading, spacing: 8) {
-            Text("Last conversion batch at this date").font(.subheadline.weight(.semibold))
             if flows.isEmpty {
+                NameText("Last conversion batch at this date")
                 Text("The last batch before this block had no conversions.")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(flows.enumerated()), id: \.element.id) { position, flow in
-                        if position > 0 { Divider() }
-                        HStack(spacing: 14) {
-                            Text(name(flow.id)).fontWeight(.semibold).lineLimit(1)
-                                .frame(width: 130, alignment: .leading)
-                            Canvas { context, size in
-                                let middle = size.width / 2
-                                context.fill(
-                                    Path(CGRect(x: middle - 0.5, y: 0, width: 1, height: size.height)),
-                                    with: .color(.secondary.opacity(0.7)))
-                                let length = max(CGFloat((flow.value ?? 0) / largest) * (middle - 2), 2)
-                                let incoming = flow.amountIn >= flow.amountOut
-                                let bar = CGRect(
-                                    x: incoming ? middle : middle - length, y: 1, width: length, height: size.height - 2)
-                                if incoming {
-                                    context.fill(Path(bar), with: .color(.accentColor))
-                                } else {
-                                    context.stroke(Path(bar), with: .color(.primary), lineWidth: 1.3)
-                                }
+                DisplayPanel {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .firstTextBaseline) {
+                            NameText("Last conversion batch at this date")
+                            Spacer()
+                            HStack(spacing: 10) {
+                                legendKey(incoming: false)
+                                NameText("Out")
+                                legendKey(incoming: true)
+                                NameText("In")
                             }
-                            .frame(height: 11)
-                            .accessibilityHidden(true)
-                            Text(line(flow)).font(.callout).monospacedDigit().lineLimit(1)
-                                .frame(width: 330, alignment: .trailing)
                         }
-                        .padding(.vertical, 6)
-                        .accessibilityElement(children: .combine)
+                        PanelRule()
+                        VStack(spacing: 0) {
+                            ForEach(Array(flows.enumerated()), id: \.element.id) { position, flow in
+                                if position > 0 { Rectangle().fill(Tone.grid).frame(height: 1) }
+                                HStack(spacing: 14) {
+                                    Text(name(flow.id)).font(.callout.weight(.semibold)).foregroundStyle(Tone.value)
+                                        .lineLimit(1)
+                                        .frame(width: 130, alignment: .leading)
+                                    Canvas { context, size in
+                                        let middle = size.width / 2
+                                        context.rule(middle, 0, middle, size.height, Tone.axis)
+                                        let length = max(CGFloat((flow.value ?? 0) / largest) * (middle - 2), 2)
+                                        let incoming = flow.amountIn >= flow.amountOut
+                                        let bar = CGRect(
+                                            x: incoming ? middle : middle - length, y: 1, width: length,
+                                            height: size.height - 2)
+                                        if incoming {
+                                            context.fill(Path(bar), with: .color(Tone.record))
+                                        } else {
+                                            context.stroke(
+                                                Path(bar.insetBy(dx: 0.5, dy: 0.5)), with: .color(Tone.value), lineWidth: 1)
+                                        }
+                                    }
+                                    .frame(height: 11)
+                                    .accessibilityHidden(true)
+                                    Text(line(flow)).font(.callout).monospacedDigit().foregroundStyle(Tone.value)
+                                        .lineLimit(1)
+                                        .frame(width: 330, alignment: .trailing)
+                                }
+                                .padding(.vertical, 6)
+                                .accessibilityElement(children: .combine)
+                            }
+                        }
+                        PanelRule()
+                        Text(
+                            "A solid bar to the right came into the pool. A hollow bar to the left went out. "
+                                + (unit == nil ? "" : "The bars are the value of each amount in \(name(unit ?? "")), at the pool's own rate. ")
+                                + "The pool does conversions in batches. The chain records the quantity in and out for each "
+                                + "reserve. It does not record the pairs.")
+                            .font(Tone.caption).foregroundStyle(Tone.label)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Text(
-                    "A solid bar to the right came into the pool. A hollow bar to the left went out. "
-                        + (unit == nil ? "" : "The bars are the value of each amount in \(name(unit ?? "")), at the pool's own rate. ")
-                        + "The pool does conversions in batches. The chain records the quantity in and out for each "
-                        + "reserve. It does not record the pairs.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// A small square of the legend: an outline for out, solid for in.
+    private func legendKey(incoming: Bool) -> some View {
+        Rectangle()
+            .fill(incoming ? Tone.record : Color.clear)
+            .overlay(Rectangle().strokeBorder(incoming ? Color.clear : Tone.value, lineWidth: 1))
+            .frame(width: 9, height: 9)
     }
 
     private func line(_ flow: Flow) -> String {

@@ -75,7 +75,7 @@ struct BlockView: View {
                             Button("Open the active block at height \(Format.integer(block.row.height))") {
                                 model.open(.block(id: active))
                             }
-                            .buttonStyle(.link)
+                            .buttonStyle(.displayLink)
                         }
                     }
                 }
@@ -164,8 +164,8 @@ struct TransactionRowView: View {
             Spacer(minLength: 8)
             if transaction.inputCount + transaction.outputCount > 0 {
                 Text("\(transaction.inputCount) in · \(transaction.outputCount) out")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .font(.callout).monospacedDigit()
+                    .foregroundStyle(Tone.label)
             }
             if let sats = transaction.outputSats {
                 CoinAmount(sats: sats)

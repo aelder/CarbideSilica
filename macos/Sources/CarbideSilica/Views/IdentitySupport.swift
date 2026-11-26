@@ -24,12 +24,12 @@ struct IDLink: View {
                 Button(isCurrency && name.hasSuffix("@") ? String(name.dropLast()) : name) {
                     model.open(route)
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.displayLink)
                 .lineLimit(1)
                 .help(id)
             } else {
                 Button(shorten ? Format.short(id) : id) { model.open(route) }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                     .font(.body.monospaced())
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -49,8 +49,7 @@ struct IDRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label)
-                .foregroundStyle(.secondary)
+            NameText(label)
                 .frame(width: 170, alignment: .leading)
             IDLink(id: id, route: route, shorten: false)
             if let note {
@@ -70,11 +69,10 @@ struct ValueRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label)
-                .foregroundStyle(.secondary)
+            NameText(label)
                 .frame(width: 170, alignment: .leading)
             if warning {
-                Label(value, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                Label(value, systemImage: "exclamationmark.triangle").foregroundStyle(Tone.mined)
             } else {
                 Text(value).textSelection(.enabled)
             }

@@ -145,17 +145,17 @@ private struct IdentityPage: View {
                         Label("Currency defined", systemImage: "circle.hexagongrid")
                             .font(.caption.weight(.medium))
                     }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                     .help("Open the currency that this identity defines")
                 }
                 if state.tokenizedControl {
-                    TagChip(text: "Tokenized control")
+                    Plate("Tokenized control")
                 } else if state.flags == 0 {
                     Text("No flags set").font(.caption).foregroundStyle(.secondary)
                 }
                 if let offers, tipHealthy {
-                    if offers.buy { TagChip(text: "Buy offers", color: .purple) }
-                    if offers.sell { TagChip(text: "Sell offers", color: .purple) }
+                    if offers.buy { Plate("Buy offers", fill: Tone.staked) }
+                    if offers.sell { Plate("Sell offers", fill: Tone.staked) }
                 }
             }
             versionStepper
@@ -166,12 +166,14 @@ private struct IdentityPage: View {
         let stale = stale && isLatest
         let word = stale ? "Stale after reorg" : state.status.capitalized
         let good = !stale && state.status.lowercased() == "active"
-        return Label(word, systemImage: good ? "checkmark.circle" : "exclamationmark.triangle")
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(good ? .green : .red)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background((good ? Color.green : Color.red).opacity(0.12), in: Capsule())
+        let color = good ? Tone.good : Tone.alert
+        return HStack(spacing: 5) {
+            Image(systemName: good ? "checkmark.circle" : "exclamationmark.triangle")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(color)
+                .accessibilityHidden(true)
+            Plate(word, fill: color)
+        }
     }
 
     private var versionStepper: some View {
@@ -187,7 +189,7 @@ private struct IdentityPage: View {
             Text("Version \(viewed + 1) of \(timeline.versions.count)")
                 .monospacedDigit()
                 .fontWeight(.semibold)
-            Text(isLatest ? "current" : "past").foregroundStyle(isLatest ? .green : .orange)
+            Text(isLatest ? "current" : "past").foregroundStyle(isLatest ? Tone.good : Tone.mined)
 
             Button {
                 viewed = min(viewed + 1, latestIndex)
@@ -199,7 +201,7 @@ private struct IdentityPage: View {
 
             if !isLatest {
                 Button("Show the current version") { viewed = latestIndex }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
             }
         }
         .labelStyle(.iconOnly)
@@ -395,7 +397,7 @@ struct BalanceList: View {
                     Button(label(balance)) {
                         model.open(.currency(name: balance.native ? model.coin : balance.currencyId))
                     }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                     .lineLimit(1)
                     .help(balance.currencyId)
                     .frame(width: 170, alignment: .leading)

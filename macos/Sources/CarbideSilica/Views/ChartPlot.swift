@@ -3,12 +3,12 @@ import SwiftUI
 
 /// Colours shared by the chart plots. Each also has a shape and a word in the legend.
 enum ChartColors {
-    static let block = Color.blue
-    static let average = Color.green
-    static let long = Color.orange
-    static let reserve = Color.green
-    static let grid = Color.secondary.opacity(0.18)
-    static let selection = Color.accentColor
+    static let block = Tone.record
+    static let average = Tone.value
+    static let long = Tone.mined
+    static let reserve = Tone.good
+    static let grid = Tone.grid
+    static let selection = Tone.present
 }
 
 /// A legend row: a small mark and the words for it.
@@ -38,13 +38,13 @@ struct ChartLegend: View {
                         path.addLine(to: CGPoint(x: size.width, y: mid))
                         context.stroke(
                             path, with: .color(item.color),
-                            style: StrokeStyle(lineWidth: 2, dash: item.shape == .dash ? [3, 3] : []))
+                            style: StrokeStyle(lineWidth: 1, dash: item.shape == .dash ? [3, 3] : []))
                     case .bar:
-                        context.fill(Path(CGRect(x: size.width / 2 - 1, y: 1, width: 2, height: size.height - 2)), with: .color(item.color))
+                        context.fill(Path(CGRect(x: size.width / 2 - 0.5, y: 1, width: 1, height: size.height - 2)), with: .color(item.color))
                     }
                 }
                 .frame(width: 16, height: 10)
-                Text(item.text).font(.caption)
+                Text(item.text).font(.caption).foregroundStyle(Tone.label)
             }
         }
     }
@@ -79,6 +79,14 @@ struct BlockPlot: View {
 
     var body: some View {
         let scale = PlotScale(samples: samples, first: first, last: last, metric: metric)
+        DisplayPanel(padding: 0) {
+            plotView(scale)
+        }
+        .accessibilityElement()
+        .accessibilityLabel("\(metric.title) plot of \(samples.count) blocks")
+    }
+
+    private func plotView(_ scale: PlotScale) -> some View {
         GeometryReader { geometry in
             let plot = CGRect(
                 x: gutter, y: 8,
@@ -95,8 +103,6 @@ struct BlockPlot: View {
                     if let hash = nearest(to: tap.location.x, plot: plot, scale: scale) { select(hash) }
                 })
         }
-        .accessibilityElement()
-        .accessibilityLabel("\(metric.title) plot of \(samples.count) blocks")
     }
 
     // MARK: Drawing
@@ -108,15 +114,11 @@ struct BlockPlot: View {
             line.move(to: CGPoint(x: plot.minX, y: y))
             line.addLine(to: CGPoint(x: plot.maxX, y: y))
             context.stroke(line, with: .color(ChartColors.grid), lineWidth: 1)
-            context.draw(
-                Text(tick.label).font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: plot.minX - 6, y: y), anchor: .trailing)
+            context.name(tick.label, plot.minX - 6, y, .trailing)
         }
         if metric == .ratio {
-            for (level, label) in [(1.0 / 3.0, "Mined"), (2.0 / 3.0, "Staked")] {
-                context.draw(
-                    Text(label).font(.caption2).foregroundStyle(ChartColors.block),
-                    at: CGPoint(x: plot.maxX + 2, y: plot.maxY - plot.height * level), anchor: .bottomTrailing)
+            for (level, label, color) in [(1.0 / 3.0, "Mined", Tone.mined), (2.0 / 3.0, "Staked", Tone.staked)] {
+                context.name(label, plot.maxX + 2, plot.maxY - plot.height * level, .bottomTrailing, color: color)
             }
         }
         if metric == .intervals {
@@ -125,24 +127,22 @@ struct BlockPlot: View {
                 var line = Path()
                 line.move(to: CGPoint(x: plot.minX, y: y))
                 line.addLine(to: CGPoint(x: plot.maxX, y: y))
-                context.stroke(line, with: .color(.secondary), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                context.stroke(line, with: .color(Tone.axis), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
             }
         }
         var axis = Path()
         axis.move(to: CGPoint(x: plot.minX, y: plot.minY))
         axis.addLine(to: CGPoint(x: plot.minX, y: plot.maxY))
         axis.addLine(to: CGPoint(x: plot.maxX, y: plot.maxY))
-        context.stroke(axis, with: .color(.secondary.opacity(0.5)), lineWidth: 1)
+        context.stroke(axis, with: .color(Tone.axis), lineWidth: 1)
         for (index, tick) in scale.xTicks.enumerated() {
             let x = scale.x(tick, in: plot)
             var mark = Path()
             mark.move(to: CGPoint(x: x, y: plot.maxY))
             mark.addLine(to: CGPoint(x: x, y: plot.maxY + 4))
-            context.stroke(mark, with: .color(.secondary), lineWidth: 1)
+            context.stroke(mark, with: .color(Tone.axis), lineWidth: 1)
             let anchor: UnitPoint = index == 0 ? .topLeading : index == scale.xTicks.count - 1 ? .topTrailing : .top
-            context.draw(
-                Text(scale.xLabel(tick)).font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: x, y: plot.maxY + 6), anchor: anchor)
+            context.name(scale.xLabel(tick), x, plot.maxY + 6, anchor)
         }
     }
 
@@ -167,11 +167,11 @@ struct BlockPlot: View {
                 let point = CGPoint(x: scale.x(scale.xValue(sample), in: plot), y: scale.y(value, in: plot))
                 dots.addEllipse(in: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2))
             }
-            context.fill(dots, with: .color(ChartColors.block))
+            context.fill(dots, with: .color(metric == .mining ? Tone.mined : Tone.staked))
             let averages = line(plot: plot, scale: scale, joins: { $0.linked }) { sample in
                 (metric == .mining ? sample.miningAverage : sample.stakingAverage)?.value
             }
-            context.stroke(averages, with: .color(ChartColors.average), lineWidth: 2)
+            context.stroke(averages, with: .color(ChartColors.average), lineWidth: 1)
         case .ratio:
             var dots = Path()
             for sample in samples {
@@ -189,10 +189,10 @@ struct BlockPlot: View {
             var half = Path()
             half.move(to: CGPoint(x: plot.minX, y: center))
             half.addLine(to: CGPoint(x: plot.maxX, y: center))
-            context.stroke(half, with: .color(.secondary), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            context.stroke(half, with: .color(Tone.axis), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
             let joins: (ChartSample) -> Bool = { $0.linked && $0.timeIncreases }
-            context.stroke(line(plot: plot, scale: scale, joins: joins) { $0.share1000 }, with: .color(ChartColors.long), lineWidth: 2)
-            context.stroke(line(plot: plot, scale: scale, joins: joins) { $0.share100 }, with: .color(ChartColors.average), lineWidth: 1.5)
+            context.stroke(line(plot: plot, scale: scale, joins: joins) { $0.share1000 }, with: .color(Tone.record), lineWidth: 1)
+            context.stroke(line(plot: plot, scale: scale, joins: joins) { $0.share100 }, with: .color(Tone.staked), lineWidth: 1)
         case .feePool:
             break
         }
@@ -224,10 +224,8 @@ struct BlockPlot: View {
     private func drawSelection(_ context: inout GraphicsContext, plot: CGRect, scale: PlotScale) {
         guard let selected, let sample = samples.first(where: { $0.hash == selected }) else { return }
         let x = scale.x(scale.xValue(sample), in: plot)
-        var rule = Path()
-        rule.move(to: CGPoint(x: x, y: plot.minY))
-        rule.addLine(to: CGPoint(x: x, y: plot.maxY))
-        context.stroke(rule, with: .color(ChartColors.selection.opacity(0.7)), lineWidth: 1)
+        context.lit(
+            Path(CGRect(x: x - 0.75, y: plot.minY, width: 1.5, height: plot.height)), ChartColors.selection, strength: 0.6)
         let value: Double?
         switch metric {
         case .intervals: value = sample.interval.map { Double(max($0, 0)) }
@@ -239,7 +237,7 @@ struct BlockPlot: View {
         if let value {
             let y = metric == .ratio ? plot.maxY - plot.height * value : scale.y(value, in: plot)
             let ring = CGRect(x: x - 5, y: y - 5, width: 10, height: 10)
-            context.stroke(Path(ellipseIn: ring), with: .color(ChartColors.selection), lineWidth: 2)
+            context.stroke(Path(ellipseIn: ring), with: .color(ChartColors.selection), lineWidth: 1.5)
         }
     }
 

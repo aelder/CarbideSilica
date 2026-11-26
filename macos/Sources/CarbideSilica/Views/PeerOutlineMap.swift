@@ -121,7 +121,7 @@ struct PeerOutlineMap: View {
     private let joinDistance: CGFloat = 22
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        DisplayPanel(padding: 0) {
             GeometryReader { geometry in
                 let size = geometry.size
                 let frame = frame(for: size)
@@ -145,18 +145,19 @@ struct PeerOutlineMap: View {
                 .accessibilityLabel(spoken(marks))
                 .overlay(alignment: .bottomLeading) {
                     Text(caption(marks))
-                        .font(.callout)
+                        .font(Tone.caption)
+                        .foregroundStyle(Tone.value)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 5))
-                        .padding(8)
+                        .background(Tone.screen.opacity(0.85))
+                        .overlay(Rectangle().strokeBorder(Tone.rule, lineWidth: 1))
+                        .padding(12)
                         .opacity(hovered == nil ? 0 : 1)
                         .allowsHitTesting(false)
                 }
             }
             .frame(height: height)
-            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
         }
     }
 
@@ -213,11 +214,11 @@ struct PeerOutlineMap: View {
         // A light grid each 30 degrees.
         for longitude in stride(from: -180.0, through: 180, by: 30) where longitude > frame.west && longitude < frame.east {
             let x = frame.point(longitude: longitude, latitude: 0, in: size).x
-            context.fill(Path(CGRect(x: x, y: 0, width: 0.5, height: size.height)), with: .color(.secondary.opacity(0.18)))
+            context.rule(x, 0, x, size.height, Tone.grid)
         }
         for latitude in stride(from: -60.0, through: 60, by: 30) where latitude > frame.south && latitude < frame.north {
             let y = frame.point(longitude: 0, latitude: latitude, in: size).y
-            context.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 0.5)), with: .color(.secondary.opacity(0.18)))
+            context.rule(0, y, size.width, y, Tone.grid)
         }
         // The coasts.
         var coast = Path()
@@ -225,26 +226,34 @@ struct PeerOutlineMap: View {
             let at = frame.point(longitude: point.longitude, latitude: point.latitude, in: size)
             coast.addEllipse(in: CGRect(x: at.x - 1.1, y: at.y - 1.1, width: 2.2, height: 2.2))
         }
-        context.fill(coast, with: .color(.secondary.opacity(0.75)))
-        // The peers.
+        context.fill(coast, with: .color(Tone.axis))
+        // The peers. A hovered mark is the selection: it has light.
         for mark in marks {
             let radius = mark.radius
+            let chosen = hovered == mark.id
+            let color = chosen ? Tone.present : Tone.record
             let disc = Path(
                 ellipseIn: CGRect(x: mark.centre.x - radius, y: mark.centre.y - radius, width: radius * 2, height: radius * 2))
-            context.fill(disc, with: .color(.accentColor.opacity(hovered == mark.id ? 0.5 : 0.3)))
-            context.stroke(disc, with: .color(.accentColor), lineWidth: hovered == mark.id ? 2 : 1.3)
-            if mark.peers.count > 1 {
-                context.draw(
-                    Text("\(mark.peers.count)").font(.callout.weight(.semibold)).foregroundStyle(.primary),
-                    at: mark.centre, anchor: .center)
-            } else {
-                context.fill(
-                    Path(ellipseIn: CGRect(x: mark.centre.x - 2, y: mark.centre.y - 2, width: 4, height: 4)),
-                    with: .color(.accentColor))
+            context.fill(disc, with: .color(Tone.record.opacity(chosen ? 0.28 : 0.16)))
+            if chosen {
+                context.drawLayer { layer in
+                    layer.addFilter(.blur(radius: 3.5))
+                    layer.stroke(disc, with: .color(Tone.present.opacity(0.8)), lineWidth: 2)
+                }
             }
+            context.stroke(disc, with: .color(color), lineWidth: chosen ? 1.5 : 1)
+            if mark.peers.count > 1 {
+                context.figure("\(mark.peers.count)", mark.centre.x, mark.centre.y, color: chosen ? Tone.present : Tone.value)
+            } else {
+                context.lit(
+                    Path(ellipseIn: CGRect(x: mark.centre.x - 2, y: mark.centre.y - 2, width: 4, height: 4)),
+                    color, strength: chosen ? 0.9 : 0)
+            }
+            // Place names stay in mixed case: a person reads them.
             let right = mark.centre.x < size.width - 150
             context.draw(
-                Text(mark.label).font(.callout.weight(.medium)).foregroundStyle(.primary),
+                Text(mark.label).font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(chosen ? Tone.present : Tone.value),
                 at: CGPoint(x: mark.centre.x + (right ? radius + 6 : -radius - 6), y: mark.centre.y),
                 anchor: right ? .leading : .trailing)
         }

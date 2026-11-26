@@ -72,7 +72,7 @@ struct ChartsView: View {
     private var controls: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Span").foregroundStyle(.secondary)
+                NameText("Span")
                 Picker("Span", selection: Binding(get: { state.span }, set: { state.setSpan($0) })) {
                     ForEach(ChartState.Span.allCases) { Text($0.title).tag($0) }
                 }
@@ -128,30 +128,35 @@ struct ChartsView: View {
     private var coverage: some View {
         if let page = state.page, let first = page.samples.first, let last = page.samples.last {
             VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 16) {
+                HStack(alignment: .firstTextBaseline, spacing: 24) {
                     endpoint("Start", first)
                     endpoint("End", last)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Covers").font(.caption).foregroundStyle(.secondary)
-                        Text(ChartFormat.duration(Int64(last.time) - Int64(first.time)) + " of header time")
-                            .monospacedDigit()
+                    VStack(alignment: .leading, spacing: 3) {
+                        NameText("Covers")
+                        HStack(alignment: .lastTextBaseline, spacing: 5) {
+                            Text(ChartFormat.duration(Int64(last.time) - Int64(first.time)))
+                                .font(Tone.figureSmall).foregroundStyle(Tone.value)
+                            Text("of header time").font(Tone.caption).foregroundStyle(Tone.label)
+                        }
+                        .monospacedDigit()
                     }
                 }
                 Text(state.coverageShort)
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Tone.label)
                     .help(state.coverageSentence)
             }
         }
     }
 
     private func endpoint(_ label: String, _ sample: ChartSample) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 3) {
+            NameText(label)
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
                 Button("#\(Format.integer(sample.height))") { model.open(.block(id: sample.hash)) }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
+                    .font(Tone.figureSmall)
                     .help(sample.hash)
-                Text(Format.date(sample.time)).monospacedDigit()
+                Text(Format.date(sample.time)).font(Tone.caption).foregroundStyle(Tone.value).monospacedDigit()
             }
         }
     }
@@ -185,7 +190,7 @@ struct ChartsView: View {
                     ? "Keys: ← → or j k select a block, Home End ends, [ ] ranges, − + span, g go to, Return open"
                     : "Click the panels to use the keys."
             )
-            .font(.caption2).foregroundStyle(.secondary)
+            .font(.caption2).foregroundStyle(Tone.label)
         } else if state.loading {
             ProgressView("Loading block headers…").frame(maxWidth: .infinity, minHeight: 300)
         } else if state.failure == nil {
@@ -205,7 +210,7 @@ struct ChartsView: View {
                     Text("Block rate: each point is one period. The band is the mean with limits of 2.66 times the mean change between periods. The dashed line is the target. A red point is outside the limits.")
                     Text("Difficulty: each dot is one block of that kind, or a bar from the lowest to the highest value where the dots would merge. The line is MA100, the mean over the trailing 100 chain heights, so it turns after the dots turn. A gap means that the trailing 100 heights are incomplete or hold a block of the kind without a value. The axes are fitted to the values and do not start at zero.")
                     Text("Staking difficulty = fixed initial Verus LWMA posLimit / observed block PoS target. The target comes from the nonce and must equal postarget.")
-                    Text("Staked share: the main line is the share over 100 blocks and the orange line is the share over 1,000 blocks. The band is three standard deviations of chance for 100 blocks. A share line needs a complete window of known blocks.")
+                    Text("Staked share: the violet line is the share over 100 blocks and the blue line is the share over 1,000 blocks. The band is three standard deviations of chance for 100 blocks. A share line needs a complete window of known blocks.")
                     Text("Fee pool: a tick at the top is a block where the pool rose. This is a balance chart. It does not separate inflow from payout.")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -889,21 +894,21 @@ private struct SampleTable: View {
             Card("Samples as a table") {
                 DisclosureGroup(isExpanded: $expanded) {
                     Table(Array(page.samples.reversed())) {
-                        TableColumn("Height") { Text(String($0.height)).monospacedDigit() }
+                        TableColumn(ChartFormat.columnName("Height")) { Text(String($0.height)).monospacedDigit() }
                             .width(min: 70, ideal: 80)
-                        TableColumn("Time") { Text(Format.date($0.time)).monospacedDigit() }
+                        TableColumn(ChartFormat.columnName("Time")) { Text(Format.date($0.time)).monospacedDigit() }
                             .width(min: 150, ideal: 180)
-                        TableColumn("Produced") { Text(ChartFormat.production($0.production)) }
+                        TableColumn(ChartFormat.columnName("Produced")) { Text(ChartFormat.production($0.production)) }
                             .width(min: 60, ideal: 70)
-                        TableColumn("Interval") { Text($0.interval.map { ChartFormat.signedSeconds($0) } ?? "–").monospacedDigit() }
+                        TableColumn(ChartFormat.columnName("Interval")) { Text($0.interval.map { ChartFormat.signedSeconds($0) } ?? "–").monospacedDigit() }
                             .width(min: 60, ideal: 70)
-                        TableColumn("Mining") { Text($0.mining.map { Format.difficulty($0) } ?? "–").monospacedDigit() }
+                        TableColumn(ChartFormat.columnName("Mining")) { Text($0.mining.map { Format.difficulty($0) } ?? "–").monospacedDigit() }
                             .width(min: 60, ideal: 70)
-                        TableColumn("Staking") { Text($0.staking.map { Format.difficulty($0) } ?? "–").monospacedDigit() }
+                        TableColumn(ChartFormat.columnName("Staking")) { Text($0.staking.map { Format.difficulty($0) } ?? "–").monospacedDigit() }
                             .width(min: 60, ideal: 70)
-                        TableColumn("Staked, 100") { Text($0.share100.map(Format.percent) ?? "–").monospacedDigit() }
+                        TableColumn(ChartFormat.columnName("Staked, 100")) { Text($0.share100.map(Format.percent) ?? "–").monospacedDigit() }
                             .width(min: 70, ideal: 80)
-                        TableColumn("Staked, 1,000") { Text($0.share1000.map(Format.percent) ?? "–").monospacedDigit() }
+                        TableColumn(ChartFormat.columnName("Staked, 1,000")) { Text($0.share1000.map(Format.percent) ?? "–").monospacedDigit() }
                             .width(min: 70, ideal: 90)
                     }
                     .frame(height: 320)
@@ -960,6 +965,11 @@ enum ChartFormat {
         if days > 0 { return "\(days) d \(hours) h \(minutes) min" }
         if hours > 0 { return "\(hours) h \(minutes) min" }
         return "\(minutes) min \(seconds % 60) s"
+    }
+
+    /// The name of a table column, in spaced capitals like the names on the charts.
+    static func columnName(_ name: String) -> Text {
+        Text(name.uppercased()).font(Tone.small).tracking(1.1).foregroundStyle(Tone.label)
     }
 
     static func iso(_ unix: Int64) -> String {

@@ -115,15 +115,13 @@ private struct ObservedBlockList: View {
         if !rows.isEmpty {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
                 GridRow {
-                    Text("Last report")
-                    Text("Height")
-                    Text("Block")
-                    Text("Source")
-                    Text("Reported")
-                    Text("Stored body")
+                    NameText("Last report")
+                    NameText("Height")
+                    NameText("Block")
+                    NameText("Source")
+                    NameText("Reported")
+                    NameText("Stored body")
                 }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                     // Rows of one block are adjacent. Name the block once, then each source.
                     let repeated = index > 0 && rows[index - 1].blockHash == row.blockHash
@@ -194,11 +192,11 @@ struct MembershipMark: View {
     var body: some View {
         switch membership {
         case .active:
-            Label("Active", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            Label("Active", systemImage: "checkmark.circle.fill").foregroundStyle(Tone.good)
         case .orphaned:
-            Label("Orphaned", systemImage: "arrow.triangle.branch").foregroundStyle(.orange)
+            Label("Orphaned", systemImage: "arrow.triangle.branch").foregroundStyle(Tone.mined)
         case .unverified:
-            Label("Unverified", systemImage: "questionmark.circle").foregroundStyle(.secondary)
+            Label("Unverified", systemImage: "questionmark.circle").foregroundStyle(Tone.label)
                 .help("No stored report says whether this block is on the active chain.")
         }
     }

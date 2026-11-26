@@ -13,7 +13,7 @@ struct Breadcrumb: View {
             crumb(placeTitle, depth: 0)
             ForEach(Array(model.path.enumerated()), id: \.offset) { index, route in
                 Image(systemName: "chevron.compact.right")
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Tone.axis)
                     .accessibilityHidden(true)
                 crumb(route.crumbTitle(names: showsNames ? model.names : [:]), depth: index + 1)
             }
@@ -24,7 +24,8 @@ struct Breadcrumb: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.bar)
+        .background(Tone.screen)
+        .overlay(alignment: .bottom) { Rectangle().fill(Tone.rule).frame(height: 1) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Path")
     }
@@ -32,10 +33,10 @@ struct Breadcrumb: View {
     @ViewBuilder
     private func crumb(_ title: String, depth: Int) -> some View {
         if depth == model.path.count {
-            Text(title).truncationMode(.middle)
+            Text(title).foregroundStyle(Tone.value).truncationMode(.middle)
         } else {
             Button(title) { model.path = Array(model.path.prefix(depth)) }
-                .buttonStyle(.link)
+                .buttonStyle(.displayLink)
                 .truncationMode(.middle)
         }
     }

@@ -108,18 +108,18 @@ struct BookmarksView: View {
     private func row(_ entry: BookmarkEntry) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: Self.route(for: entry)?.symbol ?? (entry.kind == "notarizations" ? "link" : "bookmark"))
-                .foregroundStyle(.secondary).frame(width: 20)
+                .foregroundStyle(Tone.label).frame(width: 20)
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
                     Text(entry.description.isEmpty ? Self.kindWord(entry.kind) : entry.description)
                         .fontWeight(.semibold)
                     Spacer()
-                    Text(system(entry)).font(.callout).foregroundStyle(.secondary).help(entry.systemId)
+                    NameText(system(entry)).help(entry.systemId)
                 }
                 HStack(spacing: 8) {
-                    Text(entry.kind).font(.callout).foregroundStyle(.secondary)
+                    Plate(entry.kind)
                     Button(targetText(entry)) { open(entry) }
-                        .buttonStyle(.link)
+                        .buttonStyle(.displayLink)
                         .cursorStop(token: "\(entry.index)", copy: targetText(entry)) { open(entry) }
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -145,16 +145,16 @@ struct BookmarksView: View {
         case .cached(let source, let tags):
             HStack(spacing: 6) {
                 Label("Cached observation", systemImage: "tray.full")
-                    .font(.caption.weight(.semibold)).foregroundStyle(.green)
+                    .font(.caption.weight(.semibold)).foregroundStyle(Tone.good)
                 ForEach(tags, id: \.self) { TagChip(text: $0) }
-                Text("from \(observationSource(source))").font(.caption).foregroundStyle(.secondary).help(source)
+                Text("from \(observationSource(source))").font(.caption).foregroundStyle(Tone.label).help(source)
             }
         case .uncached:
             Label("Uncached", systemImage: "tray")
-                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                .font(.caption.weight(.semibold)).foregroundStyle(Tone.label)
         case .failed(let message):
             Label("Unavailable: \(message)", systemImage: "exclamationmark.triangle")
-                .font(.caption).foregroundStyle(.orange)
+                .font(.caption).foregroundStyle(Tone.mined)
                 .lineLimit(2)
         }
     }
@@ -185,8 +185,10 @@ struct BookmarksView: View {
                 Text("[bookmarks]\nfetch_missing_on_startup = true\nstartup_limit = 20")
                     .font(.callout.monospaced())
                     .textSelection(.enabled)
+                    .foregroundStyle(Tone.value)
                     .padding(8)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                    .background(Tone.screen, in: Rectangle())
+                    .overlay(Rectangle().strokeBorder(Tone.rule, lineWidth: 1))
             }
             if !file.settingsPath.isEmpty {
                 Text("Settings file: \(file.settingsPath)").font(.caption).foregroundStyle(.secondary)

@@ -17,19 +17,26 @@ struct TraceRoute: View {
 
     var body: some View {
         let _ = showsNames
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(Array(trace.legs.enumerated()), id: \.offset) { index, leg in
-                receipt(leg, number: trace.legs.count > 1 ? index + 1 : nil)
-            }
-            let marks = TraceAxis.marks(trace.moments)
-            if !marks.isEmpty {
-                Canvas { context, size in
-                    TraceAxis.draw(context, size, marks: marks, reached: trace.confidence == .verified, name: stageName)
+        DisplayPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(trace.legs.enumerated()), id: \.offset) { index, leg in
+                    receipt(leg, number: trace.legs.count > 1 ? index + 1 : nil)
                 }
-                .frame(height: 74)
-                .accessibilityLabel(spoken(marks))
+                let marks = TraceAxis.marks(trace.moments)
+                if !marks.isEmpty {
+                    PanelRule()
+                    Canvas { context, size in
+                        TraceAxis.draw(
+                            context, size, marks: marks, reached: trace.confidence == .verified, name: stageName)
+                    }
+                    .frame(height: 74)
+                    .accessibilityLabel(spoken(marks))
+                }
+                if trace.batch != nil {
+                    PanelRule()
+                }
+                batch
             }
-            batch
         }
     }
 
@@ -48,7 +55,7 @@ struct TraceRoute: View {
         let rate = leg.rates.first { $0.purpose == "Principal" } ?? leg.rates.first
         VStack(alignment: .leading, spacing: 6) {
             if let number {
-                Text("Leg \(number)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                NameText("Leg \(number)")
             }
             HStack(spacing: 6) {
                 box("Sent", leg.principalKnown ? list(leg.principal) : "not known")
@@ -69,12 +76,13 @@ struct TraceRoute: View {
                 Text(
                     "Rate of the batch: \(rate.exact ? "" : "approximately ")\(Format.coins(sats)) "
                         + "\(model.currencyName(rate.output.currency)) for 1 \(model.currencyName(rate.netInput.currency)).")
-                    .font(.callout)
+                    .font(Tone.caption)
+                    .foregroundStyle(Tone.value)
                     .textSelection(.enabled)
             }
             let fees = feeLine(leg)
             if !fees.isEmpty {
-                Text(fees).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                Text(fees).font(Tone.caption).foregroundStyle(Tone.label).textSelection(.enabled)
             }
         }
     }
@@ -97,12 +105,15 @@ struct TraceRoute: View {
     }
 
     private func box(_ title: String, _ value: String, strong: Bool = false, open: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased()).font(.caption2.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
+        // The received box has the colour of the result: green when the trace is verified,
+        // else the present.
+        let edge = strong ? (trace.confidence == .verified ? Tone.good : Tone.present) : Tone.axis
+        return VStack(alignment: .leading, spacing: 3) {
+            NameText(title).lineLimit(1)
             Text(value)
-                .font(.callout.weight(strong ? .semibold : .medium))
+                .font(Tone.figureSmall)
                 .monospacedDigit()
-                .foregroundStyle(open ? .secondary : .primary)
+                .foregroundStyle(open ? Tone.label : strong ? edge : Tone.value)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
@@ -110,18 +121,17 @@ struct TraceRoute: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(strong ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .background(strong ? edge.opacity(0.08) : .clear)
         .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(
-                    strong ? Color.accentColor : Color.secondary.opacity(0.4),
-                    style: StrokeStyle(lineWidth: 1, dash: open ? [5, 4] : [])))
+            Rectangle()
+                .strokeBorder(edge, style: StrokeStyle(lineWidth: 1, dash: open ? [5, 4] : [])))
     }
 
     private func arrow(_ label: String?) -> some View {
         VStack(spacing: 1) {
-            Text(label ?? " ").font(.caption2).foregroundStyle(.secondary).lineLimit(1).fixedSize()
-            Image(systemName: "arrow.right").font(.caption).foregroundStyle(.secondary)
+            Text((label ?? " ").uppercased()).font(Tone.small).tracking(1.1).foregroundStyle(Tone.label)
+                .lineLimit(1).fixedSize()
+            Image(systemName: "arrow.right").font(.caption).foregroundStyle(Tone.axis)
         }
         .accessibilityHidden(true)
     }
@@ -152,12 +162,14 @@ struct TraceRoute: View {
         if let batch = trace.batch {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 10) {
-                    Text("Export batch").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    NameText("Export batch")
                     HStack(spacing: 3) {
                         ForEach(0..<Int(min(batch.size, 40)), id: \.self) { index in
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(index == Int(batch.place) ? Color.accentColor : Color.secondary.opacity(0.45))
+                            let this = index == Int(batch.place)
+                            Rectangle()
+                                .fill(this ? Tone.present : Tone.axis)
                                 .frame(width: 11, height: 11)
+                                .shadow(color: this ? Tone.present.opacity(0.7) : .clear, radius: this ? 3 : 0)
                         }
                     }
                     .accessibilityHidden(true)
@@ -165,10 +177,11 @@ struct TraceRoute: View {
                         batch.size == 1
                             ? "This transfer was alone in its export."
                             : "Transfer \(batch.place + 1) of \(batch.size) in the export.")
-                        .font(.callout)
+                        .font(Tone.caption)
+                        .foregroundStyle(Tone.value)
                 }
                 if trace.confidence == .verified, trace.legs.contains(where: { !$0.rates.isEmpty }) {
-                    Text(candidateLine).font(.callout).foregroundStyle(.secondary)
+                    Text(candidateLine).font(Tone.caption).foregroundStyle(Tone.label)
                 }
             }
         }
@@ -225,7 +238,7 @@ enum TraceAxis {
         guard let first = placed.first?.height, let last = placed.last?.height else {
             context.draw(
                 Text(StatementText.list(marks.flatMap(\.stages).map(name)) + ": not in a block that this node has")
-                    .font(.callout).foregroundStyle(.secondary),
+                    .font(Tone.caption).foregroundStyle(Tone.label),
                 at: CGPoint(x: left, y: y), anchor: .leading)
             return
         }
@@ -235,53 +248,49 @@ enum TraceAxis {
         }
         // The line and one tick for each block.
         if last > first {
-            context.fill(
-                Path(CGRect(x: left, y: y - 1.5, width: right - left, height: 3)), with: .color(.accentColor))
+            // The passed part of the record.
+            context.rule(left, y, right, y, Tone.record)
             if last - first <= 60 {
                 for height in first...last {
-                    context.fill(
-                        Path(CGRect(x: x(height) - 0.5, y: y - 5, width: 1, height: 10)),
-                        with: .color(.secondary.opacity(0.8)))
+                    context.rule(x(height), y - 2.5, x(height), y + 2.5, Tone.axis)
                 }
             }
         }
         if !reached || !open.isEmpty {
-            var dashes = Path()
-            dashes.move(to: CGPoint(x: x(last), y: y))
-            dashes.addLine(to: CGPoint(x: size.width - 8, y: y))
-            context.stroke(dashes, with: .color(.secondary), style: StrokeStyle(lineWidth: 1.5, dash: [5, 5]))
+            context.rule(x(last), y, size.width - 8, y, Tone.axis, dash: [5, 5])
         }
         for (index, mark) in placed.enumerated() {
             guard let height = mark.height else { continue }
             let at = x(height)
             let final = index == placed.count - 1
-            let radius: CGFloat = final ? 8 : 6.5
+            let side: CGFloat = final ? 11 : 9
             let done = final && reached && mark.stages.contains(.result)
-            context.fill(
-                Path(ellipseIn: CGRect(x: at - radius, y: y - radius, width: radius * 2, height: radius * 2)),
-                with: .color(done ? .green : .accentColor))
+            let box = CGRect(x: at - side / 2, y: y - side / 2, width: side, height: side)
+            if final {
+                // The result is the live mark: it has light.
+                context.lit(Path(box), done ? Tone.good : Tone.present, strength: 0.7)
+            } else {
+                context.fill(Path(box), with: .color(Tone.record))
+            }
             var title = StatementText.list(mark.stages.map(name))
             if mark.stages.count > 1 { title = StatementText.capital(title.lowercased()) }
             let trailing = final && placed.count > 1
-            context.draw(
-                Text(title).font(.callout.weight(.semibold)),
-                at: CGPoint(x: trailing ? at + 14 : at, y: y - 20), anchor: trailing ? .leading : .center)
-            context.draw(
-                Text("block \(Format.integer(height))" + (mark.stages.count > 1 ? ", one block" : ""))
-                    .font(.caption).foregroundStyle(.secondary),
-                at: CGPoint(x: trailing ? at + 14 : at, y: y + 20), anchor: trailing ? .leading : .center)
+            context.name(
+                title, trailing ? at + 14 : at, y - 20, trailing ? .leading : .center,
+                color: final ? (done ? Tone.good : Tone.present) : Tone.value)
+            context.figure(
+                "block \(Format.integer(height))" + (mark.stages.count > 1 ? ", one block" : ""),
+                trailing ? at + 14 : at, y + 20, trailing ? .leading : .center, color: Tone.label)
             // The wait from the mark before.
             if index > 0, let before = placed[index - 1].height, height > before {
                 let seconds = mark.time.flatMap { end in placed[index - 1].time.map { end > $0 ? end - $0 : 0 } }
-                context.draw(
-                    Text(wait(blocks: height - before, seconds: seconds)).font(.caption),
-                    at: CGPoint(x: (x(before) + at) / 2, y: y - 14), anchor: .center)
+                context.figure(wait(blocks: height - before, seconds: seconds), (x(before) + at) / 2, y - 14)
             }
         }
         if let pending = open.first {
             context.draw(
                 Text(StatementText.list(pending.stages.map(name)) + ": on a system that this node does not have")
-                    .font(.caption).foregroundStyle(.secondary),
+                    .font(Tone.caption).foregroundStyle(Tone.label),
                 at: CGPoint(x: size.width - 8, y: y - 14), anchor: .trailing)
         }
     }

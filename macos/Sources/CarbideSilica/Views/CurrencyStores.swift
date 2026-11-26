@@ -116,10 +116,10 @@ struct OtherChainNote: View {
     var body: some View {
         let name = showsNames ? knownName(systemId, model: model, fallback: fallback) : systemId
         HStack(spacing: 6) {
-            Text("on \(name)").font(.caption).foregroundStyle(.secondary)
+            Text("on \(name)").font(.caption).foregroundStyle(Tone.label)
             if let row = node {
                 Button("Switch Chain…") { confirming = row }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                     .font(.caption)
                     .help("Make \(name) the current chain. The app then shows its blocks and transactions.")
             }

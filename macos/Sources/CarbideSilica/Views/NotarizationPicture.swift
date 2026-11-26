@@ -43,9 +43,9 @@ enum LinkState {
 
     var color: Color {
         switch self {
-        case .current: .primary
-        case .late: .orange
-        case .stopped: .red
+        case .current: Tone.present
+        case .late: Tone.mined
+        case .stopped: Tone.alert
         }
     }
 }
@@ -103,25 +103,26 @@ struct NotarizationRhythm: View {
         return text
     }
 
+    /// The left edge of the scale. It is the left edge of the lanes of the graph below,
+    /// so that the two parts are one instrument.
+    static let gutter: CGFloat = 118
+
     private func draw(_ context: GraphicsContext, _ size: CGSize) {
-        let left: CGFloat = 16
-        let right = size.width - 56
+        let left = Self.gutter
+        let right = size.width - 84
         let base = size.height - 22
         let top = Double(max(intervals.max() ?? 1, wait ?? 1, 100))
         let decades = max(Int(ceil(log10(top))), 2)
         let x = { (blocks: UInt64) -> CGFloat in
             left + CGFloat(log10(Double(max(blocks, 1))) / Double(decades)) * (right - left)
         }
-        context.fill(
-            Path(CGRect(x: left, y: base, width: right - left, height: 1)), with: .color(.secondary.opacity(0.6)))
+        context.plate("Intervals", x: 14, y: base - 12, width: 88, fill: nil)
+        context.rule(left, base, right, base, Tone.axis)
         for power in 0...decades {
             let value = UInt64(pow(10, Double(power)))
             let at = x(value)
-            context.fill(Path(CGRect(x: at, y: base - 3, width: 1, height: 7)), with: .color(.secondary.opacity(0.6)))
-            context.draw(
-                Text("\(Format.integer(value)) \(value == 1 ? "block" : "blocks")")
-                    .font(.caption).foregroundStyle(.secondary),
-                at: CGPoint(x: at, y: base + 13), anchor: .center)
+            context.rule(at, base, at, base + 4, Tone.axis)
+            context.name("\(Format.integer(value)) \(value == 1 ? "block" : "blocks")", at, base + 13)
         }
         // The dots, in columns.
         let column: CGFloat = 6
@@ -136,20 +137,21 @@ struct NotarizationRhythm: View {
             let centre = CGPoint(x: CGFloat(slot) * column, y: base - 5 - CGFloat(level) * 5.6)
             dots.addEllipse(in: CGRect(x: centre.x - 2.3, y: centre.y - 2.3, width: 4.6, height: 4.6))
         }
-        context.fill(dots, with: .color(.accentColor))
+        context.fill(dots, with: .color(Tone.record))
         if let usual = NotarizationMath.median(intervals) {
-            context.draw(
-                Text("usual: \(Format.integer(usual)) blocks").font(.callout).foregroundStyle(.primary),
-                at: CGPoint(x: max(x(usual), 60), y: 8), anchor: .center)
+            let at = x(usual)
+            context.rule(at, base - 2, at, base + 4, Tone.label)
+            context.name("usual \(Format.integer(usual)) blocks", max(at, left + 60), 8)
         }
         if let wait {
             let at = x(wait)
-            let color = state?.color ?? .primary
-            context.fill(Path(CGRect(x: at - 1.25, y: 18, width: 2.5, height: base - 18)), with: .color(color))
+            let color = state?.color ?? Tone.present
+            context.lit(Path(CGRect(x: at - 0.75, y: 18, width: 1.5, height: base - 18)), color, strength: 0.7)
             let onLeft = at > size.width / 2
-            context.draw(
-                Text("now: \(Format.integer(wait)) blocks").font(.callout.weight(.semibold)).foregroundStyle(color),
-                at: CGPoint(x: at + (onLeft ? -8 : 8), y: 26), anchor: onLeft ? .trailing : .leading)
+            let side: UnitPoint = onLeft ? .trailing : .leading
+            let textX = at + (onLeft ? -8 : 8)
+            context.name("now", textX, 20, side, color: color)
+            context.figure("\(Format.integer(wait)) blocks", textX, 34, side, color: color)
         }
     }
 }
@@ -253,12 +255,12 @@ struct NotarizationGraph: View {
             ScrollView(.horizontal) {
                 ZStack(alignment: .topLeading) {
                     Canvas { context, _ in
+                        for lane in 0..<lanes {
+                            context.plate(
+                                lane == 0 ? "Best chain" : lanes > 2 ? "Side branch \(lane)" : "Side branch",
+                                x: 14, y: y(lane), width: 88, fill: nil)
+                        }
                         lines(context, step: step)
-                    }
-                    ForEach(0..<lanes, id: \.self) { lane in
-                        Text(lane == 0 ? "Best chain" : lanes > 2 ? "Side branch \(lane)" : "Side branch")
-                            .font(.callout.weight(.semibold))
-                            .position(x: 44, y: y(lane))
                     }
                     ForEach(marks) { mark in
                         markView(mark).position(point(mark, step: step))
@@ -295,24 +297,32 @@ struct NotarizationGraph: View {
                     to: to, control1: CGPoint(x: from.x + 30, y: from.y), control2: CGPoint(x: to.x - 40, y: to.y))
             }
             context.stroke(
-                path, with: .color(mark.lane == 0 ? .secondary : .orange),
-                style: StrokeStyle(lineWidth: 1.8, dash: [5, 4]))
+                path, with: .color(mark.lane == 0 ? Tone.axis : Tone.mined),
+                style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
         }
     }
 
     private func markView(_ mark: NotarizationMark) -> some View {
-        let color: Color = mark.confirmed ? .accentColor : mark.lane == 0 ? .primary : .orange
+        // Confirmed is solid green. A waiting mark is an outline: white on the best chain,
+        // amber on a side branch.
+        let color: Color = mark.confirmed ? Tone.good : mark.lane == 0 ? Tone.value : Tone.mined
+        let chosen = selected == mark.id
         return Button {
             selected = selected == mark.id ? nil : mark.id
         } label: {
             ZStack {
-                Circle().fill(mark.confirmed ? Color.accentColor : Color(nsColor: .windowBackgroundColor))
-                Circle().stroke(color, lineWidth: selected == mark.id ? 3.4 : 1.8)
+                Circle().fill(mark.confirmed ? color : Tone.screen)
+                Circle().strokeBorder(color, lineWidth: 1)
+                if chosen {
+                    Circle().strokeBorder(Tone.present, lineWidth: 1.5).padding(-4)
+                }
                 if mark.rows.count > 1 {
-                    Text("\(mark.rows.count)").font(.caption.weight(.bold)).foregroundStyle(color)
+                    Text("\(mark.rows.count)").font(Tone.futura(10, bold: true)).monospacedDigit()
+                        .foregroundStyle(mark.confirmed ? Tone.screen : color)
                 }
             }
             .frame(width: 20, height: 20)
+            .shadow(color: chosen ? color.opacity(0.9) : .clear, radius: chosen ? 4 : 0)
             .contentShape(Circle().inset(by: -6))
         }
         .buttonStyle(.plain)
@@ -321,16 +331,21 @@ struct NotarizationGraph: View {
     }
 
     private func labels(_ mark: NotarizationMark) -> some View {
-        VStack(spacing: 1) {
+        VStack(spacing: 2) {
             if let row = mark.newest {
-                Text("\(observer) \(NotarizationPicture.observerHeight(row).map(Format.integer) ?? "–")")
-                    .monospacedDigit()
-                Text("\(other) \(NotarizationPicture.otherHeight(row).map(Format.integer) ?? "–")")
-                    .monospacedDigit().foregroundStyle(.secondary)
+                HStack(alignment: .lastTextBaseline, spacing: 5) {
+                    NameText(observer)
+                    Text(NotarizationPicture.observerHeight(row).map(Format.integer) ?? "–")
+                        .font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.value)
+                }
+                HStack(alignment: .lastTextBaseline, spacing: 5) {
+                    NameText(other)
+                    Text(NotarizationPicture.otherHeight(row).map(Format.integer) ?? "–")
+                        .font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.label)
+                }
             }
-            Text(note(mark)).foregroundStyle(.secondary)
+            Text(note(mark)).font(Tone.caption).foregroundStyle(Tone.label)
         }
-        .font(.callout)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
         .multilineTextAlignment(.center)

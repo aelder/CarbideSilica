@@ -62,7 +62,7 @@ private struct EvidenceBody: View {
         VStack(alignment: .leading, spacing: 14) {
             if let registration = report.registration {
                 HStack(spacing: 8) {
-                    Text(report.imported ? "Imported" : "Registration").foregroundStyle(.secondary)
+                    NameText(report.imported ? "Imported" : "Registration")
                     Text(registration).font(.body.monospaced()).textSelection(.enabled)
                     if let link = report.links.first(where: {
                         $0.label == "Registration transaction" || $0.label == "Identity import transaction"
@@ -94,7 +94,7 @@ private struct EvidenceBody: View {
                     .font(.headline)
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(group.title).font(.headline).padding(.bottom, 4)
+                        NameText(group.title).padding(.bottom, 4)
                         ForEach(Array(group.links.enumerated()), id: \.offset) { index, link in
                             if index > 0 { Divider() }
                             EvidenceRow(link: link)
@@ -196,9 +196,8 @@ private struct ReferralChain: View {
                     chip { IDLink(id: identity, route: .identity(name: identity)) }
                     ForEach(Array(chain.enumerated()), id: \.offset) { depth, referrer in
                         VStack(spacing: 0) {
-                            Image(systemName: "arrow.left").foregroundStyle(.secondary)
-                            Text(depth == 0 ? "referred by" : "who was referred by")
-                                .font(.caption2).foregroundStyle(.secondary)
+                            Image(systemName: "arrow.left").foregroundStyle(Tone.axis)
+                            NameText(depth == 0 ? "referred by" : "who was referred by")
                         }
                         chip { IDLink(id: referrer, route: .identity(name: referrer)) }
                     }
@@ -214,7 +213,7 @@ private struct ReferralChain: View {
         content()
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.secondary.opacity(0.5)))
+            .overlay(Rectangle().strokeBorder(Tone.axis, lineWidth: 1))
     }
 }
 
@@ -234,7 +233,7 @@ private struct EvidenceSource: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text("Source").foregroundStyle(.tertiary)
+            NameText("Source")
             ForEach(Array(pieces.enumerated()), id: \.offset) { _, piece in
                 switch piece {
                 case .text(let text):
@@ -243,7 +242,7 @@ private struct EvidenceSource: View {
                     Button(Format.short(txid, head: 6, tail: 6) + rest) {
                         model.open(.transaction(txid: txid))
                     }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                     .lineLimit(1)
                     .help(txid)
                 }
@@ -334,12 +333,12 @@ private struct HistoricalLookup: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Historical reverse request").font(.headline)
+            NameText("Historical reverse request")
                 .onChange(of: requests) { Task { await run() } }
             Text("Find identities that used a known authority or primary address of this identity in one window of 1,000 blocks. The request needs a source with the identity index. The links found are stored with this version and its block.")
                 .font(.callout).foregroundStyle(.secondary)
             HStack {
-                Text("Window ends at block").foregroundStyle(.secondary)
+                NameText("Window ends at block")
                 TextField("Block", text: $endHeight, prompt: Text(tip.map { "\($0)" } ?? "height"))
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 130)

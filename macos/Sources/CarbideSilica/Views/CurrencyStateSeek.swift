@@ -126,15 +126,13 @@ struct CurrencyStateCard: View {
     private func reserveTable(_ state: CurrencyStateAt) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
             GridRow {
-                Text("Reserve")
-                Text("In reserve").gridColumnAlignment(.trailing)
-                Text("Price").gridColumnAlignment(.trailing)
-                Text("Last batch in").gridColumnAlignment(.trailing)
-                Text("Last batch out").gridColumnAlignment(.trailing)
+                NameText("Reserve")
+                NameText("In reserve").gridColumnAlignment(.trailing)
+                NameText("Price").gridColumnAlignment(.trailing)
+                NameText("Last batch in").gridColumnAlignment(.trailing)
+                NameText("Last batch out").gridColumnAlignment(.trailing)
             }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
-            Divider()
+            PanelRule()
             ForEach(state.reserves, id: \.currencyId) { reserve in
                 GridRow {
                     RouteLink(text: reserve.currencyId, route: .currency(name: reserve.currencyId))
@@ -224,8 +222,8 @@ struct CurrencyActivitySection: View {
     var body: some View {
         let _ = showsNames
         VStack(alignment: .leading, spacing: 10) {
-            Divider().padding(.top, 6)
-            Text("Imports and exports").font(.headline)
+            PanelRule().padding(.top, 6)
+            Text("Imports and exports".uppercased()).font(Tone.heading).tracking(2.2).foregroundStyle(Tone.value)
             Text("The app asks the node with getimports and getexports. A public API can refuse these requests.")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
@@ -277,15 +275,29 @@ struct CurrencyActivitySection: View {
             Text("No imports or exports were found in this window. This does not prove that none exist outside it.")
                 .foregroundStyle(.secondary)
         } else {
-            ActivityStrip(page: page, selected: selected) { record in
-                select(record)
+            DisplayPanel {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .lastTextBaseline, spacing: 18) {
+                        Readout("Imports", "\(imports)", tone: ActivityStrip.importTone)
+                        Readout("Exports", "\(exports)", tone: ActivityStrip.exportTone)
+                        Spacer(minLength: 0)
+                        Plate("Import", fill: ActivityStrip.importTone)
+                        Plate("Export", fill: ActivityStrip.exportTone)
+                    }
+                    PanelRule()
+                    ActivityStrip(page: page, selected: selected) { record in
+                        select(record)
+                    }
+                    .frame(height: 64)
+                    PanelRule()
+                    Text("Each mark is an import (above the line, filled) or an export (below the line, open) at its block. Click a mark to select it.")
+                        .font(Tone.caption).foregroundStyle(Tone.label)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .frame(height: 64)
-            Text("Each mark is an import (above the line, filled) or an export (below the line, open) at its block. Click a mark to select it.")
-                .font(.caption).foregroundStyle(.secondary)
             VStack(spacing: 0) {
                 ForEach(Array(page.records.enumerated()), id: \.offset) { _, record in
-                    Divider()
+                    Rectangle().fill(Tone.rule).frame(height: 1)
                     recordRow(record)
                     if record == selected {
                         inputsView(record)
@@ -301,7 +313,7 @@ struct CurrencyActivitySection: View {
                 record.kind == .import ? "Import" : "Export",
                 systemImage: record.kind == .import ? "arrow.down.circle.fill" : "arrow.up.circle"
             )
-            .foregroundStyle(record.kind == .import ? Color.accentColor : .purple)
+            .foregroundStyle(record.kind == .import ? ActivityStrip.importTone : ActivityStrip.exportTone)
             .frame(width: 90, alignment: .leading)
             RouteLink(text: heightText(record.height, model: model), route: .block(id: "\(record.height)"), shorten: false)
                 .frame(width: showsDates ? 190 : 90, alignment: .leading)
@@ -356,7 +368,7 @@ struct CurrencyActivitySection: View {
                 }
                 ForEach(Array(inputs.inputs.enumerated()), id: \.offset) { index, input in
                     HStack(spacing: 10) {
-                        Text("Input \(index + 1)").foregroundStyle(.secondary).frame(width: 70, alignment: .leading)
+                        NameText("Input \(index + 1)").frame(width: 70, alignment: .leading)
                         if input.systemId == model.status?.chainId {
                             RouteLink(text: input.txid, route: .transaction(txid: input.txid))
                         } else {
@@ -429,6 +441,11 @@ struct CurrencyActivitySection: View {
 
 /// The window as a line of blocks, with each import above it and each export below it.
 private struct ActivityStrip: View {
+    /// An import: filled, above the line.
+    static let importTone = Tone.series[0]
+    /// An export: open, below the line.
+    static let exportTone = Tone.series[1]
+
     let page: ActivityPage
     let selected: ActivityRecord?
     let choose: (ActivityRecord) -> Void
@@ -468,36 +485,31 @@ private struct ActivityStrip: View {
 
     private func draw(_ context: GraphicsContext, _ size: CGSize) {
         let middle = size.height / 2 - 6
-        context.stroke(
-            Path { path in
-                path.move(to: CGPoint(x: 8, y: middle))
-                path.addLine(to: CGPoint(x: size.width - 8, y: middle))
-            }, with: .color(.secondary.opacity(0.5)), lineWidth: 1)
+        context.rule(8, middle, size.width - 8, middle, Tone.axis)
         for record in page.records {
             let px = x(record.height, size)
             let isImport = record.kind == .import
             let y = isImport ? middle - 12 : middle + 12
-            let color: Color = isImport ? .accentColor : .purple
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: px, y: middle))
-                    path.addLine(to: CGPoint(x: px, y: y))
-                }, with: .color(color.opacity(0.5)), lineWidth: 1)
+            let color: Color = isImport ? Self.importTone : Self.exportTone
+            context.rule(px, middle, px, y, color.opacity(0.5))
             let box = CGRect(x: px - 4, y: y - 4, width: 8, height: 8)
+            let chosen = record == selected
             if isImport {
-                context.fill(Path(ellipseIn: box), with: .color(color))
+                context.lit(Path(ellipseIn: box), color, strength: chosen ? 0.8 : 0)
             } else {
-                context.stroke(Path(ellipseIn: box), with: .color(color), lineWidth: 1.6)
+                context.stroke(Path(ellipseIn: box.insetBy(dx: 0.5, dy: 0.5)), with: .color(color), lineWidth: 1)
             }
-            if record == selected {
-                context.stroke(Path(ellipseIn: box.insetBy(dx: -3, dy: -3)), with: .color(.primary), lineWidth: 1.5)
+            if chosen {
+                context.lit(
+                    Path(ellipseIn: box.insetBy(dx: -3, dy: -3)).strokedPath(StrokeStyle(lineWidth: 1.5)),
+                    Tone.present, strength: 0.7)
             }
         }
         context.draw(
-            Text(Format.integer(page.window.first)).font(.caption2).foregroundStyle(.secondary),
+            Text(Format.integer(page.window.first)).font(Tone.small).monospacedDigit().foregroundStyle(Tone.label),
             at: CGPoint(x: 8, y: size.height - 4), anchor: .bottomLeading)
         context.draw(
-            Text(Format.integer(page.window.last)).font(.caption2).foregroundStyle(.secondary),
+            Text(Format.integer(page.window.last)).font(Tone.small).monospacedDigit().foregroundStyle(Tone.label),
             at: CGPoint(x: size.width - 8, y: size.height - 4), anchor: .bottomTrailing)
     }
 }

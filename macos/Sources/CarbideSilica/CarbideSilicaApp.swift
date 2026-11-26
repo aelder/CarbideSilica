@@ -18,6 +18,11 @@ struct CarbideSilicaApp: App {
                 .environment(model)
                 .environment(shell)
                 .frame(minWidth: 980, minHeight: 560)
+                // The app is a display: black, with its own colours, in each appearance.
+                .preferredColorScheme(.dark)
+                .tint(Tone.record)
+                // Text that sets no colour has the white of the display, not the system's.
+                .foregroundStyle(Tone.value)
         }
         .defaultSize(width: 1280, height: 820)
         .commands {
@@ -28,12 +33,20 @@ struct CarbideSilicaApp: App {
         Window("Keyboard Shortcuts", id: KeyboardReference.windowID) {
             KeyboardReference()
                 .environment(model)
+                .preferredColorScheme(.dark)
+                .tint(Tone.record)
+                // Text that sets no colour has the white of the display, not the system's.
+                .foregroundStyle(Tone.value)
         }
         .defaultSize(width: 720, height: 720)
 
         Settings {
             SettingsView()
                 .environment(model)
+                .preferredColorScheme(.dark)
+                .tint(Tone.record)
+                // Text that sets no colour has the white of the display, not the system's.
+                .foregroundStyle(Tone.value)
         }
     }
 }
@@ -79,6 +92,8 @@ struct RootView: View {
                 }
             }
         }
+        // Film grain over all of the display.
+        .overlay { FilmGrain().ignoresSafeArea() }
         // While the command list is open, the page behind it takes no keys and no clicks.
         .disabled(shell.paletteShown)
         .overlay {
@@ -117,6 +132,10 @@ struct RootView: View {
         } message: {
             Text("Enter a future block height such as 5000000, or a date such as 2028-11-08 or in 2 hours.")
         }
+        // The bar at the top is a part of the display. The path line below it names the page.
+        .toolbarBackground(Tone.screen, for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
+        .toolbar(removing: .title)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 SearchField()
@@ -191,51 +210,44 @@ struct Sidebar: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        List(selection: selection) {
-            Section("Watch") {
-                Label("Dashboard", systemImage: "square.grid.2x2").tag(SidebarItem.dashboard)
-                Label("Mempool", systemImage: "tray.full")
-                    .badge(Int(model.node?.mempoolCount ?? 0))
-                    .tag(SidebarItem.mempool)
-                Label("Charts", systemImage: "chart.xyaxis.line").tag(SidebarItem.charts)
-            }
-            Section("Explore") {
-                Label("Currencies", systemImage: "circle.hexagongrid").tag(SidebarItem.currencies)
-                Label("Marketplace", systemImage: "tag").tag(SidebarItem.marketplace)
-            }
-            Section("Library") {
-                Label("Bookmarks", systemImage: "bookmark")
-                    .badge(model.bookmarks.count)
-                    .tag(SidebarItem.bookmarks)
-            }
-            Section("Node") {
-                Label("Node", systemImage: "server.rack")
-                    .badge(model.syncFraction.map { Text(Format.percent($0)) })
-                    .tag(SidebarItem.node)
-                Label("Sources", systemImage: "antenna.radiowaves.left.and.right").tag(SidebarItem.sources)
-            }
-            if !model.recent.isEmpty {
-                Section("Recent") {
-                    ForEach(model.recent, id: \.self) { route in
-                        Button {
-                            model.path = [route]
-                        } label: {
-                            Label(
-                                route.crumbTitle(names: showsNames ? model.names : [:]),
-                                systemImage: route.symbol
-                            )
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
+        // A list, so that the system places the rows below the bar at the top. A scroll view
+        // here drew the rows in one place and took the clicks in a different place.
+        List {
+            Group {
+                group("Watch") {
+                    place(.dashboard, "Dashboard")
+                    place(.mempool, "Mempool", figure: (model.node?.mempoolCount).flatMap { $0 > 0 ? "\($0)" : nil })
+                    place(.charts, "Charts")
+                }
+                group("Explore") {
+                    place(.currencies, "Currencies")
+                    place(.marketplace, "Marketplace")
+                }
+                group("Library") {
+                    place(.bookmarks, "Bookmarks", figure: model.bookmarks.isEmpty ? nil : "\(model.bookmarks.count)")
+                }
+                group("Node") {
+                    place(.node, "Node", figure: model.syncFraction.map { Format.percent($0) })
+                    place(.sources, "Sources")
+                }
+                if !model.recent.isEmpty {
+                    group("Recent") {
+                        ForEach(model.recent, id: \.self) { route in
+                            recent(route)
                         }
-                        .buttonStyle(.plain)
-                        .help(route.title)
                     }
                 }
             }
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
         }
-        .listStyle(.sidebar)
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .environment(\.defaultMinListRowHeight, 1)
+        // The sidebar is a part of the display: black, with a thin rule at its edge.
+        .background(Tone.screen)
+        .overlay(alignment: .trailing) { Rectangle().fill(Tone.rule).frame(width: 1) }
         // Names for identity and currency IDs in the Recent list.
         .task(id: model.recent) {
             await model.resolveNames(model.recent.map { route -> String? in
@@ -249,12 +261,58 @@ struct Sidebar: View {
 
     @AppStorage(DisplayKey.showsNames) private var showsNames = true
 
-    /// Nothing is selected while an object page is open on top of a sidebar place.
-    private var selection: Binding<SidebarItem?> {
-        Binding(
-            get: { model.path.isEmpty ? model.sidebar : nil },
-            set: { if let item = $0 { model.show(item) } }
-        )
+    /// A group of places, with its name above a thin rule.
+    private func group<Content: View>(_ name: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            NameText(name)
+                .padding(.horizontal, 16)
+                .padding(.top, 18)
+                .padding(.bottom, 6)
+            Rectangle().fill(Tone.rule).frame(height: 1).padding(.leading, 16).padding(.bottom, 5)
+            content()
+        }
+    }
+
+    /// One place, as a key with a lamp. Nothing is selected while an object page is open on
+    /// top of a place.
+    private func place(_ item: SidebarItem, _ title: String, figure: String? = nil) -> some View {
+        let chosen = model.path.isEmpty && model.sidebar == item
+        return LampKey(chosen: chosen) {
+            model.show(item)
+        } label: { lit in
+            HStack(spacing: 6) {
+                Text(title.uppercased())
+                    .font(Tone.futura(11.5))
+                    .tracking(1.6)
+                    .foregroundStyle(lit ? LampTone.legend : Tone.value.opacity(0.85))
+                Spacer(minLength: 6)
+                if let figure {
+                    Text(figure).font(Tone.figureSmall).monospacedDigit()
+                        .foregroundStyle(lit ? LampTone.legend.opacity(0.8) : Tone.label)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 3)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(chosen ? .isSelected : [])
+    }
+
+    /// One object that was open in this session: a smaller key.
+    private func recent(_ route: Route) -> some View {
+        let chosen = model.path.last == route
+        return LampKey(chosen: chosen, height: 24) {
+            model.path = [route]
+        } label: { lit in
+            Text(route.crumbTitle(names: showsNames ? model.names : [:]))
+                .font(.system(size: 12))
+                .foregroundStyle(lit ? LampTone.legend : Tone.label)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 2)
+        .help(route.title)
     }
 }
 
@@ -285,7 +343,7 @@ struct SearchField: View {
             if model.isSearching {
                 ProgressView().controlSize(.small)
             } else {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").foregroundStyle(Tone.label)
             }
             TextField(
                 "Search", text: $model.searchText,
@@ -312,10 +370,11 @@ struct SearchField: View {
             .onKeyPress(.upArrow) { recall(1) }
             .onKeyPress(.downArrow) { recall(-1) }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 9)
         .padding(.vertical, 5)
         .frame(minWidth: 280, idealWidth: 420, maxWidth: 480)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
+        .background(Tone.screen)
+        .overlay(Rectangle().strokeBorder(focused ? Tone.present.opacity(0.7) : Tone.axis, lineWidth: 1))
         .onChange(of: model.searchFocusRequests) { focused = true }
     }
 }
@@ -342,13 +401,14 @@ struct ConnectionBadge: View {
             }
             SettingsLink { Text("Connection Settings…") }
         } label: {
-            HStack(spacing: 6) {
-                Circle()
+            HStack(spacing: 7) {
+                Rectangle()
                     .fill(color)
-                    .frame(width: 8, height: 8)
-                Text(text)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .frame(width: 7, height: 7)
+                Text(text.uppercased())
+                    .font(Tone.small)
+                    .tracking(1.1)
+                    .foregroundStyle(Tone.value)
                     .lineLimit(1)
             }
         }
@@ -364,8 +424,8 @@ struct ConnectionBadge: View {
     }
 
     private var color: Color {
-        if model.status != nil, model.statusError == nil { return .green }
-        return model.statusError == nil ? .gray : .red
+        if model.status != nil, model.statusError == nil { return Tone.good }
+        return model.statusError == nil ? Tone.label : Tone.alert
     }
 
     private var text: String {

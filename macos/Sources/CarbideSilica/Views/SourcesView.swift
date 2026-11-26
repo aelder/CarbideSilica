@@ -138,15 +138,13 @@ private struct SourceTable: View {
     var body: some View {
         Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
             GridRow {
-                Text("Chain")
-                Text("Source")
-                Text("Endpoint")
-                Text("State")
-                Text("Traffic")
-                Text("Last answer").gridColumnAlignment(.trailing)
+                NameText("Chain")
+                NameText("Source")
+                NameText("Endpoint")
+                NameText("State")
+                NameText("Traffic")
+                NameText("Last answer").gridColumnAlignment(.trailing)
             }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
             Divider().gridCellUnsizedAxes(.horizontal)
             ForEach(rows, id: \.key) { row in
                 GridRow {
@@ -154,11 +152,7 @@ private struct SourceTable: View {
                         Text(sourceName(row, names: model.names))
                             .fontWeight(row.current ? .semibold : .regular)
                         if row.current {
-                            Text("Current")
-                                .font(.caption)
-                                .padding(.horizontal, 5)
-                                .overlay(Capsule().stroke(.secondary))
-                                .foregroundStyle(.secondary)
+                            Plate("Current")
                         }
                     }
                     Text(row.kind == .localNode ? "Node" : "API")
@@ -177,7 +171,7 @@ private struct SourceTable: View {
                 .padding(.vertical, 2)
                 .background(
                     selectedKey == row.key
-                        ? RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.12))
+                        ? Rectangle().fill(Tone.present.opacity(0.1))
                         : nil
                 )
                 .contentShape(Rectangle())
@@ -245,9 +239,9 @@ struct TrafficMark: View {
 
     private var color: Color {
         switch traffic {
-        case .responding: .green
-        case .working: .accentColor
-        case .unavailable: .red
+        case .responding: Tone.good
+        case .working: Tone.record
+        case .unavailable: Tone.alert
         default: .secondary
         }
     }
@@ -266,12 +260,12 @@ private struct SourceDetail: View {
                 FieldRow(label: "Configuration file", value: file, monospaced: true)
             }
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("State").foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+                NameText("State").frame(width: 170, alignment: .leading)
                 Text(stateMeaning)
             }
             if let check = row.chainCheck {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text("Chain check").foregroundStyle(.secondary)
+                    NameText("Chain check")
                         .frame(width: 170, alignment: .leading)
                     Note(text: check, warning: row.chainCheckProblem)
                 }

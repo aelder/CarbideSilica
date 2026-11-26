@@ -40,11 +40,24 @@ struct IdentityOriginCard: View {
                 let payments = try? await explorer.registrationPayments(txid: txid)
                 return Self.origin(of: transaction, payments: payments, identity: identityAddress)
             } content: { origin in
-                Canvas { context, size in
-                    draw(context, size, origin)
+                DisplayPanel {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Canvas { context, size in
+                            draw(context, size, origin)
+                        }
+                        .frame(height: CGFloat(max(origin.payers.count, origin.payments.count, 1)) * 52 + 26)
+                        .accessibilityLabel(sentence(origin))
+                        PanelRule()
+                        Text(
+                            "Dashed boxes and lines are inferences. Solid lines are payments that Carbide verified "
+                                + "against the issuer's rules.")
+                            .font(Tone.caption).foregroundStyle(Tone.label)
+                            .task(id: txid) {
+                                await model.resolveNames(
+                                    origin.payers + origin.payments.flatMap { [$0.recipient, $0.currency] })
+                            }
+                    }
                 }
-                .frame(height: CGFloat(max(origin.payers.count, origin.payments.count, 1)) * 52 + 26)
-                .accessibilityLabel(sentence(origin))
 
                 Text(sentence(origin)).font(.callout)
                 HStack(spacing: 14) {
@@ -56,12 +69,6 @@ struct IdentityOriginCard: View {
                     Spacer()
                     RouteLink(text: txid, route: .transaction(txid: txid))
                 }
-                Text("Dashed boxes and lines are inferences. Solid lines are payments that Carbide verified against the issuer's rules.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .task(id: txid) {
-                        await model.resolveNames(
-                            origin.payers + origin.payments.flatMap { [$0.recipient, $0.currency] })
-                    }
             }
         }
     }
@@ -153,17 +160,17 @@ struct IdentityOriginCard: View {
         let slot = { (index: Int, count: Int) -> CGFloat in
             size.height * (CGFloat(index) + 0.5) / CGFloat(max(count, 1))
         }
-        let dashed = StrokeStyle(lineWidth: 1.6, dash: [5, 4])
-        let solid = StrokeStyle(lineWidth: 2)
+        let dashed = StrokeStyle(lineWidth: 1, lineCap: .butt, dash: [5, 4])
+        let solid = StrokeStyle(lineWidth: 1)
         let box = { (frame: CGRect, title: String, subtitle: String, style: StrokeStyle, color: Color) in
-            let shape = Path(roundedRect: frame, cornerRadius: 8)
-            context.fill(shape, with: .color(Color(nsColor: .windowBackgroundColor)))
+            let shape = Path(frame.insetBy(dx: 0.5, dy: 0.5))
+            context.fill(shape, with: .color(Tone.screen))
             context.stroke(shape, with: .color(color), style: style)
             context.draw(
-                Text(title).font(.callout.weight(.semibold)),
+                Text(title).font(.callout.weight(.semibold)).foregroundStyle(Tone.value),
                 at: CGPoint(x: frame.midX, y: frame.midY - 7), anchor: .center)
             context.draw(
-                Text(subtitle).font(.caption2).foregroundStyle(.secondary),
+                Text(subtitle).font(.caption2).foregroundStyle(Tone.label),
                 at: CGPoint(x: frame.midX, y: frame.midY + 9), anchor: .center)
         }
         for (index, payer) in origin.payers.enumerated() {
@@ -173,11 +180,11 @@ struct IdentityOriginCard: View {
                 Path { path in
                     path.move(to: CGPoint(x: frame.maxX, y: y))
                     path.addLine(to: CGPoint(x: centre.minX, y: midY))
-                }, with: .color(.secondary), style: dashed)
-            box(frame, display(payer), "possible payer", dashed, .secondary)
+                }, with: .color(Tone.axis), style: dashed)
+            box(frame, display(payer), "possible payer", dashed, Tone.axis)
         }
         let style = origin.verified ? solid : dashed
-        let color: Color = origin.verified ? .green : .secondary
+        let color: Color = origin.verified ? Tone.good : Tone.axis
         for (index, payment) in origin.payments.enumerated() {
             let y = slot(index, origin.payments.count)
             let frame = CGRect(x: size.width - sideWidth, y: y - 20, width: sideWidth, height: 40)
@@ -190,12 +197,13 @@ struct IdentityOriginCard: View {
                 ?? "was paid \(amount(payment))"
             box(frame, display(payment.recipient), subtitle, style, color)
         }
-        let shape = Path(roundedRect: centre, cornerRadius: 10)
-        context.fill(shape, with: .color(.accentColor.opacity(0.14)))
-        context.stroke(shape, with: .color(.accentColor), lineWidth: 2.2)
-        context.draw(Text("Registered").font(.headline), at: CGPoint(x: centre.midX, y: centre.midY - 8), anchor: .center)
+        let shape = Path(centre.insetBy(dx: 0.5, dy: 0.5))
+        context.fill(shape, with: .color(Tone.screen))
+        context.fill(shape, with: .color(Tone.record.opacity(0.08)))
+        context.stroke(shape, with: .color(Tone.record), lineWidth: 1)
         context.draw(
-            Text(when).font(.caption).foregroundStyle(.secondary),
-            at: CGPoint(x: centre.midX, y: centre.midY + 11), anchor: .center)
+            Text("REGISTERED").font(Tone.heading).tracking(1.1).foregroundStyle(Tone.record),
+            at: CGPoint(x: centre.midX, y: centre.midY - 8), anchor: .center)
+        context.figure(when, centre.midX, centre.midY + 11, color: Tone.label)
     }
 }

@@ -2,7 +2,7 @@ import CarbideCore
 import SwiftUI
 
 /// The fee pool's balance over the chart range, read from the checkpoint in sampled blocks'
-/// coinbases. Native currency is blue. On a PBaaS chain the network's Verus currency is
+/// coinbases. Native currency is pale blue. On a PBaaS chain the network's Verus currency is
 /// green. Lines join observed checkpoints. They do not claim that every block between two
 /// checkpoints was measured.
 struct FeePoolPlot: View {
@@ -13,6 +13,14 @@ struct FeePoolPlot: View {
 
     var body: some View {
         let model = FeePoolPlotModel(state: state)
+        DisplayPanel(padding: 0) {
+            plotView(model)
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Fee pool plot of \(model.points.count) checkpoints")
+    }
+
+    private func plotView(_ model: FeePoolPlotModel) -> some View {
         GeometryReader { geometry in
             let plot = CGRect(
                 x: gutter, y: 8,
@@ -30,11 +38,10 @@ struct FeePoolPlot: View {
         .overlay {
             if model.points.isEmpty {
                 Text(state.fee.loading ? "Reading fee pool checkpoints…" : "No fee pool checkpoints have loaded for this range.")
-                    .foregroundStyle(.secondary)
+                    .font(Tone.caption)
+                    .foregroundStyle(Tone.label)
             }
         }
-        .accessibilityElement()
-        .accessibilityLabel("Fee pool plot of \(model.points.count) checkpoints")
     }
 }
 
@@ -138,23 +145,19 @@ struct FeePoolPlotModel {
             line.move(to: CGPoint(x: plot.minX, y: y))
             line.addLine(to: CGPoint(x: plot.maxX, y: y))
             context.stroke(line, with: .color(ChartColors.grid), lineWidth: 1)
-            context.draw(
-                Text(label).font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: plot.minX - 6, y: y), anchor: .trailing)
+            context.name(label, plot.minX - 6, y, .trailing)
         }
         var axis = Path()
         axis.move(to: CGPoint(x: plot.minX, y: plot.minY))
         axis.addLine(to: CGPoint(x: plot.minX, y: plot.maxY))
         axis.addLine(to: CGPoint(x: plot.maxX, y: plot.maxY))
-        context.stroke(axis, with: .color(.secondary.opacity(0.5)), lineWidth: 1)
+        context.stroke(axis, with: .color(Tone.axis), lineWidth: 1)
         let xTicks = PlotScale.xTicks(low: xLow, high: xHigh, count: 5, integral: false)
         for (index, tick) in xTicks.enumerated() {
             let x = x(tick, in: plot)
             let anchor: UnitPoint = index == 0 ? .topLeading : index == xTicks.count - 1 ? .topTrailing : .top
-            context.draw(
-                Text(ChartFormat.axisTime(UInt64(max(tick, 0)), span: UInt64(xHigh - xLow)))
-                    .font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: x, y: plot.maxY + 6), anchor: anchor)
+            context.rule(x, plot.maxY, x, plot.maxY + 4, Tone.axis)
+            context.name(ChartFormat.axisTime(UInt64(max(tick, 0)), span: UInt64(xHigh - xLow)), x, plot.maxY + 6, anchor)
         }
         if currency != .reserve {
             series(&context, plot: plot, color: ChartColors.block) { $0.nativeSats }
@@ -164,14 +167,13 @@ struct FeePoolPlotModel {
         }
         if let selected, let point = points.first(where: { $0.sample.hash == selected }) {
             let x = x(Double(point.sample.time), in: plot)
-            var rule = Path()
-            rule.move(to: CGPoint(x: x, y: plot.minY))
-            rule.addLine(to: CGPoint(x: x, y: plot.maxY))
-            context.stroke(rule, with: .color(ChartColors.selection.opacity(0.7)), lineWidth: 1)
+            context.lit(
+                Path(CGRect(x: x - 0.75, y: plot.minY, width: 1.5, height: plot.height)), ChartColors.selection,
+                strength: 0.6)
             let sats = currency == .reserve ? point.checkpoint.reserveSats : point.checkpoint.nativeSats
             if let sats {
                 let y = y(Double(sats) / 1e8, in: plot)
-                context.stroke(Path(ellipseIn: CGRect(x: x - 5, y: y - 5, width: 10, height: 10)), with: .color(ChartColors.selection), lineWidth: 2)
+                context.stroke(Path(ellipseIn: CGRect(x: x - 5, y: y - 5, width: 10, height: 10)), with: .color(ChartColors.selection), lineWidth: 1.5)
             }
         }
     }
@@ -197,9 +199,9 @@ struct FeePoolPlotModel {
             }
             open = true
             previousTime = point.sample.time
-            dots.addEllipse(in: CGRect(x: location.x - 1.8, y: location.y - 1.8, width: 3.6, height: 3.6))
+            dots.addEllipse(in: CGRect(x: location.x - 1.5, y: location.y - 1.5, width: 3, height: 3))
         }
-        context.stroke(line, with: .color(color), lineWidth: 1.5)
+        context.stroke(line, with: .color(color), lineWidth: 1)
         context.fill(dots, with: .color(color))
     }
 
@@ -234,7 +236,7 @@ struct FeePoolSection: View {
             DisclosureGroup(isExpanded: $tableShown) {
                 table
             } label: {
-                Text(tableShown ? "Hide" : "Show the loaded checkpoints").foregroundStyle(.secondary)
+                Text(tableShown ? "Hide" : "Show the loaded checkpoints").foregroundStyle(Tone.label)
             }
         }
     }
@@ -383,12 +385,12 @@ struct FeePoolSection: View {
             fee.checkpoints[sample.hash].map { FeePoolPoint(sample: sample, checkpoint: $0) }
         }
         return Table(rows) {
-            TableColumn("Height") { Text(String($0.sample.height)).monospacedDigit() }
+            TableColumn(ChartFormat.columnName("Height")) { Text(String($0.sample.height)).monospacedDigit() }
                 .width(min: 70, ideal: 80)
-            TableColumn("Time") { Text(Format.date($0.sample.time)).monospacedDigit() }
+            TableColumn(ChartFormat.columnName("Time")) { Text(Format.date($0.sample.time)).monospacedDigit() }
                 .width(min: 150, ideal: 180)
-            TableColumn(labels.0) { Text($0.checkpoint.known ? ChartFormat.sats($0.checkpoint.nativeSats) : "No checkpoint").monospacedDigit() }
-            TableColumn(labels.1) { point in
+            TableColumn(ChartFormat.columnName(labels.0)) { Text($0.checkpoint.known ? ChartFormat.sats($0.checkpoint.nativeSats) : "No checkpoint").monospacedDigit() }
+            TableColumn(ChartFormat.columnName(labels.1)) { point in
                 Text(point.checkpoint.known && fee.hasReserve ? ChartFormat.sats(point.checkpoint.reserveSats) : "–").monospacedDigit()
             }
         }

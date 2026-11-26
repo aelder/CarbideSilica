@@ -14,7 +14,9 @@ final class WaitRecord {
     private(set) var history: PulseHistory?
     private(set) var problem: String?
     private var readAt: Date?
-    private var reading = false
+    /// When a read started. A read that a cancelled task started can stay open, thus a
+    /// read that is older than one minute does not stop a new one.
+    private var readingSince: Date?
     private var generation = -1
 
     /// Reads the record at the start and each 10 minutes. The waits of a day change slowly.
@@ -29,9 +31,11 @@ final class WaitRecord {
                 history = nil
                 problem = nil
                 readAt = nil
+                readingSince = nil
             }
-            if !reading, readAt.map({ Date.now.timeIntervalSince($0) >= 600 }) ?? true {
-                reading = true
+            let free = readingSince.map { Date.now.timeIntervalSince($0) > 60 } ?? true
+            if free, readAt.map({ Date.now.timeIntervalSince($0) >= 600 }) ?? true {
+                readingSince = .now
                 // A public API answers slowly and sees each request. Ask it for less.
                 let count: UInt32 = model.status?.source == .publicApi ? 180 : 1440
                 let asked = generation
@@ -46,7 +50,7 @@ final class WaitRecord {
                     if asked == model.generation { problem = describe(error) }
                 }
                 readAt = .now
-                reading = false
+                readingSince = nil
             }
             try? await Task.sleep(for: .seconds(10))
         }

@@ -22,9 +22,9 @@ struct ChartStack: View {
     @State private var model: StackModel?
     @State private var hovered: Int?
 
-    private let leftInset: CGFloat = 62
-    private let rightInset: CGFloat = 14
-    private let headerHeight: CGFloat = 20
+    private let leftInset: CGFloat = 66
+    private let rightInset: CGFloat = 22
+    private let headerHeight: CGFloat = 22
     private let panelHeight: CGFloat = 84
     private let gap: CGFloat = 10
     private var plotHeight: CGFloat { CGFloat(StackModel.Panel.allCases.count) * (headerHeight + panelHeight + gap) + 18 }
@@ -36,34 +36,48 @@ struct ChartStack: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            readout
-            GeometryReader { geometry in
-                Canvas { context, size in
-                    if let model { draw(context, size, model) }
+        // One display panel holds the readout, the five panels and the waits.
+        DisplayPanel(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                readout
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+                    .padding(.bottom, 10)
+                PanelRule()
+                stack
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                if let model {
+                    WaitsStrip(model: model, leftInset: leftInset, rightInset: rightInset, wait: shownWait)
                 }
-                .contentShape(Rectangle())
-                .onContinuousHover { phase in
-                    switch phase {
-                    case .active(let point): hovered = model?.nearest(x: point.x, in: plotFrame(geometry.size.width))
-                    case .ended: hovered = nil
-                    }
-                }
-                .onTapGesture(coordinateSpace: .local) { point in
-                    if let model, let index = model.nearest(x: point.x, in: plotFrame(geometry.size.width)) {
-                        select(samples[index].hash)
-                    }
-                }
-            }
-            .frame(height: plotHeight)
-            .accessibilityLabel("Block rate, mining difficulty, staking difficulty, staked share and fee pool on one time axis")
-            if let model {
-                WaitsStrip(model: model, leftInset: leftInset, rightInset: rightInset, wait: shownWait)
             }
         }
         .onChange(of: key, initial: true) {
             model = StackModel(samples: samples, spanSeconds: spanSeconds, fee: fee, coin: coin)
         }
+    }
+
+    /// The five panels on one time axis.
+    private var stack: some View {
+        GeometryReader { geometry in
+            Canvas { context, size in
+                if let model { draw(context, size, model) }
+            }
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let point): hovered = model?.nearest(x: point.x, in: plotFrame(geometry.size.width))
+                case .ended: hovered = nil
+                }
+            }
+            .onTapGesture(coordinateSpace: .local) { point in
+                if let model, let index = model.nearest(x: point.x, in: plotFrame(geometry.size.width)) {
+                    select(samples[index].hash)
+                }
+            }
+        }
+        .frame(height: plotHeight)
+        .accessibilityLabel("Block rate, mining difficulty, staking difficulty, staked share and fee pool on one time axis")
     }
 
     private func plotFrame(_ width: CGFloat) -> ClosedRange<CGFloat> { leftInset...(width - rightInset) }
@@ -87,28 +101,28 @@ struct ChartStack: View {
 
     /// Each value at the block under the cursor, above the panels and not below the page.
     private var readout: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 7) {
             if let model, let index = shownIndex, samples.indices.contains(index) {
                 let sample = samples[index]
-                HStack(spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Button("Block \(Format.integer(sample.height))") { open(sample.hash) }
-                        .buttonStyle(.link)
+                        .buttonStyle(.displayLink)
+                        .font(Tone.figureSmall)
                         .help("Open this block")
-                    Text(ChartFormat.production(sample.production))
-                        .foregroundStyle(sample.production == .staked ? Color.purple : sample.production == .mined ? .orange : .secondary)
-                    Text(Format.date(sample.time)).foregroundStyle(.secondary)
+                    Plate(ChartFormat.production(sample.production), fill: productionFill(sample.production))
+                    Text(Format.date(sample.time)).foregroundStyle(Tone.value)
                     if let interval = sample.interval {
-                        Text("· \(ChartFormat.signedSeconds(interval)) after the block before").foregroundStyle(.secondary)
+                        Text("· \(ChartFormat.signedSeconds(interval)) after the block before").foregroundStyle(Tone.label)
                     }
                     if hovered != nil {
-                        Text("· click to select").foregroundStyle(.tertiary)
+                        Text("· click to select").foregroundStyle(Tone.label.opacity(0.7))
                     }
                     Spacer(minLength: 0)
                 }
-                HStack(spacing: 18) {
+                HStack(alignment: .lastTextBaseline, spacing: 20) {
                     figure("Rate", model.rateText(at: index))
-                    figure("Mining", model.miningAt[index].map { Format.difficulty($0) } ?? "–")
-                    figure("Staking", model.stakingAt[index].map { Format.difficulty($0) } ?? "–")
+                    figure("Mining", model.miningAt[index].map { Format.difficulty($0) } ?? "–", tone: Tone.mined)
+                    figure("Staking", model.stakingAt[index].map { Format.difficulty($0) } ?? "–", tone: Tone.staked)
                     figure("Staked share", sample.share100.map { Format.percent($0) } ?? "–")
                     figure("Fee pool", model.poolText(at: index))
                     Spacer(minLength: 0)
@@ -118,15 +132,25 @@ struct ChartStack: View {
                 Text(" ")
             }
         }
-        .font(.callout)
+        .font(Tone.caption)
         .lineLimit(1)
         .monospacedDigit()
+        .frame(minHeight: 40, alignment: .topLeading)
     }
 
-    private func figure(_ label: String, _ value: String) -> some View {
-        HStack(spacing: 5) {
-            Text(label).foregroundStyle(.secondary)
-            Text(value).fontWeight(.semibold)
+    private func productionFill(_ production: BlockProduction) -> Color? {
+        switch production {
+        case .staked: return Tone.staked
+        case .mined: return Tone.mined
+        case .unknown: return nil
+        }
+    }
+
+    /// A name and its figure at the shown block: "MINING 1.23T".
+    private func figure(_ label: String, _ value: String, tone: Color = Tone.value) -> some View {
+        HStack(alignment: .lastTextBaseline, spacing: 6) {
+            NameText(label)
+            Text(value).font(Tone.figureSmall).foregroundStyle(tone)
         }
     }
 
@@ -147,20 +171,15 @@ struct ChartStack: View {
             let x0 = x(wait.start), x1 = max(x(wait.end), x0 + 1)
             context.fill(
                 Path(CGRect(x: x0, y: headerHeight, width: x1 - x0, height: bottom - headerHeight)),
-                with: .color(.secondary.opacity(0.16)))
+                with: .color(Tone.value.opacity(0.09)))
         }
 
         // Time grid and its labels.
         for tick in model.timeTicks {
             let tx = x(tick)
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: tx, y: headerHeight))
-                    path.addLine(to: CGPoint(x: tx, y: bottom))
-                }, with: .color(.secondary.opacity(0.12)), lineWidth: 1)
-            context.draw(
-                Text(ChartFormat.axisTime(UInt64(tick), span: spanSeconds)).font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: tx, y: bottom + 10), anchor: .center)
+            context.rule(tx, headerHeight, tx, bottom, Tone.grid)
+            context.rule(tx, bottom, tx, bottom + 3, Tone.axis)
+            context.name(ChartFormat.axisTime(UInt64(tick), span: spanSeconds), tx, bottom + 11)
         }
 
         for panel in StackModel.Panel.allCases {
@@ -169,36 +188,29 @@ struct ChartStack: View {
             let y = { (value: Double) -> CGFloat in
                 box.maxY - CGFloat((model.scaled(value, panel) - range.lowerBound) / (range.upperBound - range.lowerBound)) * box.height
             }
-            // The name and the answer, above the panel.
+            // The name on a plate, and the answer, above the panel.
+            let plateWidth = context.resolve(Text(panel.title.uppercased()).font(Tone.plate).tracking(0.8))
+                .measure(in: CGSize(width: 400, height: 40)).width + 14
+            context.plate(panel.title, x: leftInset, y: box.minY - 10, width: plateWidth, fill: plateFill(panel))
             context.draw(
-                Text(panel.title).font(.callout.weight(.semibold)),
-                at: CGPoint(x: leftInset, y: box.minY - 10), anchor: .leading)
-            let titleWidth = context.resolve(Text(panel.title).font(.callout.weight(.semibold)))
-                .measure(in: CGSize(width: 400, height: 40)).width
-            context.draw(
-                Text(model.answer(panel)).font(.callout).foregroundStyle(model.signal(panel) ? Color.red : .secondary),
-                at: CGPoint(x: leftInset + titleWidth + 10, y: box.minY - 10), anchor: .leading)
+                Text(model.answer(panel)).font(Tone.caption).foregroundStyle(model.signal(panel) ? Tone.alert : Tone.label),
+                at: CGPoint(x: leftInset + plateWidth + 10, y: box.minY - 10), anchor: .leading)
 
-            context.stroke(Path(box), with: .color(.secondary.opacity(0.25)), lineWidth: 1)
+            context.stroke(Path(box), with: .color(Tone.rule), lineWidth: 1)
             for tick in model.ticks(panel) {
                 let ty = y(tick.value)
                 guard ty >= box.minY - 0.5, ty <= box.maxY + 0.5 else { continue }
-                context.stroke(
-                    Path { path in
-                        path.move(to: CGPoint(x: box.minX, y: ty))
-                        path.addLine(to: CGPoint(x: box.maxX, y: ty))
-                    }, with: .color(.secondary.opacity(0.14)), style: StrokeStyle(lineWidth: 1, dash: [2, 4]))
-                context.draw(
-                    Text(tick.label).font(.caption2).foregroundStyle(.secondary),
-                    at: CGPoint(x: box.minX - 6, y: ty), anchor: .trailing)
+                context.rule(box.minX, ty, box.maxX, ty, Tone.grid)
+                context.rule(box.minX - 3, ty, box.minX, ty, Tone.axis)
+                context.name(tick.label, box.minX - 7, ty, .trailing)
             }
 
             var inner = context
             inner.clip(to: Path(box))
             switch panel {
             case .rate: drawRate(inner, box, model, x, y)
-            case .mining: drawDifficulty(inner, box, model.mining, model.miningAverage, .orange, x, y)
-            case .staking: drawDifficulty(inner, box, model.staking, model.stakingAverage, .purple, x, y)
+            case .mining: drawDifficulty(inner, box, model.mining, model.miningAverage, Tone.mined, x, y)
+            case .staking: drawDifficulty(inner, box, model.staking, model.stakingAverage, Tone.staked, x, y)
             case .share: drawShare(inner, box, model, x, y)
             case .pool: drawPool(inner, box, model, x, y)
             }
@@ -214,13 +226,27 @@ struct ChartStack: View {
         }
     }
 
+    /// The colour of a panel's plate: the signal of its measure, or an outline.
+    private func plateFill(_ panel: StackModel.Panel) -> Color? {
+        switch panel {
+        case .mining: return Tone.mined
+        case .staking: return Tone.staked
+        default: return nil
+        }
+    }
+
+    /// The selected block is a line of the present with a little light. The block under the
+    /// pointer is a quieter line.
     private func cursor(_ context: GraphicsContext, _ size: CGSize, _ model: StackModel, at index: Int, strong: Bool) {
         let cx = model.x(Double(samples[index].time), in: plotFrame(size.width))
-        context.stroke(
-            Path { path in
-                path.move(to: CGPoint(x: cx, y: headerHeight))
-                path.addLine(to: CGPoint(x: cx, y: rect(.pool, size).maxY))
-            }, with: .color(.primary.opacity(strong ? 0.9 : 0.45)), lineWidth: strong ? 1.5 : 1)
+        let bottom = rect(.pool, size).maxY
+        if strong {
+            context.lit(
+                Path(CGRect(x: cx - 0.75, y: headerHeight, width: 1.5, height: bottom - headerHeight)),
+                Tone.present, strength: 0.6)
+        } else {
+            context.rule(cx, headerHeight, cx, bottom, Tone.present.opacity(0.45))
+        }
     }
 
     private func line(_ points: [CGPoint?]) -> Path {
@@ -240,23 +266,16 @@ struct ChartStack: View {
         if let limits = model.rateLimits {
             context.fill(
                 Path(CGRect(x: box.minX, y: y(limits.high), width: box.width, height: y(limits.low) - y(limits.high))),
-                with: .color(Color.accentColor.opacity(0.14)))
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: box.minX, y: y(limits.mean)))
-                    path.addLine(to: CGPoint(x: box.maxX, y: y(limits.mean)))
-                }, with: .color(Color.accentColor.opacity(0.7)), lineWidth: 1)
+                with: .color(Tone.record.opacity(0.1)))
+            context.rule(box.minX, y(limits.mean), box.maxX, y(limits.mean), Tone.record.opacity(0.6))
         }
-        context.stroke(
-            Path { path in
-                path.move(to: CGPoint(x: box.minX, y: y(model.rateTarget)))
-                path.addLine(to: CGPoint(x: box.maxX, y: y(model.rateTarget)))
-            }, with: .color(.primary.opacity(0.7)), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        context.rule(
+            box.minX, y(model.rateTarget), box.maxX, y(model.rateTarget), Tone.value.opacity(0.6), dash: [4, 3])
         let points = model.buckets.map { CGPoint(x: x(($0.start + $0.end) / 2), y: y(Double($0.count))) }
-        context.stroke(line(points), with: .color(.primary), lineWidth: 1.2)
+        context.stroke(line(points), with: .color(Tone.value), lineWidth: 1)
         for (bucket, point) in zip(model.buckets, points) {
-            let radius: CGFloat = bucket.flag == .none ? 2.6 : 4
-            let color: Color = bucket.flag == .outside ? .red : bucket.flag == .run ? .orange : .primary
+            let radius: CGFloat = bucket.flag == .none ? 2.2 : 3.5
+            let color: Color = bucket.flag == .outside ? Tone.alert : bucket.flag == .run ? Tone.mined : Tone.value
             context.fill(
                 Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)),
                 with: .color(color))
@@ -281,7 +300,7 @@ struct ChartStack: View {
         }
         context.stroke(
             line(average.map { point in point.map { CGPoint(x: x($0.time), y: y($0.value)) } }),
-            with: .color(.primary), lineWidth: 1.5)
+            with: .color(Tone.value), lineWidth: 1)
     }
 
     /// The lowest and highest value of each two-point column, so that no peak is lost.
@@ -313,18 +332,14 @@ struct ChartStack: View {
                 CGRect(
                     x: box.minX, y: y(StackModel.chanceHigh), width: box.width,
                     height: y(StackModel.chanceLow) - y(StackModel.chanceHigh))),
-            with: .color(Color.accentColor.opacity(0.14)))
-        context.stroke(
-            Path { path in
-                path.move(to: CGPoint(x: box.minX, y: y(0.5)))
-                path.addLine(to: CGPoint(x: box.maxX, y: y(0.5)))
-            }, with: .color(.primary.opacity(0.7)), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            with: .color(Tone.record.opacity(0.1)))
+        context.rule(box.minX, y(0.5), box.maxX, y(0.5), Tone.value.opacity(0.6), dash: [4, 3])
         context.stroke(
             line(model.share1000.map { point in point.map { CGPoint(x: x($0.time), y: y($0.value)) } }),
-            with: .color(.orange), lineWidth: 1.5)
+            with: .color(Tone.record), lineWidth: 1)
         context.stroke(
             line(model.share100.map { point in point.map { CGPoint(x: x($0.time), y: y($0.value)) } }),
-            with: .color(.primary), lineWidth: 1.2)
+            with: .color(Tone.staked), lineWidth: 1)
     }
 
     private func drawPool(
@@ -333,7 +348,7 @@ struct ChartStack: View {
         guard !model.pool.isEmpty else {
             context.draw(
                 Text(fee.loading ? "Reading fee pool checkpoints" : "No fee pool checkpoint is loaded for this range.")
-                    .font(.caption).foregroundStyle(.secondary),
+                    .font(Tone.caption).foregroundStyle(Tone.label),
                 at: CGPoint(x: box.midX, y: box.midY), anchor: .center)
             return
         }
@@ -343,24 +358,20 @@ struct ChartStack: View {
             area.addLine(to: CGPoint(x: last.x, y: box.maxY))
             area.addLine(to: CGPoint(x: first.x, y: box.maxY))
             area.closeSubpath()
-            context.fill(area, with: .color(Color.accentColor.opacity(0.14)))
+            context.fill(area, with: .color(Tone.record.opacity(0.08)))
         }
-        context.stroke(line(points), with: .color(Color.accentColor), lineWidth: 1.3)
+        context.stroke(line(points), with: .color(Tone.record), lineWidth: 1)
         // A tick for each block where the pool rose. Known only between neighbouring blocks.
         for time in model.poolRises {
             let tx = x(time)
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: tx, y: box.minY))
-                    path.addLine(to: CGPoint(x: tx, y: box.minY + 6))
-                }, with: .color(.primary.opacity(0.8)), lineWidth: 1)
+            context.rule(tx, box.minY, tx, box.minY + 6, Tone.value.opacity(0.75))
         }
         // The second currency of a PBaaS chain, on its own range.
         if !model.reserve.isEmpty, let top = model.reserve.map(\.value).max(), top > 0 {
             let reserve = model.reserve.map {
                 CGPoint(x: x($0.time), y: box.maxY - CGFloat($0.value / (top * 1.08)) * box.height)
             }
-            context.stroke(line(reserve), with: .color(.green), lineWidth: 1.2)
+            context.stroke(line(reserve), with: .color(Tone.good), lineWidth: 1)
         }
     }
 }
@@ -760,8 +771,12 @@ private struct WaitsStrip: View {
 
     var body: some View {
         if model.waits.count >= 20 {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Waits between bursts in this range").font(.callout.weight(.semibold))
+            VStack(alignment: .leading, spacing: 0) {
+                PanelRule()
+                Plate("Waits between bursts in this range")
+                    .padding(.leading, leftInset)
+                    .padding(.top, 12)
+                // The canvas has the full width, so that its axis has the insets of the panels above.
                 Canvas { context, size in draw(context, size) }
                     .frame(height: 62)
                     .accessibilityLabel("Dot plot of the waits between bursts in this range")
@@ -773,9 +788,12 @@ private struct WaitsStrip: View {
                         + (wait.map { "The line is the wait before the shown block: \(ChartFormat.duration(Int64($0))), longer than \(shareShorter($0)) of 100." }
                             ?? "The shown block followed its parent within the burst time.")
                 )
-                .font(.caption).foregroundStyle(.secondary)
+                .font(Tone.caption).foregroundStyle(Tone.label)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 18)
+                .padding(.top, 4)
+                .padding(.bottom, 10)
             }
-            .padding(.top, 4)
         }
     }
 
@@ -794,22 +812,21 @@ private struct WaitsStrip: View {
         let position = { (seconds: Double) -> CGFloat in
             leftInset + CGFloat((log(max(seconds, low)) - log(low)) / (log(high) - log(low))) * (right - leftInset)
         }
-        context.stroke(
-            Path { path in
-                path.move(to: CGPoint(x: leftInset, y: base))
-                path.addLine(to: CGPoint(x: right, y: base))
-            }, with: .color(.secondary.opacity(0.4)), lineWidth: 1)
+        context.rule(leftInset, base, right, base, Tone.axis)
         let ticks: [(Double, String)] = [
             (10, "10 s"), (30, "30 s"), (60, "1 min"), (120, "2 min"), (300, "5 min"), (600, "10 min"),
             (1200, "20 min"), (3600, "1 h"),
         ]
         for (seconds, label) in ticks where seconds <= high {
-            context.draw(
-                Text(label).font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: position(seconds), y: base + 11), anchor: .center)
+            let tx = position(seconds)
+            context.rule(tx, base, tx, base + 4, Tone.axis)
+            context.name(label, tx, base + 12)
         }
         let count = min(100, model.waits.count)
         var stacks: [Int: Int] = [:]
+        // The waits shorter than the shown wait have light, as in the chain pulse.
+        var shorterDots = Path()
+        var longerDots = Path()
         for index in 0..<count {
             let rank = Int((Double(index) + 0.5) / Double(count) * Double(model.waits.count))
             let value = model.waits[min(rank, model.waits.count - 1)]
@@ -819,17 +836,18 @@ private struct WaitsStrip: View {
             let center = CGPoint(
                 x: leftInset + (CGFloat(bin) + 0.5) * (dot + 1), y: base - 2 - dot / 2 - CGFloat(level) * (dot + 1))
             let shorter = wait.map { value < $0 } ?? true
-            context.fill(
-                Path(ellipseIn: CGRect(x: center.x - dot / 2, y: center.y - dot / 2, width: dot, height: dot)),
-                with: .color(shorter ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.45)))
+            let box = CGRect(x: center.x - dot / 2, y: center.y - dot / 2, width: dot, height: dot)
+            if shorter {
+                shorterDots.addEllipse(in: box)
+            } else {
+                longerDots.addEllipse(in: box)
+            }
         }
+        context.fill(longerDots, with: .color(Tone.axis))
+        context.lit(shorterDots, Tone.record, strength: 0.4)
         if let wait {
             let cx = min(position(wait), right)
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: cx, y: 2))
-                    path.addLine(to: CGPoint(x: cx, y: base))
-                }, with: .color(.primary), lineWidth: 1.5)
+            context.lit(Path(CGRect(x: cx - 0.75, y: 2, width: 1.5, height: base - 2)), Tone.present, strength: 0.6)
         }
     }
 }

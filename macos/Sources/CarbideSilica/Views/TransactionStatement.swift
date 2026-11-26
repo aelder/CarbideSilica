@@ -169,11 +169,20 @@ struct TransactionStatementView: View {
                 }
                 .fixedSize()
             }
-            if !layout.rows.isEmpty {
-                grid(layout)
-            }
-            if !layout.spread.isEmpty {
-                spread(layout)
+            if !layout.rows.isEmpty || !layout.spread.isEmpty {
+                DisplayPanel {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if !layout.rows.isEmpty {
+                            grid(layout)
+                        }
+                        if !layout.rows.isEmpty, !layout.spread.isEmpty {
+                            PanelRule()
+                        }
+                        if !layout.spread.isEmpty {
+                            spread(layout)
+                        }
+                    }
+                }
             }
             if let selection, !(selection.inputs.isEmpty && selection.outputs.isEmpty) {
                 HStack(spacing: 8) {
@@ -185,7 +194,7 @@ struct TransactionStatementView: View {
                             scroll("output-\(output)")
                         }
                     }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                 }
             }
             routes
@@ -212,9 +221,7 @@ struct TransactionStatementView: View {
                 HStack(spacing: 0) {
                     Color.clear.frame(width: Self.labelWidth, height: 1)
                     ForEach(Array(layout.columns.enumerated()), id: \.offset) { _, column in
-                        Text(currency(column))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                        NameText(currency(column))
                             .lineLimit(1)
                             .frame(maxWidth: .infinity)
                     }
@@ -222,7 +229,7 @@ struct TransactionStatementView: View {
                 .padding(.bottom, 4)
             }
             ForEach(Array(layout.rows.enumerated()), id: \.element.id) { position, row in
-                if position > 0 { Divider() }
+                if position > 0 { PanelRule() }
                 line(row, layout)
             }
         }
@@ -239,7 +246,7 @@ struct TransactionStatementView: View {
                     RouteLink(text: address, route: .holder(address))
                 } else {
                     Text(row.title)
-                        .foregroundStyle(row.style == .closing || row.style == .rest ? .secondary : .primary)
+                        .foregroundStyle(row.style == .closing || row.style == .rest ? Tone.label : Tone.value)
                         .lineLimit(1)
                 }
             }
@@ -251,11 +258,13 @@ struct TransactionStatementView: View {
             } label: {
                 HStack(spacing: 0) {
                     if row.style == .unchanged {
-                        Text("No change").font(.callout).foregroundStyle(.secondary)
+                        NameText("No change")
                             .frame(maxWidth: .infinity)
                     } else {
                         ForEach(Array(row.cells.enumerated()), id: \.offset) { column, sats in
-                            cell(sats, scale: layout.scale[column], style: row.style, currency: layout.columns[column])
+                            cell(
+                                sats, scale: layout.scale[column], style: row.style, chosen: chosen,
+                                currency: layout.columns[column])
                         }
                     }
                 }
@@ -267,16 +276,23 @@ struct TransactionStatementView: View {
             .help(selectable ? "Mark the inputs and outputs of this row in the lists below." : "")
         }
         .padding(.vertical, 5)
-        .background(chosen ? Color.accentColor.opacity(0.1) : .clear)
+        .background(chosen ? Tone.present.opacity(0.08) : .clear)
+        .overlay(alignment: .leading) {
+            if chosen {
+                Rectangle().fill(Tone.present).frame(width: 2).shadow(color: Tone.present.opacity(0.6), radius: 3)
+            }
+        }
     }
 
-    private func cell(_ sats: Int64, scale: Int64, style: StatementRow.Style, currency id: String?) -> some View {
+    private func cell(
+        _ sats: Int64, scale: Int64, style: StatementRow.Style, chosen: Bool, currency id: String?
+    ) -> some View {
         VStack(spacing: 2) {
-            NetBar(fraction: Double(sats) / Double(scale), style: style)
+            NetBar(fraction: Double(sats) / Double(scale), style: style, chosen: chosen)
                 .frame(height: 9)
             Text(sats == 0 ? " " : StatementText.signed(sats))
                 .font(.callout.monospacedDigit())
-                .foregroundStyle(style == .closing || style == .rest ? .secondary : .primary)
+                .foregroundStyle(style == .closing || style == .rest ? Tone.label : Tone.value)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
@@ -317,7 +333,7 @@ struct TransactionStatementView: View {
                     let width = CGFloat(value) / CGFloat(max(total, 1)) * size.width
                     context.fill(
                         Path(CGRect(x: x, y: 0, width: max(width - 0.6, 0.3), height: size.height)),
-                        with: .color(.accentColor.opacity(index.isMultiple(of: 2) ? 0.9 : 0.55)))
+                        with: .color(Tone.record.opacity(index.isMultiple(of: 2) ? 0.9 : 0.55)))
                     x += width
                 }
             }
@@ -329,7 +345,7 @@ struct TransactionStatementView: View {
                     + "Median: \(StatementText.brief(median)) \(name). "
                     + "The \(StatementLayout.keptReceivers) largest received "
                     + "\(Int((Double(top) / Double(max(total, 1)) * 100).rounded())) of each 100.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(Tone.caption).foregroundStyle(Tone.label)
         }
     }
 
@@ -339,13 +355,13 @@ struct TransactionStatementView: View {
     private var routes: some View {
         if !statement.routes.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Asked for").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                NameText("Asked for")
                 ForEach(statement.routes, id: \.output) { route in
                     HStack(spacing: 6) {
                         Text(routeText(route)).font(.callout.monospacedDigit())
                         if transaction.traceRoots.contains(where: { $0.output == route.output }) {
                             Button("Follow") { follow(route.output) }
-                                .buttonStyle(.link)
+                                .buttonStyle(.displayLink)
                                 .help("Start the transfer trace of output \(route.output).")
                         }
                     }
@@ -370,7 +386,7 @@ struct TransactionStatementView: View {
         let lines = statement.parties.filter { !$0.carried.isEmpty && !$0.net.isEmpty }
         if !lines.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Passed through with no change").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                NameText("Passed through with no change")
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, party in
                     Text("\(StatementText.capital(name(party))): \(StatementText.list(party.carried.map(amount)))")
                         .font(.callout)
@@ -395,8 +411,8 @@ struct TransactionStatementView: View {
 
     private func markLine(_ title: String, _ marks: [StatementMark]) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                .frame(width: 48, alignment: .leading)
+            NameText(title)
+                .frame(width: 56, alignment: .leading)
             FlowLayout(spacing: 6) {
                 ForEach(Array(marks.enumerated()), id: \.offset) { _, mark in
                     Button {
@@ -405,7 +421,7 @@ struct TransactionStatementView: View {
                             inputs: mark.spent ? [mark.index] : [], outputs: mark.spent ? [] : [mark.index])
                         scroll(mark.spent ? "input-\(mark.index)" : "output-\(mark.index)")
                     } label: {
-                        TagChip(text: markText(mark), color: .secondary)
+                        Plate(markText(mark))
                     }
                     .buttonStyle(.plain)
                     .help("Go to \(mark.spent ? "input" : "output") \(mark.index) in the lists below.")
@@ -572,29 +588,34 @@ private struct NetBar: View {
     /// The amount as a part of the largest amount in its column: -1 to 1.
     let fraction: Double
     let style: StatementRow.Style
+    /// True for the row that the person marked: its received bars are the present.
+    var chosen = false
 
     var body: some View {
         Canvas { context, size in
             let middle = size.width / 2
-            context.fill(
-                Path(CGRect(x: middle - 0.5, y: 0, width: 1, height: size.height)),
-                with: .color(.secondary.opacity(0.7)))
+            context.rule(middle, 0, middle, size.height, Tone.axis)
             guard fraction != 0 else { return }
             let length = max(CGFloat(abs(fraction)) * (middle - 1), 2)
             let rect = CGRect(
                 x: fraction < 0 ? middle - length : middle, y: 0.75, width: length, height: size.height - 1.5)
             switch style {
             case .closing, .rest:
-                context.fill(Path(rect), with: .color(.secondary.opacity(0.55)))
+                context.fill(Path(rect), with: .color(Tone.label.opacity(0.55)))
             case .hidden:
-                context.fill(Path(rect), with: .color(.accentColor.opacity(0.2)))
+                context.fill(Path(rect), with: .color(Tone.record.opacity(0.15)))
                 context.stroke(
-                    Path(rect), with: .color(.accentColor), style: StrokeStyle(lineWidth: 1.3, dash: [4, 3]))
+                    Path(rect.insetBy(dx: 0.5, dy: 0.5)), with: .color(Tone.record),
+                    style: StrokeStyle(lineWidth: 1, lineCap: .butt, dash: [4, 3]))
             default:
                 if fraction < 0 {
-                    context.stroke(Path(rect), with: .color(.primary), lineWidth: 1.3)
+                    context.stroke(
+                        Path(rect.insetBy(dx: 0.5, dy: 0.5)), with: .color(chosen ? Tone.present : Tone.value),
+                        lineWidth: 1)
+                } else if chosen {
+                    context.lit(Path(rect), Tone.present, strength: 0.5)
                 } else {
-                    context.fill(Path(rect), with: .color(.accentColor))
+                    context.fill(Path(rect), with: .color(Tone.record))
                 }
             }
         }

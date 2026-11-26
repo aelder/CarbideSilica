@@ -93,7 +93,7 @@ struct CurrenciesView: View {
                     .disabled(browser.loading)
             }
             HStack(spacing: 8) {
-                Text("Launch status").foregroundStyle(.secondary).frame(width: 100, alignment: .leading)
+                NameText("Launch status").frame(width: 100, alignment: .leading)
                 ForEach(LaunchState.all, id: \.self) { state in
                     LaunchToggle(state: state, isOn: launchBinding(state))
                 }
@@ -109,7 +109,7 @@ struct CurrenciesView: View {
                 .fixedSize()
             }
             HStack(spacing: 8) {
-                Text("Option flags").foregroundStyle(.secondary).frame(width: 100, alignment: .leading)
+                NameText("Option flags").frame(width: 100, alignment: .leading)
                 Text(flagSummary).lineLimit(1).truncationMode(.tail)
                 Spacer()
                 Button(browser.showFlags ? "Hide Flags" : "Edit Flags") { browser.showFlags.toggle() }
@@ -141,7 +141,7 @@ struct CurrenciesView: View {
                         Image(systemName: symbol(state)).foregroundStyle(color(state))
                         Text(flag.name)
                         Spacer(minLength: 4)
-                        Text(word(state)).font(.caption.weight(.semibold)).foregroundStyle(color(state))
+                        Text(word(state).uppercased()).font(Tone.plate).tracking(0.8).foregroundStyle(color(state))
                     }
                     .frame(width: 210, alignment: .leading)
                     .contentShape(Rectangle())
@@ -163,9 +163,9 @@ struct CurrenciesView: View {
 
     private func color(_ state: FlagState) -> Color {
         switch state {
-        case .any: .secondary
-        case .show: .green
-        case .hide: .red
+        case .any: Tone.label
+        case .show: Tone.good
+        case .hide: Tone.alert
         }
     }
 
@@ -255,7 +255,7 @@ private struct CurrencyTile: View {
                 }
                 Text(row.currencyId)
                     .font(.callout.monospaced())
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Tone.record)
                     .lineLimit(1)
                 Text(summary)
                     .font(.callout)
@@ -265,9 +265,14 @@ private struct CurrencyTile: View {
             .padding(.vertical, 8)
             .padding(.horizontal, 8)
             .background(
-                selected ? AnyShapeStyle(Color.accentColor.opacity(0.12))
-                    : hovering ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear),
-                in: RoundedRectangle(cornerRadius: 6))
+                selected ? AnyShapeStyle(Tone.present.opacity(0.1))
+                    : hovering ? AnyShapeStyle(Tone.grid) : AnyShapeStyle(.clear),
+                in: Rectangle())
+            .overlay(alignment: .leading) {
+                if selected {
+                    Rectangle().fill(Tone.present).frame(width: 2)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -291,8 +296,8 @@ private struct CurrencyTile: View {
     }
 }
 
-/// A launch-status filter. On is a filled checkmark, the state's colour and a tinted
-/// border; off is an empty circle in grey with no fill, so the state never rests on colour.
+/// A launch-status filter, as a plate. On is a filled plate; off is an outline, so the
+/// state never rests on colour.
 private struct LaunchToggle: View {
     let state: LaunchState
     @Binding var isOn: Bool
@@ -301,16 +306,8 @@ private struct LaunchToggle: View {
         Button {
             isOn.toggle()
         } label: {
-            Label(state.word, systemImage: isOn ? "checkmark.circle.fill" : "circle")
-                .font(.callout.weight(isOn ? .semibold : .regular))
-                .foregroundStyle(isOn ? Color.accentColor : .secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(
-                    isOn ? Color.accentColor.opacity(0.14) : .clear,
-                    in: Capsule())
-                .overlay(Capsule().strokeBorder(isOn ? Color.accentColor : Color.secondary.opacity(0.4), lineWidth: 1))
-                .contentShape(Capsule())
+            Plate(state.word, fill: isOn ? Tone.record : nil)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityValue(isOn ? "Included" : "Not included")
@@ -341,10 +338,10 @@ struct CurrencyLaunchBadge: View {
 
     private var color: Color {
         switch state {
-        case .launched: .green
-        case .prelaunch: .accentColor
-        case .failed: .red
-        case .unknown: .orange
+        case .launched: Tone.good
+        case .prelaunch: Tone.record
+        case .failed: Tone.alert
+        case .unknown: Tone.mined
         }
     }
 }

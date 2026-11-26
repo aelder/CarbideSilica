@@ -128,30 +128,31 @@ struct KeyboardReference: View {
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 16, verticalSpacing: 4) {
                     ForEach(Self.sections, id: \.0) { section in
                         GridRow {
-                            Text(section.0).font(.headline)
-                                .gridCellColumns(3)
-                                .padding(.top, section.0 == Self.sections.first?.0 ? 0 : 14)
+                            VStack(alignment: .leading, spacing: 8) {
+                                PanelRule()
+                                Self.heading(section.0)
+                            }
+                            .gridCellColumns(3)
+                            .padding(.top, section.0 == Self.sections.first?.0 ? 0 : 14)
                         }
                         GridRow {
-                            Text("Keys")
-                            Text("Action")
-                            Text("Terminal key")
+                            NameText("Keys")
+                            NameText("Action")
+                            NameText("Terminal key")
                         }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
                         ForEach(section.1) { entry in
                             GridRow {
-                                Text(entry.keys).font(.body.monospaced())
+                                Self.key(entry.keys)
                                     .gridColumnAlignment(.leading)
-                                Text(entry.action)
-                                Text(entry.terminal).foregroundStyle(.secondary)
+                                Text(entry.action).foregroundStyle(Tone.value)
+                                Text(entry.terminal).font(.callout.monospaced()).foregroundStyle(Tone.label)
                             }
                         }
                     }
                 }
-                Divider()
+                PanelRule()
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Search").font(.headline)
+                    Self.heading("Search")
                     Text(
                         "Enter a block height, a block hash, a transaction ID, an address, an identity (name@ or an i-address) or a currency (name@@). "
                             + "Enter currencies to open the currency browser."
@@ -168,15 +169,20 @@ struct KeyboardReference: View {
                         "A future height or date opens an estimate. Enter estimate:5000000, estimate:in 2 hours or estimate:unix:1857254400 to open the estimator directly."
                     )
                 }
-                .foregroundStyle(.secondary)
-                Divider()
+                .foregroundStyle(Tone.label)
+                PanelRule()
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Cache").font(.headline)
+                    Self.heading("Cache")
                     if let cache {
-                        LabeledContent("Location") {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            NameText("Location").frame(width: 90, alignment: .leading)
                             Text(cache.path).textSelection(.enabled).font(.callout.monospaced())
+                                .foregroundStyle(Tone.value)
                         }
-                        LabeledContent("Size", value: Format.bytes(cache.bytes))
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            NameText("Size").frame(width: 90, alignment: .leading)
+                            Text(Format.bytes(cache.bytes)).monospacedDigit().foregroundStyle(Tone.value)
+                        }
                     } else {
                         Text("Not connected. The cache location is not known.").foregroundStyle(.secondary)
                     }
@@ -185,7 +191,25 @@ struct KeyboardReference: View {
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(Tone.screen)
+        .environment(\.colorScheme, .dark)
         .frame(minWidth: 620, idealWidth: 720, minHeight: 480, idealHeight: 720)
         .task(id: model.generation) { cache = model.explorer?.cacheInfo() }
+    }
+
+    /// The heading of a section, as the heading of a card.
+    static func heading(_ title: String) -> some View {
+        Text(title.uppercased()).font(Tone.heading).tracking(2.2).foregroundStyle(Tone.value)
+    }
+
+    /// A key, in an outline. The key keeps its case: "j" and "J" are not the same key.
+    static func key(_ keys: String) -> some View {
+        Text(keys)
+            .font(.callout.monospaced())
+            .foregroundStyle(Tone.value)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .overlay(Rectangle().strokeBorder(Tone.label.opacity(0.7), lineWidth: 1))
+            .fixedSize()
     }
 }

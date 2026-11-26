@@ -129,12 +129,25 @@ private struct SyncCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            Canvas { context, size in
-                draw(context, size)
+            DisplayPanel {
+                VStack(alignment: .leading, spacing: 10) {
+                    Canvas { context, size in
+                        draw(context, size)
+                    }
+                    .frame(height: 62)
+                    .accessibilityLabel(
+                        "Synchronization progress: \(Format.percent(fraction)) of the chain validated")
+                    if syncing {
+                        PanelRule()
+                        Text(
+                            "The year marks are approximate. They assume a constant block rate. "
+                                + "Blocks with more transactions take longer to validate."
+                        )
+                        .font(Tone.caption)
+                        .foregroundStyle(Tone.label)
+                    }
+                }
             }
-            .frame(height: 62)
-            .accessibilityLabel(
-                "Synchronization progress: \(Format.percent(fraction)) of the chain validated")
 
             HStack(spacing: 28) {
                 Stat(
@@ -155,14 +168,6 @@ private struct SyncCard: View {
                 if let waiting = node.mempoolCount, !syncing {
                     Stat(label: "Waiting", value: "\(waiting)", detail: "unconfirmed transactions")
                 }
-            }
-            if syncing {
-                Text(
-                    "The year marks are approximate. They assume a constant block rate. "
-                        + "Blocks with more transactions take longer to validate."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
         }
     }
@@ -196,19 +201,21 @@ private struct SyncCard: View {
 
     private func draw(_ context: GraphicsContext, _ size: CGSize) {
         let bar = CGRect(x: 0, y: 4, width: size.width, height: 30)
-        let shape = Path(roundedRect: bar, cornerRadius: 5)
-        context.fill(shape, with: .color(.secondary.opacity(0.14)))
-        var clipped = context
-        clipped.clip(to: shape)
+        context.fill(Path(bar), with: .color(Tone.grid))
         if let headers = headerFraction {
-            clipped.fill(
+            context.fill(
                 Path(CGRect(x: 0, y: bar.minY, width: bar.width * headers, height: bar.height)),
-                with: .color(.accentColor.opacity(0.22)))
+                with: .color(Tone.record.opacity(0.22)))
         }
-        clipped.fill(
+        // The validated part is done: pale blue. Its edge is the present.
+        context.fill(
             Path(CGRect(x: 0, y: bar.minY, width: bar.width * fraction, height: bar.height)),
-            with: .color(.accentColor))
-        context.stroke(shape, with: .color(.secondary.opacity(0.4)), lineWidth: 1)
+            with: .color(Tone.record.opacity(0.85)))
+        context.stroke(Path(bar.insetBy(dx: 0.5, dy: 0.5)), with: .color(Tone.rule), lineWidth: 1)
+        let edge = min(max(bar.width * fraction, 0.75), bar.width - 0.75)
+        context.lit(
+            Path(CGRect(x: edge - 0.75, y: bar.minY - 3, width: 1.5, height: bar.height + 6)), Tone.present,
+            strength: fraction < 1 ? 0.7 : 0)
 
         // Year marks: height is close to linear in time because blocks target one minute.
         let total = Date.now.timeIntervalSince(Self.genesis)
@@ -219,14 +226,8 @@ private struct SyncCard: View {
                 continue
             }
             let x = bar.width * start.timeIntervalSince(Self.genesis) / total
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: x, y: bar.maxY))
-                    path.addLine(to: CGPoint(x: x, y: bar.maxY + 6))
-                }, with: .color(.secondary), lineWidth: 1)
-            context.draw(
-                Text(String(year)).font(.caption2).foregroundStyle(.secondary),
-                at: CGPoint(x: x, y: bar.maxY + 16), anchor: .center)
+            context.rule(x, bar.maxY, x, bar.maxY + 6, Tone.axis)
+            context.name(String(year), x, bar.maxY + 16)
         }
     }
 }
@@ -238,7 +239,7 @@ private struct Stat: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+            NameText(label)
             Text(value).font(.title3.weight(.semibold)).monospacedDigit()
             Text(detail ?? " ").font(.caption).foregroundStyle(.secondary)
         }
@@ -256,21 +257,37 @@ private struct SpeedCard: View {
                     .foregroundStyle(.secondary)
                     .frame(height: 120)
             } else {
-                Chart(samples) { sample in
-                    AreaMark(
-                        x: .value("Time", sample.time),
-                        y: .value("Blocks per second", sample.blocksPerSecond)
-                    )
-                    .foregroundStyle(Color.accentColor.opacity(0.15))
-                    LineMark(
-                        x: .value("Time", sample.time),
-                        y: .value("Blocks per second", sample.blocksPerSecond)
-                    )
-                    .foregroundStyle(Color.accentColor)
-                    .interpolationMethod(.monotone)
+                DisplayPanel {
+                    Chart(samples) { sample in
+                        AreaMark(
+                            x: .value("Time", sample.time),
+                            y: .value("Blocks per second", sample.blocksPerSecond)
+                        )
+                        .foregroundStyle(Tone.record.opacity(0.08))
+                        LineMark(
+                            x: .value("Time", sample.time),
+                            y: .value("Blocks per second", sample.blocksPerSecond)
+                        )
+                        .foregroundStyle(Tone.record)
+                        .lineStyle(StrokeStyle(lineWidth: 1))
+                        .interpolationMethod(.monotone)
+                    }
+                    .chartYScale(domain: .automatic(includesZero: true))
+                    .chartXAxis {
+                        AxisMarks { _ in
+                            AxisGridLine().foregroundStyle(Tone.grid)
+                            AxisTick().foregroundStyle(Tone.axis)
+                            AxisValueLabel().font(Tone.small).foregroundStyle(Tone.label)
+                        }
+                    }
+                    .chartYAxis {
+                        AxisMarks { _ in
+                            AxisGridLine().foregroundStyle(Tone.grid)
+                            AxisValueLabel().font(Tone.small).foregroundStyle(Tone.label)
+                        }
+                    }
+                    .frame(height: 140)
                 }
-                .chartYScale(domain: .automatic(includesZero: true))
-                .frame(height: 140)
             }
         }
     }
@@ -317,11 +334,9 @@ private struct PeersCard: View {
                     let scale = PeerScale(peers: node.peers, ranges: feed.responseRange, now: context.date)
                     VStack(alignment: .leading, spacing: 0) {
                         PeerColumns(
-                            peer: Text("Peer"),
-                            response: Text("Response time, 0 to \(PeerScale.time(scale.slowest))"),
-                            data: Text("Data received"), connected: Text("Connected"))
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
+                            peer: NameText("Peer"),
+                            response: NameText("Response time, 0 to \(PeerScale.time(scale.slowest))"),
+                            data: NameText("Data received"), connected: NameText("Connected"))
                             .padding(.horizontal, 8)
                             .padding(.bottom, 6)
                         Divider()
@@ -423,16 +438,16 @@ private struct PeersCard: View {
 
     private func countLine(_ title: String, _ groups: [(name: String, count: Int)]) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                .frame(width: 110, alignment: .leading)
+            NameText(title)
+                .frame(width: 140, alignment: .leading)
             FlowLayout(spacing: 14) {
                 ForEach(groups, id: \.name) { group in
                     let most = group.count * 2 > node.peers.count
                     HStack(spacing: 5) {
                         HStack(spacing: 3) {
                             ForEach(0..<group.count, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(most ? Color.accentColor : Color.secondary.opacity(0.6))
+                                Rectangle()
+                                    .fill(most ? Tone.record : Tone.axis)
                                     .frame(width: 11, height: 11)
                             }
                         }
@@ -452,7 +467,7 @@ private struct PeersCard: View {
             peer: VStack(alignment: .leading, spacing: 2) {
                 if let peer = item.peer {
                     HStack(spacing: 6) {
-                        Button("Peer \(peer.id)") { open(peer) }.buttonStyle(.link)
+                        Button("Peer \(peer.id)") { open(peer) }.buttonStyle(.displayLink)
                         Text(placeName(peer)).lineLimit(1)
                     }
                     HStack(spacing: 0) {
@@ -462,10 +477,10 @@ private struct PeersCard: View {
                     .font(.callout).foregroundStyle(.secondary)
                     .help("\(peer.address) · height at connection \(peer.startingHeight.map { Format.integer(UInt64(max($0, 0))) } ?? "unknown")")
                     if let gap = behind(peer) {
-                        Text("\(Format.integer(gap)) blocks behind the node").font(.callout).foregroundStyle(.orange)
+                        Text("\(Format.integer(gap)) blocks behind the node").font(.callout).foregroundStyle(Tone.mined)
                     }
                 } else if let banned = item.banned {
-                    Label("Banned", systemImage: "nosign").foregroundStyle(.red)
+                    Label("Banned", systemImage: "nosign").foregroundStyle(Tone.alert)
                     Text("\(banned.address) · \(banText(banned))")
                         .font(.callout).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
@@ -480,7 +495,7 @@ private struct PeersCard: View {
                     VStack(alignment: .leading, spacing: 3) {
                         GeometryReader { geometry in
                             Rectangle()
-                                .fill(Color.accentColor.opacity(0.85))
+                                .fill(Tone.record.opacity(0.85))
                                 .frame(width: max(geometry.size.width * scale.share(of: peer), 1.5))
                         }
                         .frame(height: 8)
@@ -534,7 +549,7 @@ private struct PeersCard: View {
     @ViewBuilder
     private var totals: some View {
         HStack(spacing: 18) {
-            Text("Network totals").fontWeight(.semibold)
+            NameText("Network totals")
             if let totals = feed.totals {
                 Text("Received \(Format.bytes(totals.received))").monospacedDigit()
                 Text("Sent \(Format.bytes(totals.sent))").monospacedDigit()
@@ -633,20 +648,17 @@ private struct ResponseScale: View {
                 Canvas { context, size in
                     let middle = size.height / 2
                     func x(_ ms: Double) -> CGFloat { 5 + CGFloat(min(ms / slowest, 1)) * (size.width - 10) }
-                    context.fill(
-                        Path(CGRect(x: 5, y: middle - 0.5, width: size.width - 10, height: 1)),
-                        with: .color(.secondary.opacity(0.35)))
-                    context.fill(
-                        Path(CGRect(x: 5 - 0.5, y: middle - 4, width: 1, height: 8)), with: .color(.secondary.opacity(0.6)))
+                    context.rule(5, middle, size.width - 5, middle, Tone.axis)
+                    context.rule(5, middle - 4, 5, middle + 4, Tone.axis)
                     if let range, range.upperBound - range.lowerBound > 0 {
                         let from = x(range.lowerBound)
                         let band = CGRect(x: from, y: middle - 2, width: max(x(range.upperBound) - from, 2), height: 4)
-                        context.fill(Path(roundedRect: band, cornerRadius: 2), with: .color(.primary.opacity(0.35)))
+                        context.fill(Path(band), with: .color(Tone.record.opacity(0.35)))
                     }
                     let at = x(milliseconds)
                     context.fill(
-                        Path(ellipseIn: CGRect(x: at - 4.5, y: middle - 4.5, width: 9, height: 9)),
-                        with: .color(.accentColor))
+                        Path(ellipseIn: CGRect(x: at - 4, y: middle - 4, width: 8, height: 8)),
+                        with: .color(Tone.record))
                 }
                 .frame(height: 12)
                 .accessibilityHidden(true)

@@ -181,18 +181,16 @@ private struct CurrencyPage: View {
                     }
                     Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 8) {
                         GridRow {
-                            Text("Currency")
-                            Text("Weight").gridColumnAlignment(.trailing)
-                            Text("In reserve").gridColumnAlignment(.trailing)
-                            Text("Price in reserve").gridColumnAlignment(.trailing)
+                            NameText("Currency")
+                            NameText("Weight").gridColumnAlignment(.trailing)
+                            NameText("In reserve").gridColumnAlignment(.trailing)
+                            NameText("Price in reserve").gridColumnAlignment(.trailing)
                             if unitPrice != nil {
-                                Text("Value in \(unitName)").gridColumnAlignment(.trailing)
-                                Text("One is worth, in \(unitName)").gridColumnAlignment(.trailing)
+                                NameText("Value in \(unitName)").gridColumnAlignment(.trailing)
+                                NameText("One is worth, in \(unitName)").gridColumnAlignment(.trailing)
                             }
                         }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        Divider()
+                        PanelRule()
                         ForEach(currency.reserves, id: \.currencyId) { reserve in
                             GridRow {
                                 RouteLink(

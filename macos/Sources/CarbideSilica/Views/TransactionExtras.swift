@@ -25,7 +25,7 @@ struct ProtocolLinksCard: View {
             } else {
                 LinkList(links: forwardLinks, checking: report == nil && failure == nil)
             }
-            Text("Referenced by").font(.headline).padding(.top, 4)
+            NameText("Referenced by").padding(.top, 4)
             if let report {
                 if !reverseLinks.isEmpty {
                     LinkList(links: reverseLinks, checking: false)
@@ -77,7 +77,7 @@ private struct LinkList: View {
                 if index > 0 { Divider() }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 10) {
-                        Text("Output \(link.output)").foregroundStyle(.secondary)
+                        NameText("Output \(link.output)")
                             .frame(width: 76, alignment: .leading)
                         Text(link.label).fontWeight(.medium)
                         Image(systemName: link.reverse ? "arrow.left" : "arrow.right").foregroundStyle(.secondary)
@@ -111,7 +111,7 @@ private struct LinkList: View {
             } else if link.problem {
                 Label(status, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Tone.alert)
             } else {
                 ConfidenceMark(level: .unknown, label: status)
             }
@@ -153,13 +153,14 @@ struct WitnessCard: View {
                     }
                 }
                 if !report.finalizations.isEmpty {
-                    Text("Observed finalization fields").font(.headline).padding(.top, 4)
+                    NameText("Observed finalization fields").padding(.top, 4)
                     ForEach(report.finalizations, id: \.self) {
                         Text($0).font(.callout.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
                     }
                 }
                 if !report.issues.isEmpty {
-                    Text("Investigation incomplete").font(.headline).foregroundStyle(.orange).padding(.top, 4)
+                    Text("Investigation incomplete".uppercased())
+                        .font(Tone.small).tracking(1.1).foregroundStyle(Tone.mined).padding(.top, 4)
                     ForEach(report.issues, id: \.self) { Note(text: $0, warning: true).font(.callout) }
                 }
                 Text(
@@ -238,7 +239,7 @@ private struct SignatureGroup: View {
                     signature.confirms ? "Confirming" : "Rejecting",
                     systemImage: signature.confirms ? "checkmark.circle.fill" : "xmark.circle.fill"
                 )
-                .foregroundStyle(signature.confirms ? .green : .red)
+                .foregroundStyle(signature.confirms ? Tone.good : Tone.alert)
                 .frame(width: 110, alignment: .leading)
                 RouteLink(text: signature.identity, route: .identity(name: signature.identity))
                 Text("on").foregroundStyle(.secondary)
@@ -251,10 +252,10 @@ private struct SignatureGroup: View {
                 } label: {
                     Text("\(signature.keyCount) distinct key signature\(signature.keyCount == 1 ? "" : "s")")
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.displayLink)
             }
             HStack(spacing: 6) {
-                Text("Signed target").foregroundStyle(.secondary)
+                NameText("Signed target")
                 if signature.targetSystem == model.status?.chainId {
                     RouteLink(text: signature.targetTxid, route: .transaction(txid: signature.targetTxid))
                 } else {
@@ -271,7 +272,7 @@ private struct SignatureGroup: View {
                     }
                     ForEach(Array(signature.origins.enumerated()), id: \.offset) { _, origin in
                         HStack(spacing: 6) {
-                            Text("Evidence").foregroundStyle(.secondary)
+                            NameText("Evidence")
                             if origin.output.systemId == model.status?.chainId {
                                 RouteLink(text: origin.output.txid, route: .transaction(txid: origin.output.txid))
                             } else {
@@ -323,9 +324,9 @@ struct BytesView: View {
             Text(scriptBody
                 ? "The pushes did not decode. These are the script bytes after OP_RETURN."
                 : "The payload bytes of every push, joined in order.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(Tone.caption).foregroundStyle(Tone.label)
             HStack(spacing: 6) {
-                Text("Copy all the bytes as hexadecimal").font(.caption).foregroundStyle(.secondary)
+                Text("Copy all the bytes as hexadecimal").font(Tone.caption).foregroundStyle(Tone.label)
                 CopyButton(text: hex)
             }
             LazyVStack(alignment: .leading, spacing: 1) {
@@ -336,9 +337,14 @@ struct BytesView: View {
             status(data: data, shownCount: shown.count)
         }
         .font(.callout.monospaced())
-        .padding(10)
+        .foregroundStyle(Tone.value)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.tertiary, in: RoundedRectangle(cornerRadius: 6))
+        // A display field: black, a thin border and four corner marks, as a DisplayPanel.
+        .background(Tone.screen, in: RoundedRectangle(cornerRadius: 4))
+        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Tone.rule, lineWidth: 1).allowsHitTesting(false))
+        .overlay(CornerMarks().stroke(Tone.value.opacity(0.55), lineWidth: 1).padding(5).allowsHitTesting(false))
+        .environment(\.colorScheme, .dark)
         .focusable()
         .focused($focused)
         .focusEffectDisabled()
@@ -355,12 +361,13 @@ struct BytesView: View {
     private func row(offset: Int, bytes: [UInt8]) -> some View {
         let end = min(offset + Self.columns, bytes.count)
         return HStack(spacing: 14) {
-            Text(String(format: "%04x", offset)).foregroundStyle(.tertiary)
+            Text(String(format: "%04x", offset)).foregroundStyle(Tone.axis)
             HStack(spacing: 0) {
                 ForEach(offset..<end, id: \.self) { index in
                     Text(String(format: "%02x", bytes[index]))
+                        .foregroundStyle(index == cursor ? Tone.screen : Tone.value)
                         .padding(.horizontal, 2)
-                        .background(index == cursor ? Color.accentColor.opacity(0.35) : .clear)
+                        .background(index == cursor ? Tone.present : .clear)
                         .onTapGesture { select(index) }
                 }
             }
@@ -368,8 +375,8 @@ struct BytesView: View {
             HStack(spacing: 0) {
                 ForEach(offset..<end, id: \.self) { index in
                     Text(Self.printable(bytes[index]))
-                        .background(index == cursor ? Color.accentColor.opacity(0.35) : .clear)
-                        .foregroundStyle(.secondary)
+                        .background(index == cursor ? Tone.present : .clear)
+                        .foregroundStyle(index == cursor ? Tone.screen : Tone.label)
                         .onTapGesture { select(index) }
                 }
             }
@@ -381,12 +388,13 @@ struct BytesView: View {
         return VStack(alignment: .leading, spacing: 2) {
             if shownCount > 0 {
                 Text("Cursor at offset \(cursor) (0x\(String(format: "%04x", cursor))): 0x\(String(format: "%02x", byte)), decimal \(byte), text \(Self.printable(byte))")
+                    .foregroundStyle(Tone.present)
                     .textSelection(.enabled)
             }
             Text(data.count > shownCount
                 ? "\(data.count) bytes. The view shows the first \(shownCount)."
                 : "\(data.count) bytes. Dots stand for bytes that are not printable.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Tone.label)
         }
         .font(.caption)
         .padding(.top, 4)

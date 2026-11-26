@@ -114,6 +114,8 @@ struct PeerMapCard: View {
             }
             // DB-IP's licence (CC BY 4.0) requires this attribution wherever its data appears.
             Link("IP geolocation by DB-IP (CC BY 4.0)", destination: URL(string: "https://db-ip.com")!)
+                .tint(Tone.record)
+                .foregroundStyle(Tone.record)
                 .font(.caption)
         }
         .confirmationDialog(
@@ -241,10 +243,10 @@ struct PeerMapCard: View {
     /// Peers without a public location, one per line, each a link to its page.
     private func peerLine(_ label: String, _ list: [PeerRow]) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("\(label) (\(list.count))").foregroundStyle(.secondary)
+            NameText("\(label) (\(list.count))")
             ForEach(list, id: \.id) { peer in
                 HStack(spacing: 8) {
-                    Button(peer.address) { open(peer) }.buttonStyle(.link).font(.callout.monospaced())
+                    Button(peer.address) { open(peer) }.buttonStyle(.displayLink).font(.callout.monospaced())
                     Text("Peer \(peer.id)").foregroundStyle(.secondary)
                 }
             }
@@ -342,7 +344,7 @@ struct PeerDetailView: View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text("Peer \(peer.id)").font(.title2.weight(.semibold))
             Text(peer.address).font(.title3.monospaced()).textSelection(.enabled)
-            TagChip(text: peer.inbound ? "Inbound" : "Outbound", color: peer.inbound ? .teal : .indigo)
+            Plate(peer.inbound ? "Inbound" : "Outbound", fill: peer.inbound ? Tone.record : nil)
             Spacer()
         }
     }

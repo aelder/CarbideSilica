@@ -109,7 +109,7 @@ struct MarketplaceView: View {
             Note(text: failure, warning: true)
         }
         let prices = priced.map(\.price!).sorted()
-        HStack(spacing: 20) {
+        HStack(alignment: .lastTextBaseline, spacing: 20) {
             figure("Offers", Format.integer(UInt64(items.count)))
             if let top = sellers.first {
                 figure("Sellers", "\(sellers.count)")
@@ -124,7 +124,6 @@ struct MarketplaceView: View {
             }
             Spacer(minLength: 0)
         }
-        .font(.callout)
         .lineLimit(1)
         detailProgress
         Text("Request: getoffers for \(market.subject). The seller of an identity is its first primary address now.")
@@ -132,10 +131,7 @@ struct MarketplaceView: View {
     }
 
     private func figure(_ label: String, _ value: String) -> some View {
-        HStack(spacing: 5) {
-            Text(label).foregroundStyle(.secondary)
-            Text(value).fontWeight(.semibold).monospacedDigit()
-        }
+        Readout(label, value)
     }
 
     /// The sellers and the listing dates need two requests for each offer.
@@ -166,53 +162,62 @@ struct MarketplaceView: View {
     /// are available at or below each price.
     private var prices: some View {
         let steps = priceSteps
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 26) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Prices that many offers share").font(.callout.weight(.semibold))
-                    let top = Double(steps.map(\.count).max() ?? 1)
-                    ForEach(steps, id: \.label) { step in
-                        HStack(spacing: 8) {
-                            Text(step.label).monospacedDigit().frame(width: 104, alignment: .trailing)
-                            GeometryReader { geometry in
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(Color.accentColor.opacity(step.other ? 0.4 : 0.85))
-                                    .frame(width: max(geometry.size.width * CGFloat(Double(step.count) / top), 2))
-                            }
-                            .frame(height: 12)
-                            Text(Format.integer(UInt64(step.count))).monospacedDigit().frame(width: 44, alignment: .leading)
-                        }
-                        .font(.callout)
-                    }
-                }
-                .frame(maxWidth: 330)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Offers at or below each price").font(.callout.weight(.semibold))
-                    GeometryReader { geometry in
-                        Canvas { context, size in drawSupply(context, size) }
-                            .contentShape(Rectangle())
-                            .onContinuousHover { phase in
-                                if case .active(let point) = phase {
-                                    hoveredPrice = price(atX: point.x, width: geometry.size.width)
-                                } else {
-                                    hoveredPrice = nil
+        return DisplayPanel {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 26) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        NameText("Prices that many offers share")
+                        PanelRule().padding(.bottom, 3)
+                        let top = Double(steps.map(\.count).max() ?? 1)
+                        ForEach(steps, id: \.label) { step in
+                            HStack(spacing: 8) {
+                                Text(step.label).font(.callout).monospacedDigit()
+                                    .foregroundStyle(step.other ? Tone.label : Tone.value)
+                                    .frame(width: 104, alignment: .trailing)
+                                GeometryReader { geometry in
+                                    Rectangle()
+                                        .fill(Tone.record.opacity(step.other ? 0.4 : 1))
+                                        .frame(width: max(geometry.size.width * CGFloat(Double(step.count) / top), 2))
                                 }
+                                .frame(height: 10)
+                                Text(Format.integer(UInt64(step.count)))
+                                    .font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.value)
+                                    .frame(width: 44, alignment: .leading)
                             }
+                        }
                     }
-                    .frame(height: 190)
-                    .accessibilityLabel("The number of offers available at or below each price")
-                    Text(supplyReadout)
-                        .font(.callout)
-                        .foregroundStyle(hoveredPrice == nil ? .secondary : .primary)
-                        .monospacedDigit()
+                    .frame(maxWidth: 330)
+                    VStack(alignment: .leading, spacing: 5) {
+                        NameText("Offers at or below each price")
+                        PanelRule().padding(.bottom, 3)
+                        GeometryReader { geometry in
+                            Canvas { context, size in drawSupply(context, size) }
+                                .contentShape(Rectangle())
+                                .onContinuousHover { phase in
+                                    if case .active(let point) = phase {
+                                        hoveredPrice = price(atX: point.x, width: geometry.size.width)
+                                    } else {
+                                        hoveredPrice = nil
+                                    }
+                                }
+                        }
+                        .frame(height: 190)
+                        .accessibilityLabel("The number of offers available at or below each price")
+                        Text(supplyReadout)
+                            .font(Tone.caption)
+                            .foregroundStyle(hoveredPrice == nil ? Tone.label : Tone.value)
+                            .monospacedDigit()
+                    }
                 }
+                PanelRule()
+                let unpriced = items.count - priced.count
+                Text(
+                    "Each step up in the curve is a price that many offers share. The price scale is logarithmic. "
+                        + (unpriced > 0 ? "\(unpriced) offer\(unpriced == 1 ? " does" : "s do") not ask for one amount of \(priceTicker) and \(unpriced == 1 ? "is" : "are") not in these figures." : "")
+                )
+                .font(Tone.caption).foregroundStyle(Tone.label)
+                .fixedSize(horizontal: false, vertical: true)
             }
-            let unpriced = items.count - priced.count
-            Text(
-                "Each step up in the curve is a price that many offers share. The price scale is logarithmic. "
-                    + (unpriced > 0 ? "\(unpriced) offer\(unpriced == 1 ? " does" : "s do") not ask for one amount of \(priceTicker) and \(unpriced == 1 ? "is" : "are") not in these figures." : "")
-            )
-            .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -267,20 +272,17 @@ struct MarketplaceView: View {
         let y = { (count: Int) -> CGFloat in base - CGFloat(Double(count) / Double(sortedPrices.count)) * (base - top) }
         for share in [0.0, 0.5, 1.0] {
             let count = Int(Double(sortedPrices.count) * share), gy = y(count)
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: left, y: gy))
-                    path.addLine(to: CGPoint(x: right, y: gy))
-                }, with: .color(.secondary.opacity(0.14)), lineWidth: 1)
+            context.rule(left, gy, right, gy, share == 0 ? Tone.axis : Tone.grid)
             context.draw(
-                Text(Format.integer(UInt64(count))).font(.caption2).foregroundStyle(.secondary),
+                Text(Format.integer(UInt64(count))).font(Tone.small).monospacedDigit().foregroundStyle(Tone.label),
                 at: CGPoint(x: left - 6, y: gy), anchor: .trailing)
         }
         var decade = bounds.low
         while decade <= bounds.high * 1.0001 {
             let last = decade * 10 > bounds.high * 1.0001
+            context.rule(x(decade), base, x(decade), base + 4, Tone.axis)
             context.draw(
-                Text(Format.amount(decade)).font(.caption2).foregroundStyle(.secondary),
+                Text(Format.amount(decade)).font(Tone.small).monospacedDigit().foregroundStyle(Tone.label),
                 at: CGPoint(x: x(decade), y: base + 11), anchor: last ? .trailing : .center)
             decade *= 10
         }
@@ -294,15 +296,11 @@ struct MarketplaceView: View {
         var area = curve
         area.addLine(to: CGPoint(x: right, y: base))
         area.closeSubpath()
-        context.fill(area, with: .color(Color.accentColor.opacity(0.14)))
-        context.stroke(curve, with: .color(Color.accentColor), lineWidth: 1.6)
+        context.fill(area, with: .color(Tone.record.opacity(0.07)))
+        context.stroke(curve, with: .color(Tone.record), lineWidth: 1)
         if let hoveredPrice {
             let hx = x(hoveredPrice)
-            context.stroke(
-                Path { path in
-                    path.move(to: CGPoint(x: hx, y: top))
-                    path.addLine(to: CGPoint(x: hx, y: base))
-                }, with: .color(.primary.opacity(0.7)), lineWidth: 1)
+            context.lit(Path(CGRect(x: hx - 0.5, y: top, width: 1, height: base - top)), Tone.present, strength: 0.6)
         }
     }
 
@@ -315,7 +313,7 @@ struct MarketplaceView: View {
                 let options = options(for: facet)
                 if !options.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(facet.title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        NameText(facet.title).padding(.bottom, 2)
                         let counts = counts(for: facet)
                         let top = max(counts.values.max() ?? 1, 1)
                         ForEach(options, id: \.self) { option in
@@ -407,7 +405,7 @@ struct MarketplaceView: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 240)
                 Text("\(Format.integer(UInt64(ordered.count))) of \(Format.integer(UInt64(items.count))) offers")
-                    .font(.headline).monospacedDigit()
+                    .font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.value)
                 Spacer(minLength: 0)
             }
             HStack(spacing: 8) {
@@ -770,26 +768,31 @@ private struct FacetOption: View {
 
     var body: some View {
         Button(action: action) {
+            // A plate: filled when it is selected, an outline when it is not. The faint bar
+            // behind an outline is the count.
             HStack(spacing: 6) {
-                Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(on ? Color.accentColor : .secondary)
-                    .imageScale(.small)
                 Text(label).fontWeight(on ? .semibold : .regular).lineLimit(1)
+                    .foregroundStyle(on ? Tone.screen : Tone.value)
                 Spacer(minLength: 4)
-                Text(Format.integer(UInt64(count))).foregroundStyle(.secondary).monospacedDigit()
+                Text(Format.integer(UInt64(count))).monospacedDigit()
+                    .foregroundStyle(on ? Tone.screen : Tone.label)
             }
             .font(.callout)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(alignment: .leading) {
-                GeometryReader { geometry in
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(Color.accentColor.opacity(on ? 0.28 : 0.14))
-                        .frame(width: geometry.size.width * CGFloat(share))
+                if on {
+                    Rectangle().fill(Tone.record)
+                } else {
+                    GeometryReader { geometry in
+                        Rectangle()
+                            .fill(Tone.record.opacity(0.16))
+                            .frame(width: geometry.size.width * CGFloat(share))
+                    }
                 }
             }
             .overlay {
-                if on { RoundedRectangle(cornerRadius: 5).stroke(Color.accentColor, lineWidth: 1) }
+                if !on { Rectangle().strokeBorder(Tone.rule, lineWidth: 1) }
             }
             .contentShape(Rectangle())
         }
@@ -836,9 +839,7 @@ private struct OfferLine: View {
                     .help(offer.subjectId ?? offer.txid)
                     .cursorStop(token: offer.txid, copy: offer.subjectId ?? offer.txid) { open() }
                     if offer.kind != .identityForSale {
-                        Text(item.kindLabel)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(offer.kind == .identityWanted ? Color.purple : .orange)
+                        Plate(item.kindLabel)
                     }
                 }
                 if let traits = item.traits, traits.kind == .other || traits.kind == .emoji {
@@ -867,11 +868,11 @@ private struct OfferLine: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(ask).fontWeight(.semibold).monospacedDigit().lineLimit(1)
+                Text(ask).fontWeight(.semibold).monospacedDigit().foregroundStyle(Tone.value).lineLimit(1)
                 if let price = item.price {
                     GeometryReader { geometry in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.accentColor)
+                        Rectangle()
+                            .fill(Tone.record)
                             .frame(width: max(geometry.size.width * barShare(price), 3))
                     }
                     .frame(height: 4)
@@ -893,7 +894,7 @@ private struct OfferLine: View {
             Group {
                 if let holder = detail?.holder {
                     Button(Format.short(holder, head: 6, tail: 4)) { model.open(Route.holder(holder)) }
-                        .buttonStyle(.link)
+                        .buttonStyle(.displayLink)
                         .help("The seller: \(holder)")
                 } else {
                     Text(" ")

@@ -70,8 +70,12 @@ private struct ForecastResult: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(headline).font(.title3)
-            ForecastTimeline(forecast: forecast)
-                .frame(height: 64)
+            DisplayPanel(padding: 0) {
+                ForecastTimeline(forecast: forecast)
+                    .frame(height: 64)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+            }
             FieldRow(label: "Estimated height", value: Format.integer(forecast.height))
             FieldRow(label: "Estimated time", value: "\(Format.date(UInt64(max(forecast.time, 0)))) (\(forecast.time))")
             FieldRow(label: "Average", value: "\(forecast.secondsPerBlock.formatted(.number.precision(.fractionLength(6)))) seconds per block")
@@ -101,7 +105,7 @@ private struct ForecastResult: View {
 }
 
 /// The calibration span and the target on one time axis: the measured stretch as a solid
-/// bar, the projection to the target as a dashed line.
+/// line, the projection to the target as a dashed line. The tip is the present.
 private struct ForecastTimeline: View {
     let forecast: Forecast
 
@@ -116,24 +120,26 @@ private struct ForecastTimeline: View {
             var measured = Path()
             measured.move(to: CGPoint(x: x(start), y: y))
             measured.addLine(to: CGPoint(x: x(tip), y: y))
-            context.stroke(measured, with: .color(ChartColors.block), lineWidth: 4)
+            context.stroke(measured, with: .color(Tone.record), lineWidth: 2)
             var projected = Path()
             projected.move(to: CGPoint(x: x(tip), y: y))
             projected.addLine(to: CGPoint(x: x(target), y: y))
-            context.stroke(projected, with: .color(ChartColors.long), style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+            context.stroke(projected, with: .color(Tone.value.opacity(0.7)), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
             let marks: [(Double, String, Color, UnitPoint)] = [
-                (start, "Calibration start #\(Format.integer(forecast.start.height))", ChartColors.block, .topLeading),
-                (tip, "Tip #\(Format.integer(forecast.tip.height))", ChartColors.block, .top),
-                (target, "Estimate #\(Format.integer(forecast.height))", ChartColors.long, .topTrailing),
+                (start, "Calibration start #\(Format.integer(forecast.start.height))", Tone.record, .topLeading),
+                (tip, "Tip #\(Format.integer(forecast.tip.height))", Tone.present, .top),
+                (target, "Estimate #\(Format.integer(forecast.height))", Tone.value, .topTrailing),
             ]
             for (time, label, color, anchor) in marks {
                 let point = CGPoint(x: x(time), y: y)
-                context.fill(Path(ellipseIn: CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)), with: .color(color))
+                let dot = Path(ellipseIn: CGRect(x: point.x - 3.5, y: point.y - 3.5, width: 7, height: 7))
+                // The tip is the present: it alone has light.
+                context.lit(dot, color, strength: anchor == .top ? 0.6 : 0)
                 // The tip's label goes above the line, so that it does not meet the target's label.
                 if anchor == .top {
-                    context.draw(Text(label).font(.caption2), at: CGPoint(x: point.x, y: y - 8), anchor: .bottom)
+                    context.name(label, point.x, y - 8, .bottom, color: Tone.present)
                 } else {
-                    context.draw(Text(label).font(.caption2), at: CGPoint(x: point.x, y: y + 10), anchor: anchor)
+                    context.name(label, point.x, y + 10, anchor)
                 }
             }
         }

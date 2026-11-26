@@ -125,7 +125,7 @@ struct NotarizationLanesCard: View {
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
         if let state {
-            Text(state.rule).font(.callout).foregroundStyle(.secondary)
+            Text(state.rule).font(.callout).foregroundStyle(state.color)
         } else if view.perspective.local, view.rows.contains(where: \.confirmed) {
             Text("The app has no record of earlier notarizations to compare the wait with.")
                 .font(.callout).foregroundStyle(.secondary)
@@ -133,37 +133,56 @@ struct NotarizationLanesCard: View {
         if let confirmed = view.rows.first(where: \.confirmed) {
             confirmedLine(confirmed, view)
         }
-        if !intervals.isEmpty {
-            NotarizationRhythm(intervals: intervals, wait: wait, state: state)
-            Text("Each dot is the number of \(name(view.perspective.observerId, view.perspective.observerName)) blocks between two earlier notarizations in sequence, for the last \(intervals.count). Each step to the right is ten times more.")
-                .font(.caption).foregroundStyle(.secondary)
+        if !intervals.isEmpty || !view.rows.isEmpty {
+            // The rhythm and the graph are one instrument: the scale of the rhythm starts
+            // at the left edge of the lanes of the graph.
+            DisplayPanel(padding: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !intervals.isEmpty {
+                        NotarizationRhythm(intervals: intervals, wait: wait, state: state)
+                            .padding(.top, 12)
+                        Text("Each dot is the number of \(name(view.perspective.observerId, view.perspective.observerName)) blocks between two earlier notarizations in sequence, for the last \(intervals.count). Each step to the right is ten times more.")
+                            .font(Tone.caption).foregroundStyle(Tone.label)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 18).padding(.vertical, 10)
+                    }
+                    if !intervals.isEmpty && !view.rows.isEmpty {
+                        PanelRule()
+                    }
+                    if !view.rows.isEmpty {
+                        NotarizationGraph(
+                            marks: marks,
+                            observer: name(view.perspective.observerId, view.perspective.observerName),
+                            other: otherName(view),
+                            note: { note($0, view) },
+                            selected: $selected)
+                        PanelRule()
+                        Text(caption(view)).font(Tone.caption).foregroundStyle(Tone.label)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 18).padding(.vertical, 10)
+                    }
+                }
+            }
         }
         if view.rows.isEmpty {
             Text("No notarizations in current view").foregroundStyle(.secondary)
         } else {
-            NotarizationGraph(
-                marks: marks,
-                observer: name(view.perspective.observerId, view.perspective.observerName),
-                other: otherName(view),
-                note: { note($0, view) },
-                selected: $selected)
-            Text(caption(view)).font(.caption).foregroundStyle(.secondary)
-
             VStack(alignment: .leading, spacing: 0) {
                 let groups = NotarizationPicture.ordered(marks)
                 ForEach(groups, id: \.lane) { group in
                     if groups.count > 1 {
-                        Text(group.lane == 0 ? "Best chain" : groups.count > 2 ? "Side branch \(group.lane)" : "Side branch")
-                            .font(.callout.weight(.semibold))
+                        Plate(
+                            group.lane == 0 ? "Best chain" : groups.count > 2 ? "Side branch \(group.lane)" : "Side branch",
+                            fill: group.lane == 0 ? nil : Tone.mined)
                             .padding(.top, 10).padding(.bottom, 4)
                     }
                     ForEach(group.rows, id: \.index) { row in
-                        Divider()
+                        Rectangle().fill(Tone.rule).frame(height: 1)
                         NotarizationRowView(row: row, perspective: view.perspective, observerTip: observerTip(view))
                             .padding(.horizontal, 6)
                             .background(
-                                selectedRows(marks).contains(row.index) ? Color.accentColor.opacity(0.12) : .clear,
-                                in: RoundedRectangle(cornerRadius: 5))
+                                selectedRows(marks).contains(row.index) ? Tone.present.opacity(0.1) : .clear,
+                                in: Rectangle())
                     }
                 }
             }
@@ -192,7 +211,7 @@ struct NotarizationLanesCard: View {
 
     private func confirmedLine(_ row: BrowserNotarization, _ view: NotarizationBrowser) -> some View {
         HStack(spacing: 10) {
-            Text("Last confirmed").foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+            NameText("Last confirmed").frame(width: 170, alignment: .leading)
             if row.synthetic {
                 Text("Synthetic proof root")
             } else if let txid = row.txid {
@@ -418,15 +437,15 @@ private struct NotarizationRowView: View {
                 Spacer()
                 if !row.onBestChain {
                     Label("On a side branch", systemImage: "arrow.triangle.branch")
-                        .font(.callout).foregroundStyle(.orange)
+                        .font(.callout).foregroundStyle(Tone.mined)
                 }
             }
             HStack(spacing: 12) {
-                Text("Proof roots").foregroundStyle(.secondary).frame(width: 150, alignment: .leading)
+                NameText("Proof roots").frame(width: 150, alignment: .leading)
                 Text(heights).monospacedDigit()
             }
             HStack(spacing: 12) {
-                Text("Included").foregroundStyle(.secondary).frame(width: 150, alignment: .leading)
+                NameText("Included").frame(width: 150, alignment: .leading)
                 if let height = row.includedHeight, let hash = row.blockHash, perspective.local {
                     RouteLink(text: heightText(height, known: row.includedTime, model: model), route: .block(id: hash), shorten: false)
                     if let time = row.includedTime {
@@ -446,12 +465,12 @@ private struct NotarizationRowView: View {
             }
             if let previous = row.previous {
                 HStack(spacing: 12) {
-                    Text("Previous").foregroundStyle(.secondary).frame(width: 150, alignment: .leading)
+                    NameText("Previous").frame(width: 150, alignment: .leading)
                     Text("on \(knownName(previous.output.systemId, model: model, fallback: previous.systemName))")
                     Text("\(Format.short(previous.output.txid)):\(previous.output.output)")
                         .font(.callout.monospaced()).textSelection(.enabled)
                     Label(previous.status, systemImage: previous.found ? "checkmark.circle" : "questionmark.circle")
-                        .foregroundStyle(previous.found ? .green : .orange)
+                        .foregroundStyle(previous.found ? Tone.good : Tone.mined)
                 }
             }
         }
@@ -461,11 +480,11 @@ private struct NotarizationRowView: View {
     @ViewBuilder
     private var status: some View {
         if row.synthetic {
-            Label("Synthetic proof root", systemImage: "circle.dotted").foregroundStyle(.secondary)
+            Label("Synthetic proof root", systemImage: "circle.dotted").foregroundStyle(Tone.label)
         } else if row.confirmed {
-            Label("Confirmed", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+            Label("Confirmed", systemImage: "checkmark.seal.fill").foregroundStyle(Tone.good)
         } else {
-            Label("Unconfirmed", systemImage: "circle.dashed").foregroundStyle(.orange)
+            Label("Unconfirmed", systemImage: "circle.dashed").foregroundStyle(Tone.mined)
         }
     }
 
@@ -490,7 +509,7 @@ private struct NotarizationRowView: View {
     private func rootLine(_ root: ProofRootRow) -> some View {
         let system = knownName(root.systemId, model: model, fallback: root.systemName)
         HStack(spacing: 12) {
-            Text("\(system) root").foregroundStyle(.secondary).frame(width: 150, alignment: .leading)
+            NameText("\(system) root").frame(width: 150, alignment: .leading)
             if let check = root.check, let text = root.status {
                 Label(text, systemImage: symbol(check)).foregroundStyle(color(check))
             } else {
@@ -531,10 +550,10 @@ private struct NotarizationRowView: View {
 
     private func color(_ check: RootCheck) -> Color {
         switch check {
-        case .active: .green
-        case .knownOffChain, .notFound, .heightMismatch: .red
-        case .presentMembershipUnknown, .sourceBehind: .orange
-        default: .secondary
+        case .active: Tone.good
+        case .knownOffChain, .notFound, .heightMismatch: Tone.alert
+        case .presentMembershipUnknown, .sourceBehind: Tone.mined
+        default: Tone.label
         }
     }
 }

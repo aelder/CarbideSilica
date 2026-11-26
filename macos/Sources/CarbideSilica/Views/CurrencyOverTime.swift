@@ -62,9 +62,9 @@ struct CurrencyOverTimeCard: View {
                 Spacer()
                 if let point = selected {
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text(dateLabel(point)).font(.headline)
+                        Text(dateLabel(point)).font(Tone.figureSmall).foregroundStyle(Tone.present)
                         Text("block \(Format.integer(point.height))")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.caption).monospacedDigit().foregroundStyle(Tone.label)
                     }
                     if let onChoose {
                         Button("Show Exact State") { onChoose(point.height) }
@@ -89,20 +89,24 @@ struct CurrencyOverTimeCard: View {
                     value: Binding(get: { index }, set: { index = $0.rounded() }),
                     in: 0...Double(points.count - 1))
                     .accessibilityLabel("Date")
-                VStack(spacing: 0) {
-                    row(title: "Supply", subtitle: currency.name, values: points.map(\.supply), digits: 2)
-                    if let unit, reserveIDs.contains(unit) {
-                        Divider()
-                        indexed(unit)
+                DisplayPanel {
+                    VStack(spacing: 0) {
+                        row(title: "Supply", subtitle: currency.name, values: points.map(\.supply), digits: 2)
+                        if let unit, reserveIDs.contains(unit) {
+                            PanelRule()
+                            indexed(unit)
+                        }
+                        PanelRule()
+                        activityRow
+                        if flatSince != nil {
+                            PanelRule()
+                            Text(flatSince!).font(Tone.caption).foregroundStyle(Tone.label)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 8)
+                        }
                     }
                 }
-                Divider()
-                activityRow
-                if flatSince != nil {
-                    Text(flatSince!).font(.caption).foregroundStyle(.secondary)
-                }
                 if let point = selected, !point.reserves.isEmpty {
-                    Divider().padding(.vertical, 4)
                     PoolBatchView(currencyName: currency.name, point: point, unit: unit, name: reserveName)
                 }
             }
@@ -176,27 +180,28 @@ struct CurrencyOverTimeCard: View {
         let flags = changed
         let position = min(Int(index), max(points.count - 1, 0))
         return HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Activity").fontWeight(.semibold)
-                Text("conversions found").font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                NameText("Activity")
+                Text("conversions found").font(.caption).foregroundStyle(Tone.label)
             }
             .frame(width: 130, alignment: .leading)
             Canvas { context, size in
                 let count = max(flags.count - 1, 1)
+                context.rule(0, size.height / 2, size.width, size.height / 2, Tone.grid)
                 for (offset, active) in flags.enumerated() where active {
                     let x = size.width * CGFloat(offset) / CGFloat(count)
                     context.fill(
                         Path(CGRect(x: x - 1.5, y: 6, width: 3, height: size.height - 12)),
-                        with: .color(.purple))
+                        with: .color(Tone.record))
                 }
                 let cursor = size.width * CGFloat(position) / CGFloat(count)
-                context.fill(
-                    Path(CGRect(x: cursor - 0.75, y: 0, width: 1.5, height: size.height)),
-                    with: .color(.primary.opacity(0.55)))
+                context.lit(
+                    Path(CGRect(x: cursor - 0.75, y: 0, width: 1.5, height: size.height)), Tone.present,
+                    strength: 0.6)
             }
             .frame(height: 30)
             Text("\(flags.filter { $0 }.count) of \(max(flags.count - 1, 0)) intervals")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.value)
                 .frame(width: 130, alignment: .trailing)
         }
         .padding(.vertical, 7)
@@ -213,7 +218,9 @@ struct CurrencyOverTimeCard: View {
         let values: [Double?]
     }
 
-    private static let palette: [Color] = [.orange, .purple, .green, .red, .cyan, .pink, .brown, .mint, .indigo, .yellow]
+    /// The colours of the reserves. The last colour of the series is near the colour of the
+    /// basket line, so the reserves do not use it.
+    private static let palette: [Color] = Array(Tone.series.dropLast())
 
     private func lines(_ unit: String) -> [IndexLine] {
         func price(_ point: CurrencyPoint, _ id: String) -> Double? {
@@ -225,7 +232,7 @@ struct CurrencyOverTimeCard: View {
         }
         var result = [
             IndexLine(
-                id: "basket", name: currency.name, basket: true, color: .primary,
+                id: "basket", name: currency.name, basket: true, color: Tone.present,
                 values: rebased(points.map { price($0, unit) }))
         ]
         for (position, id) in reserveIDs.enumerated() where id != unit {
@@ -246,14 +253,16 @@ struct CurrencyOverTimeCard: View {
         let high = max(known.max() ?? 110, 105)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Value").fontWeight(.semibold)
-                    Text("in \(reserveName(unit))").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    Text("start of range = 100").font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    NameText("Value")
+                    Text("in \(reserveName(unit))").font(.caption).foregroundStyle(Tone.label).lineLimit(1)
+                    Text("start of range = 100").font(.caption).foregroundStyle(Tone.label)
                 }
                 .frame(width: 130, alignment: .leading)
                 Chart {
-                    RuleMark(y: .value("Start", 100)).foregroundStyle(Color.secondary.opacity(0.6))
+                    RuleMark(y: .value("Start", 100))
+                        .foregroundStyle(Tone.axis)
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     ForEach(lines) { line in
                         ForEach(Array(line.values.enumerated()), id: \.offset) { offset, value in
                             if let value {
@@ -261,19 +270,22 @@ struct CurrencyOverTimeCard: View {
                                     x: .value("Sample", offset), y: .value("Value", value),
                                     series: .value("Currency", line.id))
                                     .foregroundStyle(line.color)
-                                    .lineStyle(StrokeStyle(lineWidth: line.basket ? 2.6 : 1.5))
+                                    .lineStyle(StrokeStyle(lineWidth: line.basket ? 2 : 1.2))
                             }
                         }
                     }
                     RuleMark(x: .value("Sample", position))
-                        .foregroundStyle(Color.primary.opacity(0.55))
-                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                        .foregroundStyle(Tone.present)
+                        .lineStyle(StrokeStyle(lineWidth: 1))
                 }
                 .chartXAxis(.hidden)
                 .chartYAxis {
                     // The labels are inside the plot, so that the plot has the width of the
                     // lines above and below it and one cursor goes through all of them.
-                    AxisMarks(preset: .inset, position: .leading)
+                    AxisMarks(preset: .inset, position: .leading) { _ in
+                        AxisGridLine().foregroundStyle(Tone.grid)
+                        AxisValueLabel().font(Tone.small).foregroundStyle(Tone.label)
+                    }
                 }
                 .chartXScale(domain: 0...max(points.count - 1, 1))
                 .chartYScale(domain: (low - 3)...(high + 3))
@@ -283,22 +295,23 @@ struct CurrencyOverTimeCard: View {
                 VStack(alignment: .leading, spacing: 5) {
                     ForEach(lines) { line in
                         HStack(spacing: 6) {
-                            RoundedRectangle(cornerRadius: 1.5).fill(line.color)
-                                .frame(width: 14, height: line.basket ? 4 : 2.5)
-                            Text(line.name).fontWeight(line.basket ? .semibold : .regular).lineLimit(1)
+                            Rectangle().fill(line.color)
+                                .frame(width: line.basket ? 9 : 7, height: line.basket ? 9 : 7)
+                            NameText(line.name).lineLimit(1)
                             Spacer(minLength: 4)
-                            Text(line.values[position].map(Self.changeText) ?? "–").monospacedDigit()
+                            Text(line.values[position].map(Self.changeText) ?? "–")
+                                .font(.caption).monospacedDigit()
+                                .foregroundStyle(line.basket ? Tone.present : Tone.value)
                         }
-                        .font(.caption)
                     }
-                    Text("at the cursor").font(.caption).foregroundStyle(.secondary)
+                    NameText("at the cursor")
                 }
                 .frame(width: 130)
             }
             Text(
                 "A line at 80 means that the currency lost 20 of each 100 of its value in \(reserveName(unit)) since "
                     + "the start of the range. The heavy line is \(currency.name). The values are the pool's own rates.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(Tone.caption).foregroundStyle(Tone.label)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 7)
@@ -317,9 +330,9 @@ struct CurrencyOverTimeCard: View {
         let high = known.max() ?? 1
         let pad = high > low ? (high - low) * 0.12 : max(abs(high) * 0.05, 0.0001)
         HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).fontWeight(.semibold).lineLimit(1)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            VStack(alignment: .leading, spacing: 3) {
+                NameText(title).lineLimit(1)
+                Text(subtitle).font(.caption).foregroundStyle(Tone.label).lineLimit(1)
             }
             .frame(width: 130, alignment: .leading)
 
@@ -327,12 +340,13 @@ struct CurrencyOverTimeCard: View {
                 ForEach(Array(values.enumerated()), id: \.offset) { offset, value in
                     if let value {
                         LineMark(x: .value("Sample", offset), y: .value(title, value))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Tone.record)
+                            .lineStyle(StrokeStyle(lineWidth: 1.2))
                     }
                 }
                 RuleMark(x: .value("Sample", position))
-                    .foregroundStyle(Color.primary.opacity(0.55))
-                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                    .foregroundStyle(Tone.present)
+                    .lineStyle(StrokeStyle(lineWidth: 1))
             }
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
@@ -343,11 +357,11 @@ struct CurrencyOverTimeCard: View {
             VStack(alignment: .trailing, spacing: 1) {
                 if let value = values[position] {
                     Text(value.formatted(.number.precision(.fractionLength(0...digits))))
-                        .monospacedDigit()
+                        .font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.value)
                     Text(change(from: value, to: values.last ?? nil, latest: position == values.count - 1))
-                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                        .font(.caption).foregroundStyle(Tone.label).monospacedDigit()
                 } else {
-                    Text("–").foregroundStyle(.secondary)
+                    Text("–").foregroundStyle(Tone.label)
                 }
             }
             .frame(width: 130, alignment: .trailing)

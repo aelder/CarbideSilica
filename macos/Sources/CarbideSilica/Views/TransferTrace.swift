@@ -34,10 +34,10 @@ struct ConfidenceMark: View {
 
     private var color: Color {
         switch level {
-        case .verified: .green
-        case .observed: .accentColor
-        case .candidate: .secondary
-        case .unknown: .orange
+        case .verified: Tone.good
+        case .observed: Tone.record
+        case .candidate: Tone.label
+        case .unknown: Tone.mined
         }
     }
 
@@ -296,7 +296,7 @@ private struct LegDetail: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 if let number {
-                    Text("Leg \(number)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    NameText("Leg \(number)")
                 }
                 ConfidenceMark(level: leg.confidence, label: leg.stage)
                 Spacer()
@@ -308,7 +308,7 @@ private struct LegDetail: View {
                 column("Sent", amounts: leg.principal, unknown: !leg.principalKnown)
                 if let pool = leg.pool {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Through").font(.caption).foregroundStyle(.secondary)
+                        NameText("Through")
                         RouteLink(text: pool, route: .currency(name: pool))
                     }
                 }
@@ -318,13 +318,13 @@ private struct LegDetail: View {
                     column("Burned", amounts: [burned])
                 } else {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(leg.stage.contains("burn") ? "Burned" : "Received").font(.caption).foregroundStyle(.secondary)
+                        NameText(leg.stage.contains("burn") ? "Burned" : "Received")
                         Text("Unresolved").foregroundStyle(.secondary)
                     }
                 }
                 if let height = leg.importHeight {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Imported at").font(.caption).foregroundStyle(.secondary)
+                        NameText("Imported at")
                         if leg.executionSystem == model.status?.chainId {
                             RouteLink(text: "block \(Format.integer(height))", route: .block(id: "\(height)"), shorten: false)
                         } else {
@@ -374,17 +374,17 @@ private struct LegDetail: View {
                 Button(showCurrencies ? "Hide currencies" : "Currencies (\(leg.currencies.count))") {
                     showCurrencies.toggle()
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.displayLink)
                 if let pool = leg.pool {
                     Button("Open pool") { openPool(pool) }
-                        .buttonStyle(.link)
+                        .buttonStyle(.displayLink)
                         .help(poolHelp)
                 }
                 if leg.poolInspection?.previous != nil, !live {
                     Button(comparing ? "Comparing…" : "Compare with the previous pool notarization") {
                         Task { await compare() }
                     }
-                    .buttonStyle(.link)
+                    .buttonStyle(.displayLink)
                     .disabled(comparing)
                 }
             }
@@ -393,7 +393,7 @@ private struct LegDetail: View {
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(leg.currencies, id: \.self) { id in
                         HStack(spacing: 6) {
-                            Text(id == leg.pool ? "Pool" : "Currency").foregroundStyle(.secondary).frame(width: 64, alignment: .leading)
+                            NameText(id == leg.pool ? "Pool" : "Currency").frame(width: 64, alignment: .leading)
                             RouteLink(text: id, route: .currency(name: id))
                             Text(id).font(.caption.monospaced()).foregroundStyle(.tertiary)
                         }
@@ -410,7 +410,8 @@ private struct LegDetail: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.tertiary, in: RoundedRectangle(cornerRadius: 8))
+        .background(Tone.screen, in: Rectangle())
+        .overlay(Rectangle().strokeBorder(Tone.rule, lineWidth: 1))
     }
 
     /// The pool at the import height when it is on the connected chain, else its current state.
@@ -441,7 +442,7 @@ private struct LegDetail: View {
             if let budget = leg.transferFeeBudget {
                 amountLine("Fee budget", budget)
             } else {
-                HStack { Text("Fee budget").foregroundStyle(.secondary).frame(width: 170, alignment: .leading); Text("Unknown").foregroundStyle(.secondary) }
+                HStack { NameText("Fee budget").frame(width: 170, alignment: .leading); Text("Unknown").foregroundStyle(.secondary) }
             }
             if let fee = leg.conversionFee { amountLine("Conversion fee", fee) }
             if let budget = leg.forwardingBudget { amountLine("Forward budget", budget) }
@@ -455,7 +456,7 @@ private struct LegDetail: View {
 
     private func amountLine(_ label: String, _ amount: CurrencyAmount, note: String? = nil) -> some View {
         HStack(spacing: 6) {
-            Text(label).foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+            NameText(label).frame(width: 170, alignment: .leading)
             ReserveAmount(amount: amount)
             if let note { Text("(\(note))").foregroundStyle(.secondary) }
         }
@@ -463,7 +464,7 @@ private struct LegDetail: View {
 
     private func column(_ title: String, amounts: [CurrencyAmount], unknown: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            NameText(title)
             if amounts.isEmpty {
                 Text(unknown ? "Unknown" : "–").foregroundStyle(.secondary)
             }
@@ -499,21 +500,21 @@ private struct RateLines: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
-                Text("\(rate.purpose) net").foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+                NameText("\(rate.purpose) net").frame(width: 170, alignment: .leading)
                 ReserveAmount(amount: rate.netInput)
                 Image(systemName: "arrow.right").foregroundStyle(.secondary)
                 ReserveAmount(amount: rate.output)
             }
             if let sats = rate.rateSats {
                 HStack(spacing: 6) {
-                    Text("Execution rate").foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+                    NameText("Execution rate").frame(width: 170, alignment: .leading)
                     Text("\(rate.exact ? "=" : "≈") \(Format.coins(sats)) \(name(rate.output.currency)) per \(name(rate.netInput.currency))")
                         .monospacedDigit()
                 }
             }
             ForEach(Array(rate.prices.enumerated()), id: \.offset) { _, price in
                 HStack(spacing: 6) {
-                    Text("Import batch").foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+                    NameText("Import batch").frame(width: 170, alignment: .leading)
                     Text("\(name(price.currency)) \(price.field) = \(Format.amount(price.value))").monospacedDigit()
                 }
             }
@@ -538,7 +539,7 @@ private struct PoolComparisonView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Pool states").font(.headline)
+            Text("Pool states".uppercased()).font(Tone.heading).tracking(1.1).foregroundStyle(Tone.value)
             Text("Pool-wide changes between notarizations include other transfers and fees.")
                 .font(.caption).foregroundStyle(.secondary)
             if let previous = comparison.previous {
@@ -551,9 +552,9 @@ private struct PoolComparisonView: View {
             Grid(alignment: .trailing, horizontalSpacing: 18, verticalSpacing: 4) {
                 GridRow {
                     Text("").gridColumnAlignment(.leading)
-                    Text("Before").foregroundStyle(.secondary)
-                    Text("After").foregroundStyle(.secondary)
-                    Text("Change").foregroundStyle(.secondary)
+                    NameText("Before")
+                    NameText("After")
+                    NameText("Change")
                 }
                 ForEach(Array(comparison.changes.enumerated()), id: \.offset) { _, change in
                     GridRow {
@@ -587,7 +588,7 @@ private struct PoolComparisonView: View {
 
     private func snapshot(_ label: String, _ snapshot: PoolSnapshot) -> some View {
         HStack(spacing: 6) {
-            Text(label).foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+            NameText(label).frame(width: 170, alignment: .leading)
             if snapshot.output.systemId == model.status?.chainId {
                 RouteLink(text: snapshot.output.txid, route: .transaction(txid: snapshot.output.txid))
             } else {
