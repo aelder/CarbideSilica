@@ -12,8 +12,11 @@ mkdir -p "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME"
 export CARBIDE_SILICA_SETTINGS=/tmp/home/settings.json
 export GDK_BACKEND=x11
 [ -n "${GSK_RENDERER:-}" ] || unset GSK_RENDERER
-Xvfb :99 -screen 0 1281x1084x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
-export DISPLAY=:99
+# Containers on the host network share abstract X sockets, so each run takes its own display
+# number and does not listen on the shared socket.
+display=$(( 300 + $(od -An -N2 -tu2 /dev/urandom) % 600 ))
+Xvfb ":$display" -screen 0 1281x1084x24 -nolisten tcp -nolisten local >/tmp/xvfb.log 2>&1 &
+export DISPLAY=":$display"
 sleep 1
 set -- "-conf=/conf/VRSC.conf"
 [ -n "$object" ] && set -- "$@" "-open=$object"
