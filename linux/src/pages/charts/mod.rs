@@ -161,7 +161,7 @@ pub fn build(model: &Rc<AppModel>) -> Rc<Page> {
     card.append(&empty);
 
     // MARK: Notes
-    let marks = parts::disclosure("What the marks mean", |_| {});
+    let marks = lamp::Disclosure::new("What the marks mean", false, |_| {});
     let marks_text = gtk::Box::new(gtk::Orientation::Vertical, 4);
     marks_text.set_margin_top(4);
     for text in [

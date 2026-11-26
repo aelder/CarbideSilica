@@ -180,7 +180,7 @@ impl TraceCard {
         }
         let count = trace.steps.len();
         let weak = Rc::downgrade(self);
-        let disclosure = super::extras::disclosure(
+        let disclosure = lamp::Disclosure::new(
             &format!("Evidence ({count} step{})", if count == 1 { "" } else { "s" }),
             self.show_evidence.get(),
             move |open| {

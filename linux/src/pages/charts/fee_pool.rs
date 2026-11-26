@@ -64,7 +64,7 @@ pub fn section(page: &Rc<Page>, charts: &Rc<Charts>) {
     let table_card = page.card("Checkpoints as a table", None);
     let shown = Rc::new(RefCell::new(false));
     let table = Holder::new(0);
-    let disclosure = parts::disclosure("Show the loaded checkpoints", {
+    let disclosure = lamp::Disclosure::new("Show the loaded checkpoints", false, {
         let (shown, weak) = (shown.clone(), Rc::downgrade(charts));
         move |open| {
             *shown.borrow_mut() = open;

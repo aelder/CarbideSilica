@@ -377,7 +377,7 @@ impl WitnessCard {
                 "These groups are not a quorum count. The investigation covers reachable evidence. It does not find every witness broadcast, and it does not verify signatures, proofs, quorum membership or consensus.",
                 &["caption-text", "secondary"],
             ));
-            let disclosure = disclosure("Decoded report", false, |_| {});
+            let disclosure = lamp::Disclosure::new("Decoded report", false, |_| {});
             disclosure.content.set_margin_top(6);
             disclosure.content.append(&json_text(&report.json));
             self.content.append(&disclosure.root);
@@ -402,23 +402,6 @@ impl WitnessCard {
             self.content.append(&row);
         }
     }
-}
-
-/// A part that opens (`lamp::Disclosure`) whose contents take no room while it is closed.
-/// The revealer of the shared disclosure keeps the height of its contents when it is
-/// closed, so the contents are hidden here as well.
-pub fn disclosure(title: &str, expanded: bool, changed: impl Fn(bool) + 'static) -> Rc<lamp::Disclosure> {
-    let content: Rc<RefCell<Option<glib::WeakRef<gtk::Box>>>> = Rc::default();
-    let holder = content.clone();
-    let made = lamp::Disclosure::new(title, expanded, move |open| {
-        if let Some(content) = holder.borrow().as_ref().and_then(|c| c.upgrade()) {
-            content.set_visible(open);
-        }
-        changed(open);
-    });
-    made.content.set_visible(expanded);
-    *content.borrow_mut() = Some(made.content.downgrade());
-    made
 }
 
 /// JSON as monospaced text, on the black of the display.

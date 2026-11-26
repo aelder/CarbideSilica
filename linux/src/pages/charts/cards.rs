@@ -341,7 +341,7 @@ pub fn sample_table(page: &Rc<Page>, charts: &Rc<Charts>) {
     let table = Holder::new(0);
     let weak = Rc::downgrade(charts);
     let opened = shown.clone();
-    let disclosure = parts::disclosure("", move |open| {
+    let disclosure = lamp::Disclosure::new("", false, move |open| {
         opened.set(open);
         if let Some(charts) = weak.upgrade() {
             charts.changed();

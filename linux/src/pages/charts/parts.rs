@@ -218,19 +218,3 @@ pub fn legend(items: &[(Shape, Color, String)]) -> gtk::FlowBox {
     flow
 }
 
-/// A part that opens (`lamp::Disclosure`), whose contents take no room while it is closed.
-/// The shared disclosure's revealer keeps the height of its contents when closed, so the
-/// contents are hidden too.
-pub fn disclosure(title: &str, changed: impl Fn(bool) + 'static) -> Rc<lamp::Disclosure> {
-    let content: Rc<RefCell<Option<gtk::Box>>> = Rc::default();
-    let holder = content.clone();
-    let disclosure = lamp::Disclosure::new(title, false, move |open| {
-        if let Some(content) = holder.borrow().as_ref() {
-            content.set_visible(open);
-        }
-        changed(open);
-    });
-    disclosure.content.set_visible(false);
-    *content.borrow_mut() = Some(disclosure.content.clone());
-    disclosure
-}

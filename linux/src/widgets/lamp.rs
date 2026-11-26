@@ -99,7 +99,7 @@ impl LampKey {
         if recent {
             self.title.set_markup(&format!(
                 "<span font_size=\"{}\">{}</span>",
-                12 * 1024,
+                crate::theme::pango_points(12.0),
                 glib::markup_escape_text(title)
             ));
         } else {
@@ -409,7 +409,6 @@ pub struct Disclosure {
     pub header: gtk::Box,
     pub content: gtk::Box,
     expanded: Rc<Cell<bool>>,
-    revealer: gtk::Revealer,
     mark: Canvas,
 }
 
@@ -442,14 +441,12 @@ impl Disclosure {
         }
         button.set_child(Some(&header));
         key_sounds(&button, false);
+        // A closed part hides its contents, so they take no room and are not measured.
         let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        let revealer = gtk::Revealer::new();
-        revealer.set_transition_type(gtk::RevealerTransitionType::None);
-        revealer.set_child(Some(&content));
-        revealer.set_reveal_child(expanded);
+        content.set_visible(expanded);
         root.append(&button);
-        root.append(&revealer);
-        let disclosure = Rc::new(Self { root, header, content, expanded: state, revealer, mark });
+        root.append(&content);
+        let disclosure = Rc::new(Self { root, header, content, expanded: state, mark });
         let weak = Rc::downgrade(&disclosure);
         button.connect_clicked(move |_| {
             if let Some(d) = weak.upgrade() {
@@ -467,7 +464,7 @@ impl Disclosure {
 
     pub fn set_expanded(&self, expanded: bool) {
         self.expanded.set(expanded);
-        self.revealer.set_reveal_child(expanded);
+        self.content.set_visible(expanded);
         self.mark.queue_draw();
     }
 }
