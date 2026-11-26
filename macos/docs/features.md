@@ -1,4 +1,4 @@
-# What Carbide Silica does
+# Functions of Carbide Silica
 
 The app can do what Carbide's terminal app does. [`docs/reference.md`](../../docs/reference.md) is the reference.
 The app shows the same data as pictures where a picture is clearer, and keeps the exact
