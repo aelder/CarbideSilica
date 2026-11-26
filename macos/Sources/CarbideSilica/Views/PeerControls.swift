@@ -93,11 +93,6 @@ struct PeerControlsCard: View {
             if let message = commands.message {
                 Text(message).font(.callout).foregroundStyle(.secondary)
             }
-            Text(
-                "These commands change only the connections of the node. They do not change funds, keys or the chain. "
-                    + "To disconnect or ban a peer, open the peer."
-            )
-            .font(.caption).foregroundStyle(.secondary)
         }
     }
 }

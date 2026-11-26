@@ -13,6 +13,9 @@ final class PeerFeed {
     private(set) var totals: NetworkTotals?
     private(set) var totalsError: String?
     private(set) var locations: PeerLocations?
+    /// The place of this node, when the peers report a public address for it and the
+    /// location data has that address.
+    private(set) var home: PeerLocation?
     private(set) var installing = false
     private(set) var installMessage: String?
     /// The peer list's selection, kept for the session.
@@ -61,6 +64,22 @@ final class PeerFeed {
     func loadLocations(_ model: AppModel, addresses: [String]) async {
         guard let explorer = model.explorer else { return }
         locations = await explorer.peerLocations(addresses: addresses)
+        // Each peer reports the address that it sees for this node. The place of that
+        // address comes from the same local data: the app makes no request for it.
+        var counts: [String: Int] = [:]
+        for peer in model.node?.peers ?? [] {
+            guard let data = peer.json.data(using: .utf8),
+                let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let seen = object["addrlocal"] as? String, !seen.isEmpty
+            else { continue }
+            counts[seen, default: 0] += 1
+        }
+        guard let own = counts.max(by: { $0.value < $1.value })?.key else {
+            home = nil
+            return
+        }
+        let found = await explorer.peerLocations(addresses: [own]).locations.first
+        home = found?.place == .located && found?.latitude != nil && found?.longitude != nil ? found : nil
     }
 
     /// Downloads the location database. Only the Download button in the confirmation calls it.
@@ -98,7 +117,7 @@ struct PeerMapCard: View {
     @State private var confirmingInstall = false
 
     var body: some View {
-        Card("Peers on a map", trailing: stateText) {
+        Card("Connected node map", trailing: stateText) {
             // The map shows even with no pin, so the peers listed under it have their place.
             if let locations = feed.locations {
                 map(locations)
@@ -112,11 +131,8 @@ struct PeerMapCard: View {
             if let message = feed.installMessage {
                 Text(message).font(.callout).foregroundStyle(.secondary)
             }
-            // DB-IP's licence (CC BY 4.0) requires this attribution wherever its data appears.
-            Link("IP geolocation by DB-IP (CC BY 4.0)", destination: URL(string: "https://db-ip.com")!)
-                .tint(Tone.record)
-                .foregroundStyle(Tone.record)
-                .font(.caption)
+            // When the data is current, its date and the attribution are one line.
+            if feed.locations?.state != .current { attribution }
         }
         .confirmationDialog(
             "Download the location data?", isPresented: $confirmingInstall, titleVisibility: .visible
@@ -171,16 +187,7 @@ struct PeerMapCard: View {
     private func map(_ locations: PeerLocations) -> some View {
         let pins = located(locations)
         if !pins.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                PeerOutlineMap(pins: pins, open: open)
-                Text(
-                    "Each mark is the approximate area of the IP address of a peer. The city of a data centre "
-                        + "address can be the city of its company. The land is drawn as the coast points of the "
-                        + "terminal's map. The app makes no request to a map service.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            PeerOutlineMap(pins: pins, home: feed.home, open: open)
         }
     }
 
@@ -207,9 +214,19 @@ struct PeerMapCard: View {
                 installButton("Install Location Data Again…")
             }
         case .current:
-            Text("Location data from \(locations.release ?? "this month").")
-                .font(.callout).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("Location data from \(locations.release ?? "this month").")
+                    .font(.caption).foregroundStyle(Tone.label)
+                attribution
+            }
         }
+    }
+
+    /// DB-IP's licence (CC BY 4.0) requires this attribution wherever its data appears.
+    private var attribution: some View {
+        Link("IP geolocation by DB-IP (CC BY 4.0)", destination: URL(string: "https://db-ip.com")!)
+            .buttonStyle(.displayLink)
+            .font(.caption)
     }
 
     private func installButton(_ title: String) -> some View {
@@ -289,13 +306,7 @@ struct PeerDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Picker("View", selection: $showsJSON) {
-                    Text("Overview").tag(false)
-                    Text("JSON").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
+                LampSegments(options: [(false, "Overview"), (true, "JSON")], selection: $showsJSON)
                 Spacer()
                 if let peer {
                     Button("Disconnect…") { commands.confirmDisconnect(peer.address) }

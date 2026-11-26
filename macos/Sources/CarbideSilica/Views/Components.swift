@@ -25,6 +25,8 @@ struct LoadView<Value: Sendable, Content: View>: View {
             case .loading:
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // The page that loads is the black of the display, not the grey of a window.
+                    .background(Tone.screen)
             case .failed(let message):
                 ContentUnavailableView {
                     Label("The data did not load", systemImage: "exclamationmark.triangle")
@@ -56,6 +58,8 @@ struct Page<Content: View>: View {
     @ViewBuilder let content: Content
 
     @State private var cursor = PageCursor()
+    /// The width of the scroll view with its bar.
+    @State private var outer: CGFloat?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -68,8 +72,9 @@ struct Page<Content: View>: View {
                 .overlayPreferenceValue(StopMarksKey.self) { StopCollector(marks: $0, cursor: cursor) }
                 .overlayPreferenceValue(CardMarksKey.self) { CardCollector(marks: $0, cursor: cursor) }
                 .id(PageCursor.topID)
-                .frame(maxWidth: .infinity)
+                .modifier(SteadyWidth(outer: outer))
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { outer = $0 }
             .modifier(CursorHost(cursor: cursor, proxy: proxy))
             .background(Tone.screen)
             .onAppear { cursor.enabled = keys }
@@ -383,6 +388,31 @@ struct Note: View {
             Label(text, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
         } else {
             Text(text)
+        }
+    }
+}
+
+/// Gives the contents of a scrolling page the same width if the scroll bar shows or not.
+///
+/// When the system shows scroll bars always, a scroll bar takes width and shows only on a
+/// long page. A page then became narrower when its contents loaded, and all that is at the
+/// right edge moved. With this, the contents always leave the width of the bar free.
+struct SteadyWidth: ViewModifier {
+    /// The width of the scroll view, with the bar.
+    let outer: CGFloat?
+
+    private var bar: CGFloat {
+        NSScroller.preferredScrollerStyle == .legacy
+            ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
+    }
+
+    func body(content: Content) -> some View {
+        if let outer, bar > 0 {
+            content
+                .frame(width: max(outer - bar, 0))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            content.frame(maxWidth: .infinity)
         }
     }
 }

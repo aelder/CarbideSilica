@@ -340,7 +340,7 @@ private struct HistoricalLookup: View {
             HStack {
                 NameText("Window ends at block")
                 TextField("Block", text: $endHeight, prompt: Text(tip.map { "\($0)" } ?? "height"))
-                    .textFieldStyle(.roundedBorder)
+                    .displayField()
                     .frame(width: 130)
                     .onSubmit { Task { await run() } }
                 Button("Request") { Task { await run() } }.disabled(running)

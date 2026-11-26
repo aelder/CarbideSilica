@@ -107,17 +107,26 @@ struct Readout: View {
     let label: String
     let value: String
     var tone: Color = Tone.value
+    /// The widest value that the figure can show. The figure keeps the width of this text,
+    /// so that the figures after it do not move when the value gets longer or shorter.
+    var reserve: String?
 
-    init(_ label: String, _ value: String, tone: Color = Tone.value) {
+    init(_ label: String, _ value: String, tone: Color = Tone.value, reserve: String? = nil) {
         self.label = label
         self.value = value
         self.tone = tone
+        self.reserve = reserve
     }
 
     var body: some View {
         HStack(alignment: .lastTextBaseline, spacing: 7) {
             Text(label.uppercased()).font(Tone.small).tracking(1.1).foregroundStyle(Tone.label)
-            Text(value).font(Tone.figure).monospacedDigit().foregroundStyle(tone)
+            ZStack(alignment: .leading) {
+                if let reserve {
+                    Text(reserve).font(Tone.figure).monospacedDigit().hidden().accessibilityHidden(true)
+                }
+                Text(value).font(Tone.figure).monospacedDigit().foregroundStyle(tone)
+            }
         }
         .lineLimit(1)
         .fixedSize()
@@ -234,11 +243,38 @@ extension GraphicsContext {
 /// A link in the display: pale blue text with no underline. It replaces the system link
 /// style, which has the system's blue.
 struct DisplayLinkStyle: ButtonStyle {
+    /// The colour of the link when the pointer is not on it.
+    var tone: Color = Tone.record
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(Tone.record)
-            .opacity(configuration.isPressed ? 0.6 : 1)
-            .contentShape(Rectangle())
+        Link(configuration: configuration, tone: tone)
+    }
+
+    /// Under the pointer a link gets light and a line below it, and a press has a quiet
+    /// sound of a key.
+    private struct Link: View {
+        let configuration: Configuration
+        let tone: Color
+        @Environment(\.isEnabled) private var enabled
+        @State private var hovering = false
+
+        private static let lit = Color(red: 0.84, green: 0.95, blue: 0.92)
+
+        var body: some View {
+            let on = hovering && enabled
+            configuration.label
+                .foregroundStyle(on ? Self.lit : tone)
+                .underline(on, color: Self.lit.opacity(0.7))
+                .shadow(color: Tone.record.opacity(on ? 0.75 : 0), radius: 4)
+                .opacity(configuration.isPressed ? 0.6 : 1)
+                .contentShape(Rectangle())
+                .onHover { hovering = $0 }
+                .onChange(of: configuration.isPressed) { _, pressed in
+                    if pressed { ClickSound.shared.link() }
+                }
+                // Quick up, slower down, as the keys.
+                .animation(on ? .easeOut(duration: 0.08) : .easeOut(duration: 0.28), value: on)
+        }
     }
 }
 
@@ -474,5 +510,218 @@ struct LampSegments<Value: Hashable>: View {
             .accessibilityLabel(title)
             .accessibilityAddTraits(chosen ? .isSelected : [])
         }
+    }
+}
+
+/// A key that is on or off: lit amber when on, blue under the pointer. With `struck`, the
+/// legend has a line through it, for a key that is on to remove something.
+struct LampToggle: View {
+    let title: String
+    let lit: Bool
+    var struck = false
+    let action: () -> Void
+    @State private var hovering = false
+
+    private var lamp: LampFace.Lamp { lit ? .amber : hovering ? .blue : .off }
+
+    var body: some View {
+        Button(action: action) {
+            Text(title.uppercased())
+                .font(Tone.futura(10.5))
+                .tracking(1.2)
+                .strikethrough(struck)
+                .lineLimit(1)
+                .foregroundStyle(lamp == .off ? (struck ? Tone.alert : Tone.value.opacity(0.9)) : LampTone.legend)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(LampFace(lamp: lamp))
+                .overlay(Rectangle().strokeBorder(Tone.alert.opacity(struck && lamp == .off ? 0.8 : 0), lineWidth: 1))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSoundStyle())
+        .onHover { inside in
+            hovering = inside
+            if inside { ClickSound.shared.hover() }
+        }
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(lit ? .isSelected : [])
+    }
+}
+
+/// A toggle of a page as a key: lit when on.
+struct LampToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Key(configuration: configuration)
+    }
+
+    private struct Key: View {
+        let configuration: Configuration
+        @Environment(\.isEnabled) private var enabled
+        @State private var hovering = false
+
+        private var lamp: LampFace.Lamp {
+            guard enabled else { return .off }
+            return configuration.isOn ? .amber : hovering ? .blue : .off
+        }
+
+        var body: some View {
+            Button {
+                configuration.isOn.toggle()
+            } label: {
+                configuration.label
+                    .font(Tone.futura(10.5))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                    .lineLimit(1)
+                    .foregroundStyle(lamp == .off ? Tone.value.opacity(enabled ? 0.9 : 0.35) : LampTone.legend)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(LampFace(lamp: lamp).opacity(enabled ? 1 : 0.5))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressSoundStyle())
+            .onHover { inside in
+                hovering = inside
+                if inside, enabled { ClickSound.shared.hover() }
+            }
+            .accessibilityAddTraits(configuration.isOn ? .isSelected : [])
+        }
+    }
+}
+
+/// A part of a page that opens and closes: a small mark and the name, then the contents.
+struct DisplayDisclosureStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                configuration.isExpanded.toggle()
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "arrowtriangle.right.fill")
+                        .font(.system(size: 7))
+                        .rotationEffect(.degrees(configuration.isExpanded ? 90 : 0))
+                        .foregroundStyle(Tone.present)
+                    configuration.label
+                        .font(Tone.small)
+                        .tracking(1.1)
+                        .textCase(.uppercase)
+                        .foregroundStyle(Tone.value.opacity(0.9))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressSoundStyle())
+            if configuration.isExpanded {
+                configuration.content
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A key that opens a list of choices and shows the chosen one.
+struct LampMenu<Value: Hashable>: View {
+    let options: [(value: Value, title: String)]
+    @Binding var selection: Value
+    @State private var hovering = false
+
+    var body: some View {
+        Menu {
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                Button(option.title) { selection = option.value }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text((options.first { $0.value == selection }?.title ?? "–").uppercased())
+                    .font(Tone.futura(10.5))
+                    .tracking(1.2)
+                    .lineLimit(1)
+                Image(systemName: "arrowtriangle.down.fill").font(.system(size: 6))
+            }
+            .foregroundStyle(hovering ? LampTone.legend : Tone.value.opacity(0.9))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(LampFace(lamp: hovering ? .blue : .off))
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { inside in
+            hovering = inside
+            if inside { ClickSound.shared.hover() }
+        }
+    }
+}
+
+/// A slider of the display: a thin line with a lit mark. The value goes in steps of one.
+struct LampSlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    @State private var hovering = false
+    @State private var dragging = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = max(geometry.size.width - 12, 1)
+            let span = max(range.upperBound - range.lowerBound, 1)
+            let x = 6 + CGFloat((value - range.lowerBound) / span) * width
+            ZStack(alignment: .leading) {
+                Rectangle().fill(Tone.axis).frame(height: 1)
+                Rectangle().fill(Tone.record).frame(width: x, height: 2)
+                Rectangle()
+                    .fill(.clear)
+                    .frame(width: 10, height: 18)
+                    .background(LampFace(lamp: dragging ? .amber : hovering ? .blue : .off))
+                    .overlay(Rectangle().fill(dragging || hovering ? LampTone.legend : Tone.present).frame(width: 2, height: 10))
+                    .offset(x: x - 5)
+            }
+            .frame(height: 22)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        if !dragging {
+                            dragging = true
+                            ClickSound.shared.press()
+                        }
+                        let part = min(max((drag.location.x - 6) / width, 0), 1)
+                        value = (range.lowerBound + Double(part) * span).rounded()
+                    }
+                    .onEnded { _ in
+                        dragging = false
+                        ClickSound.shared.release()
+                    }
+            )
+            .onHover { hovering = $0 }
+        }
+        .frame(height: 22)
+        .accessibilityElement()
+        .accessibilityValue("\(Int(value))")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: value = min(value + 1, range.upperBound)
+            case .decrement: value = max(value - 1, range.lowerBound)
+            @unknown default: break
+            }
+        }
+    }
+}
+
+extension View {
+    /// The controls of a page in the form of the display: keys, toggles and parts that open.
+    func displayControls() -> some View {
+        buttonStyle(.lamp)
+            .toggleStyle(LampToggleStyle())
+            .disclosureGroupStyle(DisplayDisclosureStyle())
+            .progressViewStyle(CircuitProgressStyle())
+    }
+
+    /// A text field in the form of the display: plain, in a thin frame.
+    func displayField() -> some View {
+        textFieldStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .overlay(Rectangle().strokeBorder(Tone.axis, lineWidth: 1))
     }
 }

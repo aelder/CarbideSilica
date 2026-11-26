@@ -54,29 +54,37 @@ final class ClickSound {
     func press() {
         guard enabled else { return }
         prepare(click)
-        play(click.presses, last: &click.lastPress)
+        play(click.presses, last: &click.lastPress, volume: click.volume)
     }
 
     /// The release of a key.
     func release() {
         guard enabled else { return }
         prepare(click)
-        play(click.releases, last: &click.lastRelease)
+        play(click.releases, last: &click.lastRelease, volume: click.volume)
+    }
+
+    /// The press of a link: the sound of a key, less loud.
+    func link() {
+        guard enabled else { return }
+        prepare(click)
+        play(click.presses, last: &click.lastPress, volume: click.volume * 0.45)
     }
 
     /// The pointer goes on a key.
     func hover() {
         guard enabled else { return }
         prepare(touch)
-        play(touch.presses, last: &touch.lastPress)
+        play(touch.presses, last: &touch.lastPress, volume: touch.volume)
     }
 
-    private func play(_ players: [AVAudioPlayer], last: inout Int) {
+    private func play(_ players: [AVAudioPlayer], last: inout Int, volume: Float) {
         guard !players.isEmpty else { return }
         var index = Int.random(in: 0..<players.count)
         if index == last { index = (index + 1) % players.count }
         last = index
         let player = players[index]
+        player.volume = volume
         player.currentTime = 0
         player.play()
     }

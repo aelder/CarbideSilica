@@ -44,6 +44,8 @@ struct StatementLayout {
     /// The net amounts of all receivers in the first column, largest first, when the
     /// statement joins some of them into one row.
     let spread: [Int64]
+    /// The receivers that the statement joins into one row, largest first, one row each.
+    let joined: [StatementRow]
 
     init(statement: TransactionStatement, only: String??, title: (StatementParty) -> String) {
         let all = statement.columns
@@ -74,6 +76,7 @@ struct StatementLayout {
         let receivers = allReceivers.filter { $0.element.kind == .address }
         var rows = givers.map { row($0.element, $0.offset) }
         var spread: [Int64] = []
+        var joined: [StatementRow] = []
         if receivers.count > Self.maxReceivers {
             let first = columns.first ?? nil
             let amount = { (party: StatementParty) in party.net.first { $0.currencyId == first }?.sats ?? 0 }
@@ -90,6 +93,7 @@ struct StatementLayout {
                     cells: columns.map { sums[$0] ?? 0 },
                     inputs: rest.flatMap(\.element.inputs), outputs: rest.flatMap(\.element.outputs)))
             spread = sorted.map { amount($0.element) }.filter { $0 > 0 }
+            joined = rest.map { row($0.element, $0.offset) }
         } else {
             rows += receivers.map { row($0.element, $0.offset) }
         }
@@ -108,6 +112,7 @@ struct StatementLayout {
             max(rows.map { abs($0.cells[column]) }.max() ?? 1, 1)
         }
         self.spread = spread
+        self.joined = joined
     }
 }
 
@@ -148,6 +153,10 @@ struct TransactionStatementView: View {
     @AppStorage(DisplayKey.showsNames) private var showsNames = true
     /// The one currency to show, when the statement has more columns than fit.
     @State private var only: String??
+    /// True shows the statement as a flow picture, false as the table. A test.
+    @AppStorage("statementShowsFlow") private var showsFlow = false
+    /// The column whose amounts the flow picture shows.
+    @State private var flowColumn = 0
 
     private var statement: TransactionStatement { transaction.statement }
     private var coin: String { transaction.coin }
@@ -160,20 +169,36 @@ struct TransactionStatementView: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
             if statement.columns.count > StatementLayout.maxColumns {
-                Picker("Currency", selection: $only) {
-                    Text("First \(StatementLayout.maxColumns) of \(statement.columns.count)")
-                        .tag(String??.none)
-                    ForEach(statement.columns, id: \.self) { column in
-                        Text(currency(column)).tag(String??.some(column))
+                HStack(spacing: 10) {
+                    NameText("Currency")
+                    LampMenu(
+                        options: [(String??.none, "First \(StatementLayout.maxColumns) of \(statement.columns.count)")]
+                            + statement.columns.map { (String??.some($0), currency($0)) },
+                        selection: $only)
+                }
+            }
+            if !layout.rows.isEmpty {
+                HStack(spacing: 14) {
+                    LampSegments(options: [(false, "Table"), (true, "Flow")], selection: $showsFlow)
+                    if showsFlow, layout.columns.count > 1 {
+                        LampSegments(
+                            options: layout.columns.enumerated().map { ($0.offset, currency($0.element)) },
+                            selection: $flowColumn)
                     }
                 }
-                .fixedSize()
             }
             if !layout.rows.isEmpty || !layout.spread.isEmpty {
                 DisplayPanel {
                     VStack(alignment: .leading, spacing: 12) {
                         if !layout.rows.isEmpty {
-                            grid(layout)
+                            if showsFlow {
+                                StatementFlow(
+                                    layout: layout, column: min(flowColumn, max(layout.columns.count - 1, 0)),
+                                    unit: currency(layout.columns[safe: min(flowColumn, max(layout.columns.count - 1, 0))] ?? nil),
+                                    selection: $selection)
+                            } else {
+                                grid(layout)
+                            }
                         }
                         if !layout.rows.isEmpty, !layout.spread.isEmpty {
                             PanelRule()
@@ -210,7 +235,10 @@ struct TransactionStatementView: View {
                 Note(text: "A value is missing from the source. The statement is not complete.", warning: true)
             }
         }
-        .onChange(of: transaction.txid) { only = nil }
+        .onChange(of: transaction.txid) {
+            only = nil
+            flowColumn = 0
+        }
     }
 
     // MARK: The grid
@@ -326,26 +354,62 @@ struct TransactionStatementView: View {
         let median = values.sorted()[values.count / 2]
         let top = values.prefix(StatementLayout.keptReceivers).reduce(0, +)
         let name = currency(layout.columns.first ?? nil)
-        return VStack(alignment: .leading, spacing: 4) {
+        // An address with less than 1 of each 400 gets less than two points of the bar.
+        // Those addresses are one segment at the end, so that the bar stays clear.
+        let single = values.filter { $0 * 400 >= total }
+        let small = values.count - single.count
+        let smallTotal = total - single.reduce(0, +)
+        let share = Int((Double(top) / Double(max(total, 1)) * 100).rounded())
+        let note: String = small > 0
+            ? "One segment is one address. The segment with lines is the \(small) smallest together: "
+                + "\(StatementText.brief(smallTotal)) \(name)."
+            : "One segment is one address."
+        let figures: [(String, String)] = [
+            ("Addresses", "\(values.count)"),
+            ("Largest", "\(StatementText.brief(values[0])) \(name)"),
+            ("Median", "\(StatementText.brief(median)) \(name)"),
+            ("\(StatementLayout.keptReceivers) largest", "\(share)% of the total"),
+        ]
+        return VStack(alignment: .leading, spacing: 8) {
             Canvas { context, size in
                 var x: CGFloat = 0
-                for (index, value) in values.enumerated() {
+                for (index, value) in single.enumerated() {
                     let width = CGFloat(value) / CGFloat(max(total, 1)) * size.width
                     context.fill(
                         Path(CGRect(x: x, y: 0, width: max(width - 0.6, 0.3), height: size.height)),
                         with: .color(Tone.record.opacity(index.isMultiple(of: 2) ? 0.9 : 0.55)))
                     x += width
                 }
+                if small > 0, size.width > x {
+                    // The group of small addresses: an outline with lines across it.
+                    let box = CGRect(x: x, y: 0, width: size.width - x, height: size.height)
+                    var lines = Path()
+                    var at = box.minX - box.height
+                    while at < box.maxX {
+                        lines.move(to: CGPoint(x: at, y: box.maxY))
+                        lines.addLine(to: CGPoint(x: at + box.height, y: box.minY))
+                        at += 5
+                    }
+                    context.drawLayer { layer in
+                        layer.clip(to: Path(box))
+                        layer.stroke(lines, with: .color(Tone.record.opacity(0.6)), lineWidth: 1)
+                    }
+                    context.stroke(Path(box.insetBy(dx: 0.5, dy: 0.5)), with: .color(Tone.record.opacity(0.8)), lineWidth: 1)
+                }
             }
             .frame(height: 20)
             .accessibilityLabel("The amount of each of \(values.count) addresses, largest first.")
-            Text(
-                "One segment for each of \(values.count) addresses, largest first. "
-                    + "Largest: \(StatementText.brief(values[0])) \(name). "
-                    + "Median: \(StatementText.brief(median)) \(name). "
-                    + "The \(StatementLayout.keptReceivers) largest received "
-                    + "\(Int((Double(top) / Double(max(total, 1)) * 100).rounded())) of each 100.")
+            HStack(alignment: .firstTextBaseline, spacing: 26) {
+                ForEach(figures, id: \.0) { figure in
+                    HStack(alignment: .firstTextBaseline, spacing: 7) {
+                        NameText(figure.0)
+                        Text(figure.1).font(.callout.monospacedDigit()).foregroundStyle(Tone.value)
+                    }
+                }
+            }
+            Text(note)
                 .font(Tone.caption).foregroundStyle(Tone.label)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -654,5 +718,439 @@ struct FlowLayout: Layout {
             subview.place(
                 at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: .unspecified)
         }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
+/// The statement as a flow: the parties that gave on the left, the transaction in the
+/// middle, the parties that received on the right. The width of a band is the amount.
+///
+/// All bands go through the transaction. The chain does not record which input paid which
+/// output, thus the picture has no band from one party to a different party.
+///
+/// The band of the joined addresses opens: a click goes one level in, where that group is
+/// on the left and its next largest addresses are on the right, with the remainder as a
+/// new group. The picture moves across to the new level.
+private struct StatementFlow: View {
+    let layout: StatementLayout
+    let column: Int
+    let unit: String
+    @Binding var selection: StatementSelection?
+    @State private var pointed: String?
+    /// How many levels into the joined addresses the picture is. 0 is the transaction.
+    @State private var depth = 0
+    /// The level that the picture comes from, while it moves.
+    @State private var origin = 0
+    /// 0 at the start of a move between levels, 1 at its end.
+    @State private var progress: Double = 1
+    /// The width of the names and the picture together, for the place of the pointer.
+    @State private var rowWidth: CGFloat = 800
+
+    fileprivate struct Node {
+        let row: StatementRow
+        let sats: Int64
+        /// The thickness of the band.
+        let thick: CGFloat
+        /// The top of the place of the node, and the height of the place.
+        let top: CGFloat
+        let slot: CGFloat
+        var middle: CGFloat { top + slot / 2 }
+    }
+
+    fileprivate struct Scene {
+        var left: [Node] = []
+        var right: [Node] = []
+        var height: CGFloat = 60
+        /// The node of the group that opens to the next level.
+        var group: Node? { right.last { $0.row.style == .rest } }
+
+        static let bar: CGFloat = 4
+        static let core: CGFloat = 9
+
+        /// The top of each band where it meets the bar in the middle.
+        func inner(_ nodes: [Node]) -> [CGFloat] {
+            let leftThick = left.reduce(0) { $0 + $1.thick }
+            let rightThick = right.reduce(0) { $0 + $1.thick }
+            let coreHeight = max(leftThick, rightThick)
+            let coreTop = max((height - coreHeight) / 2, 0)
+            var y = coreTop + (coreHeight - nodes.reduce(0) { $0 + $1.thick }) / 2
+            return nodes.map { node in
+                defer { y += node.thick }
+                return y
+            }
+        }
+
+        /// The band at a point of the picture: the band itself, not the row of its name.
+        func band(at point: CGPoint, width: CGFloat) -> Node? {
+            let mid = width / 2
+            let gave = point.x < mid
+            let nodes = gave ? left : right
+            let outer = gave ? Self.bar : width - Self.bar
+            let innerX = gave ? mid - Self.core / 2 : mid + Self.core / 2
+            // How far along the band the point is, from its party (0) to the middle (1).
+            let along = min(max((point.x - outer) / (innerX - outer), 0), 1)
+            // The band is a curve with its control points at the half distance: find the
+            // parameter of the curve for this distance.
+            var low: CGFloat = 0, high: CGFloat = 1
+            for _ in 0..<18 {
+                let t = (low + high) / 2
+                let x = 1.5 * t * (1 - t) * (1 - t) + 1.5 * t * t * (1 - t) + t * t * t
+                if x < along { low = t } else { high = t }
+            }
+            let t = (low + high) / 2
+            let ease = 3 * t * t - 2 * t * t * t
+            var best: (node: Node, distance: CGFloat)?
+            for (node, end) in zip(nodes, inner(nodes)) {
+                let start = node.middle - node.thick / 2
+                let top = start + (end - start) * ease
+                // A thin band takes the pointer from a little above and below it.
+                let reach = max((6 - node.thick) / 2, 0)
+                guard point.y >= top - reach, point.y <= top + node.thick + reach else { continue }
+                let distance = abs(point.y - (top + node.thick / 2))
+                if best == nil || distance < best!.distance { best = (node, distance) }
+            }
+            return best?.node
+        }
+    }
+
+    private static let bandSpace: CGFloat = 210
+    private static let minThick: CGFloat = 1.5
+    private static let minSlot: CGFloat = 22
+    private static let gap: CGFloat = 5
+    private static let leftWidth: CGFloat = 236
+    private static let rightWidth: CGFloat = 270
+    private static let step = StatementLayout.keptReceivers
+
+    /// The nodes of one side, from the top.
+    private func nodes(_ rows: [StatementRow], scale: CGFloat) -> [Node] {
+        var top: CGFloat = 0
+        return rows.map { row in
+            let sats = abs(row.cells[column])
+            let thick = max(CGFloat(sats) * scale, Self.minThick)
+            let slot = max(thick, Self.minSlot)
+            defer { top += slot + Self.gap }
+            return Node(row: row, sats: sats, thick: thick, top: top, slot: slot)
+        }
+    }
+
+    /// One row for a group of joined addresses.
+    private func group(_ rows: ArraySlice<StatementRow>, id: String) -> StatementRow {
+        StatementRow(
+            id: id, title: "\(rows.count) more addresses", address: nil, style: .rest,
+            cells: layout.columns.indices.map { index in rows.reduce(0) { $0 + $1.cells[index] } },
+            inputs: rows.flatMap(\.inputs), outputs: rows.flatMap(\.outputs))
+    }
+
+    /// The deepest level: each level takes the next addresses from the joined ones.
+    private var maxDepth: Int {
+        layout.joined.isEmpty ? 0 : (layout.joined.count - 1) / Self.step + 1
+    }
+
+    private func scene(_ level: Int, height: CGFloat) -> Scene {
+        var found = scene(level)
+        found.height = height
+        return found
+    }
+
+    /// The picture of a level.
+    private func scene(_ level: Int) -> Scene {
+        var gave: [StatementRow]
+        var received: [StatementRow]
+        if level == 0 {
+            let rows = layout.rows.filter { $0.style != .unchanged && $0.cells[column] != 0 }
+            gave = rows.filter { $0.cells[column] < 0 }
+            received = rows.filter { $0.cells[column] > 0 }
+        } else {
+            let from = (level - 1) * Self.step
+            let joined = layout.joined
+            gave = [group(joined[min(from, joined.count)...], id: "group-\(level)")]
+            let end = min(from + Self.step, joined.count)
+            received = Array(joined[min(from, joined.count)..<end])
+            if end < joined.count { received.append(group(joined[end...], id: "rest")) }
+            received = received.filter { $0.cells[column] != 0 }
+        }
+        let total = max(
+            gave.reduce(0) { $0 + abs($1.cells[column]) }, received.reduce(0) { $0 + abs($1.cells[column]) }, 1)
+        let scale = Self.bandSpace / CGFloat(total)
+        var scene = Scene(left: nodes(gave, scale: scale), right: nodes(received, scale: scale))
+        scene.height = max(
+            scene.left.last.map { $0.top + $0.slot } ?? 0, scene.right.last.map { $0.top + $0.slot } ?? 0, 60)
+        return scene
+    }
+
+    /// Goes to a level. The picture moves across in the direction of the level.
+    private func go(to level: Int) {
+        let level = min(max(level, 0), maxDepth)
+        guard level != depth else { return }
+        origin = depth
+        depth = level
+        progress = 0
+        pointed = nil
+        let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        withAnimation(still ? nil : .easeInOut(duration: 0.6)) { progress = 1 }
+    }
+
+    var body: some View {
+        let level = min(depth, maxDepth)
+        // Each level has the height of the tallest one seen, so that the page below the
+        // picture does not move when the level changes.
+        let tall = max(scene(level).height, scene(min(origin, maxDepth)).height, scene(0).height)
+        let now = scene(level, height: tall)
+        let before = scene(min(origin, maxDepth), height: tall)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                labels(now.left, alignment: .trailing, level: level)
+                    .frame(width: Self.leftWidth, height: now.height, alignment: .topTrailing)
+                    .id("left-\(level)")
+                    .transition(.opacity)
+                GeometryReader { geometry in
+                    let width = geometry.size.width
+                    FlowPicture(
+                        from: before, to: now, inward: level >= origin, progress: progress,
+                        chosen: selection?.id, pointed: pointed)
+                    .contentShape(Rectangle())
+                    .onTapGesture(coordinateSpace: .local) { point in
+                        if let found = node(at: point, width: width, in: now) { choose(found.row, level: level) }
+                    }
+                }
+                .frame(height: now.height)
+                .accessibilityLabel("The flow of \(unit) through the transaction.")
+                labels(now.right, alignment: .leading, level: level)
+                    .frame(width: Self.rightWidth, height: now.height, alignment: .topLeading)
+                    .id("right-\(level)")
+                    .transition(.opacity)
+            }
+            // One pointer area for the names and the bands. With an area for each, the light
+            // of a band went off and on when the pointer went from its name to the band.
+            .contentShape(Rectangle())
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let point):
+                    // In the picture, the band under the pointer. At the names, the row.
+                    let pictureLeft = Self.leftWidth + 10
+                    let pictureWidth = rowWidth - Self.leftWidth - Self.rightWidth - 20
+                    let found: String?
+                    if point.x >= pictureLeft, point.x <= pictureLeft + pictureWidth {
+                        found = now.band(
+                            at: CGPoint(x: point.x - pictureLeft, y: point.y), width: pictureWidth)?.row.id
+                    } else {
+                        let side = point.x < pictureLeft ? now.left : now.right
+                        found = side.first { point.y >= $0.top && point.y <= $0.top + $0.slot }?.row.id
+                    }
+                    if found != pointed { pointed = found }
+                case .ended: pointed = nil
+                }
+            }
+            // The keys to go back are on the picture, in the empty corner above the group,
+            // so that the picture stays in its place when they come.
+            .overlay(alignment: .topLeading) {
+                if level > 0 {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Button("Up one level") { go(to: level - 1) }
+                        if level > 1 { Button("To the transaction") { go(to: 0) } }
+                    }
+                    .transition(.opacity)
+                }
+            }
+            if !caption(level, now).isEmpty {
+                Text(caption(level, now))
+                    .font(Tone.caption).foregroundStyle(Tone.label)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .onChange(of: column) { depth = 0; origin = 0 }
+    }
+
+    private func place(_ level: Int) -> String {
+        let first = StatementLayout.keptReceivers + (level - 1) * Self.step + 1
+        let last = min(first + Self.step - 1, StatementLayout.keptReceivers + layout.joined.count)
+        return "Level \(level) of \(maxDepth): addresses \(first) to \(last) by amount."
+    }
+
+    private func caption(_ level: Int, _ scene: Scene) -> String {
+        var text = level == 0 ? "Click a band to mark its inputs and outputs in the lists." : place(level)
+        if scene.group != nil {
+            text += (text.isEmpty ? "" : " ") + "Click the band of the more addresses to go into that group."
+        }
+        return text
+    }
+
+    private func choose(_ row: StatementRow, level: Int) {
+        // The band of the joined addresses opens the next level. The band of the group on
+        // the left goes back.
+        if row.id == "rest", !layout.joined.isEmpty { return go(to: level + 1) }
+        if row.id.hasPrefix("group-") { return go(to: level - 1) }
+        guard !(row.inputs.isEmpty && row.outputs.isEmpty) else { return }
+        selection = selection?.id == row.id
+            ? nil : StatementSelection(id: row.id, inputs: Set(row.inputs), outputs: Set(row.outputs))
+    }
+
+    /// The node whose place has the point: the left half is the givers.
+    private func node(at point: CGPoint, width: CGFloat, in scene: Scene) -> Node? {
+        scene.band(at: point, width: width)
+    }
+
+    /// True for a row whose band does something on a click.
+    private func acts(_ row: StatementRow) -> Bool {
+        row.id == "rest" || row.id.hasPrefix("group-") || !(row.inputs.isEmpty && row.outputs.isEmpty)
+    }
+
+    private func labels(_ nodes: [Node], alignment: HorizontalAlignment, level: Int) -> some View {
+        VStack(alignment: alignment, spacing: Self.gap) {
+            ForEach(nodes, id: \.row.id) { node in
+                let chosen = selection?.id == node.row.id
+                HStack(spacing: 8) {
+                    if alignment == .leading { amount(node, chosen: chosen) }
+                    if let address = node.row.address {
+                        RouteLink(text: address, route: .holder(address))
+                    } else if acts(node.row) {
+                        // The name does what a click on its band does.
+                        Button(node.row.title) { choose(node.row, level: level) }
+                            .buttonStyle(
+                                DisplayLinkStyle(tone: node.row.style == .rest ? Tone.label : Tone.value))
+                            .lineLimit(1)
+                    } else {
+                        Text(node.row.title).foregroundStyle(Tone.label).lineLimit(1)
+                    }
+                    if alignment == .trailing { amount(node, chosen: chosen) }
+                }
+                .frame(height: node.slot)
+            }
+        }
+    }
+
+    private func amount(_ node: Node, chosen: Bool) -> some View {
+        Text(StatementText.brief(node.sats))
+            .font(.callout.monospacedDigit())
+            .foregroundStyle(chosen ? Tone.present : Tone.value)
+            .lineLimit(1)
+            .frame(minWidth: 78, alignment: .trailing)
+            .help("\(Format.coins(node.sats)) \(unit)")
+    }
+}
+
+/// The bands of the flow. While the picture moves between two levels, the level it leaves
+/// goes out to one side and the new level comes in from the other side. The bar of the
+/// group goes across with them: it is the right end of one level and the left end of the
+/// next.
+private struct FlowPicture: View, @preconcurrency Animatable {
+    let from: StatementFlow.Scene
+    let to: StatementFlow.Scene
+    /// True when the move goes into a group, false when it goes back out.
+    let inward: Bool
+    var progress: Double
+    let chosen: String?
+    let pointed: String?
+
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    private static let bar: CGFloat = 4
+    private static let core: CGFloat = 9
+
+    var body: some View {
+        Canvas { context, size in
+            let p = CGFloat(min(max(progress, 0), 1))
+            guard p < 1 else { return draw(context, size, to, shift: 0, opacity: 1) }
+            let way: CGFloat = inward ? 1 : -1
+            draw(context, size, from, shift: -way * p * size.width, opacity: Double(1 - p))
+            draw(context, size, to, shift: way * (1 - p) * size.width, opacity: Double(p))
+            // The bar of the group, from its place in one level to its place in the other.
+            let start = inward ? end(from.group, right: true, size) : end(from.left.first, right: false, size)
+            let stop = inward ? end(to.left.first, right: false, size) : end(to.group, right: true, size)
+            if let start, let stop {
+                let rect = CGRect(
+                    x: start.minX + (stop.minX - start.minX) * p, y: start.minY + (stop.minY - start.minY) * p,
+                    width: Self.bar, height: start.height + (stop.height - start.height) * p)
+                context.lit(Path(rect), Tone.present, strength: 0.8)
+            }
+        }
+    }
+
+    /// The bar at the end of a band, at its party.
+    private func end(_ node: StatementFlow.Node?, right: Bool, _ size: CGSize) -> CGRect? {
+        guard let node else { return nil }
+        return CGRect(
+            x: right ? size.width - Self.bar : 0, y: node.middle - node.thick / 2, width: Self.bar, height: node.thick)
+    }
+
+    private func color(_ row: StatementRow, gave: Bool) -> Color {
+        if chosen == row.id { return Tone.present }
+        switch row.style {
+        case .closing: return Tone.mined
+        case .rest: return Tone.label
+        case .hidden: return Tone.staked
+        default: return gave ? Tone.value : Tone.record
+        }
+    }
+
+    private func draw(
+        _ base: GraphicsContext, _ size: CGSize, _ scene: StatementFlow.Scene, shift: CGFloat, opacity: Double
+    ) {
+        var context = base
+        context.opacity = opacity
+        context.translateBy(x: shift, y: 0)
+        let bar = Self.bar
+        let core = Self.core
+        let mid = size.width / 2
+        let leftThick = scene.left.reduce(0) { $0 + $1.thick }
+        let rightThick = scene.right.reduce(0) { $0 + $1.thick }
+        let coreHeight = max(leftThick, rightThick)
+        let coreTop = max((scene.height - coreHeight) / 2, 0)
+
+        func band(_ node: StatementFlow.Node, at y: CGFloat, gave: Bool) {
+            let outer = gave ? bar : size.width - bar
+            let inner = gave ? mid - core / 2 : mid + core / 2
+            let from = CGPoint(x: outer, y: node.middle - node.thick / 2)
+            let bend = (outer + inner) / 2
+            var path = Path()
+            path.move(to: from)
+            path.addCurve(
+                to: CGPoint(x: inner, y: y), control1: CGPoint(x: bend, y: from.y), control2: CGPoint(x: bend, y: y))
+            path.addLine(to: CGPoint(x: inner, y: y + node.thick))
+            path.addCurve(
+                to: CGPoint(x: outer, y: from.y + node.thick), control1: CGPoint(x: bend, y: y + node.thick),
+                control2: CGPoint(x: bend, y: from.y + node.thick))
+            path.closeSubpath()
+            let tone = color(node.row, gave: gave)
+            let strong = chosen == node.row.id || pointed == node.row.id
+            context.fill(path, with: .color(tone.opacity(strong ? 0.6 : gave ? 0.16 : 0.34)))
+            if gave || node.row.style == .hidden {
+                // What a party gave is an outline, as in the table.
+                context.stroke(
+                    path, with: .color(tone.opacity(0.8)),
+                    style: StrokeStyle(lineWidth: 1, dash: node.row.style == .hidden ? [4, 3] : []))
+            }
+            // The end of the band at its party.
+            let end = CGRect(
+                x: gave ? 0 : size.width - bar, y: node.middle - node.thick / 2, width: bar, height: node.thick)
+            if strong {
+                context.lit(Path(end), tone, strength: 0.6)
+            } else {
+                context.fill(Path(end), with: .color(tone))
+            }
+        }
+
+        var y = coreTop + (coreHeight - leftThick) / 2
+        for node in scene.left {
+            band(node, at: y, gave: true)
+            y += node.thick
+        }
+        y = coreTop + (coreHeight - rightThick) / 2
+        for node in scene.right {
+            band(node, at: y, gave: false)
+            y += node.thick
+        }
+        // The middle: all that came in is all that went out.
+        context.lit(
+            Path(CGRect(x: mid - core / 2, y: coreTop, width: core, height: coreHeight)), Tone.present, strength: 0.5)
     }
 }

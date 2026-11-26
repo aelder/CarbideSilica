@@ -1086,30 +1086,48 @@ private struct MempoolTimeRecord: View {
         let share = Double(feed.totalBytes) / Double(WaitingRoom.blockLimit)
         let percent = share * 100
         let seen = lines.count
-        return HStack(alignment: .lastTextBaseline, spacing: 26) {
-            Readout("Waiting", feed.loaded ? "\(waiting)" : "–", tone: waiting > 0 ? Tone.present : Tone.value)
-            Readout("Size", feed.loaded ? Format.bytes(feed.totalBytes) : "–")
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                NameText("Next block")
-                Canvas { context, size in
-                    context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Tone.grid))
-                    let filled = CGRect(x: 0, y: 0, width: size.width * min(share, 1), height: size.height)
-                    context.fill(Path(filled), with: .color(share <= 1 ? Tone.record : Tone.alert))
-                    context.fill(Path(CGRect(x: size.width - 1, y: -2, width: 1, height: size.height + 4)), with: .color(Tone.axis))
+        func row(_ spacing: CGFloat) -> some View {
+            HStack(alignment: .lastTextBaseline, spacing: spacing) {
+                Readout(
+                    "Waiting", feed.loaded ? "\(waiting)" : "–", tone: waiting > 0 ? Tone.present : Tone.value,
+                    reserve: "00")
+                Readout("Size", feed.loaded ? Format.bytes(feed.totalBytes) : "–", reserve: "Zero KB")
+                HStack(alignment: .lastTextBaseline, spacing: 8) {
+                    NameText("Next block")
+                    Canvas { context, size in
+                        context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Tone.grid))
+                        let filled = CGRect(x: 0, y: 0, width: size.width * min(share, 1), height: size.height)
+                        context.fill(Path(filled), with: .color(share <= 1 ? Tone.record : Tone.alert))
+                        context.fill(Path(CGRect(x: size.width - 1, y: -2, width: 1, height: size.height + 4)), with: .color(Tone.axis))
+                    }
+                    .frame(width: 110, height: 8)
+                    .alignmentGuide(.lastTextBaseline) { $0[.bottom] - 3 }
+                    ZStack(alignment: .leading) {
+                        // The widest value, so that the figures after it keep their places.
+                        Text("0.00%").font(Tone.figure).monospacedDigit().hidden().accessibilityHidden(true)
+                        Text(waiting == 0 ? "0%" : percent < 1 ? String(format: "%.2f%%", percent) : String(format: "%.0f%%", percent))
+                            .font(Tone.figure).monospacedDigit()
+                            .foregroundStyle(share <= 1 ? Tone.value : Tone.alert)
+                    }
                 }
-                .frame(width: 110, height: 8)
-                .alignmentGuide(.lastTextBaseline) { $0[.bottom] - 3 }
-                Text(waiting == 0 ? "0%" : percent < 1 ? String(format: "%.2f%%", percent) : String(format: "%.0f%%", percent))
-                    .font(Tone.figure).monospacedDigit()
-                    .foregroundStyle(share <= 1 ? Tone.value : Tone.alert)
+                .help("The part of one block that the waiting transactions fill. A block holds \(Format.bytes(WaitingRoom.blockLimit)).")
+                if let block = model.blocks.first {
+                    Readout(
+                        "Last block", Self.clock(max(now.timeIntervalSince1970 - Double(block.time), 0)), reserve: "00:00")
+                }
+                Readout("Seen in 15 min", "\(seen)", reserve: "00")
+                Spacer(minLength: 0)
             }
-            .help("The part of one block that the waiting transactions fill. A block holds \(Format.bytes(WaitingRoom.blockLimit)).")
-            if let block = model.blocks.first {
-                Readout("Last block", Self.clock(max(now.timeIntervalSince1970 - Double(block.time), 0)))
-            }
-            Readout("Seen in 15 min", "\(seen)")
-            Spacer(minLength: 0)
         }
+        // The row gets less space between its figures when the page is narrow, and it never
+        // makes the page wider: a wider row moved the page when a figure got one more digit.
+        return ViewThatFits(in: .horizontal) {
+            row(26)
+            row(16)
+            row(9)
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 
     /// "6:08" for six minutes and eight seconds.

@@ -87,13 +87,18 @@ struct RootView: View {
                 // the root page.
                 .safeAreaInset(edge: .top, spacing: 0) { Breadcrumb() }
                 .navigationDestination(for: Route.self) { route in
+                    // A pushed page does not get the styles of the stack, thus it sets them.
                     destination(route)
+                        .displayControls()
                         .safeAreaInset(edge: .top, spacing: 0) { Breadcrumb() }
                 }
             }
             // A button of a page that sets no style is a key of the display. The buttons of
             // the bar at the top keep the form of the system.
-            .buttonStyle(.lamp)
+            .displayControls()
+            // The page does not set the width of its column. Without this, a page with a
+            // wide row made the sidebar narrower, and the sidebar moved between pages.
+            .frame(minWidth: 560)
         }
         // Film grain over all of the display.
         .overlay { FilmGrain().ignoresSafeArea() }

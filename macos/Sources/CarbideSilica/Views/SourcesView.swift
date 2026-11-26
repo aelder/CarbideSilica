@@ -188,18 +188,10 @@ private struct StatePicker: View {
     let change: (SourceRow, SourceState) -> Void
 
     var body: some View {
-        Picker(
-            "State",
-            selection: Binding(get: { row.state }, set: { change(row, $0) })
-        ) {
-            Text("Disabled").tag(SourceState.disabled)
-            Text("Enabled").tag(SourceState.enabled)
-            if row.kind == .localNode {
-                Text("Monitored").tag(SourceState.monitored)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        LampSegments(
+            options: [(SourceState.disabled, "Disabled"), (SourceState.enabled, "Enabled")]
+                + (row.kind == .localNode ? [(SourceState.monitored, "Monitored")] : []),
+            selection: Binding(get: { row.state }, set: { change(row, $0) }))
         .fixedSize()
         .disabled(row.kind == .localNode && !row.hasCredentials)
     }

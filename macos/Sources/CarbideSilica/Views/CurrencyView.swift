@@ -172,12 +172,12 @@ private struct CurrencyPage: View {
                         Text(sentence).font(.title3).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                     }
                     if currency.reserves.count > 1 {
-                        Picker("Show values in", selection: Binding(get: { unit ?? "" }, set: { chosenUnit = $0 })) {
-                            ForEach(currency.reserves, id: \.currencyId) { reserve in
-                                Text(reserveName(reserve)).tag(reserve.currencyId)
-                            }
+                        HStack(spacing: 10) {
+                            NameText("Show values in")
+                            LampMenu(
+                                options: currency.reserves.map { ($0.currencyId, reserveName($0)) },
+                                selection: Binding(get: { unit ?? "" }, set: { chosenUnit = $0 }))
                         }
-                        .fixedSize()
                     }
                     Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 8) {
                         GridRow {

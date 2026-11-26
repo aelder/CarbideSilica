@@ -9,13 +9,18 @@ struct DashboardView: View {
     /// Keep the newest block selected and in view, as the terminal's "Stream Blocks" row.
     @AppStorage("dashboardStreamsBlocks") private var streaming = true
     @FocusState private var focus: DashboardList?
+    /// True when the status has been a stored answer for some time.
+    @State private var storedLong = false
 
     var body: some View {
         Group {
             if let status = model.status {
                 PlacePage(key: "dashboard") { proxy in
                     StatusLine(status: status)
-                    if status.provenance.retained {
+                    // A stored answer for a short time is usual: at the start, and while the app
+                    // reconciles new blocks. The source line says it. The large note comes only
+                    // when the state stays, so that the page does not move down and up again.
+                    if status.provenance.retained, storedLong {
                         ProvenanceNote(provenance: status.provenance)
                     }
                     if let fraction = model.syncFraction {
@@ -50,6 +55,12 @@ struct DashboardView: View {
                 ProgressView("Connecting…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        .task(id: model.status?.provenance.retained == true) {
+            storedLong = false
+            guard model.status?.provenance.retained == true else { return }
+            try? await Task.sleep(for: .seconds(45))
+            if !Task.isCancelled { storedLong = true }
         }
         .navigationTitle("Carbide Silica")
         .publishPlace(PlaceActions(
@@ -198,7 +209,10 @@ private struct StatusLine: View {
             VStack(alignment: .leading, spacing: 6) {
             SourceLine(provenance: status.provenance, short: model.currentChain)
             HStack(spacing: 18) {
-                item("Height", value: Format.integer(status.blocks), detail: behind)
+                item(
+                    "Height", value: Format.integer(status.blocks), detail: behind,
+                    // When the node is not at the tip, the line has more items: no fixed width.
+                    reserve: live ? "0,000,000  at the longest chain" : nil)
                 // The chain pulse shows the time since the last block. When the node is
                 // not at the tip, the pulse does not, thus the line shows it.
                 if !live {
@@ -210,9 +224,9 @@ private struct StatusLine: View {
                 // The usual state has no label. The line says when the node is off.
                 if !nodeOn { state("Node", on: false) }
                 state("Public API", on: model.connection?.apiEndpoint != nil, inUse: status.source == .publicApi)
-                item("Peers", value: status.connections.map { "\($0)" } ?? "unknown", detail: nil)
+                item("Peers", value: status.connections.map { "\($0)" } ?? "unknown", detail: nil, reserve: "00")
                 if let difficulty = status.difficulty {
-                    item("Difficulty", value: Format.difficulty(difficulty), detail: nil)
+                    item("Difficulty", value: Format.difficulty(difficulty), detail: nil, reserve: "0.00 T")
                 }
                 if let version = status.version {
                     item("Version", value: version, detail: nil)
@@ -240,12 +254,21 @@ private struct StatusLine: View {
         return delta <= 0 ? "at the longest chain" : "\(Format.integer(UInt64(delta))) behind \(Format.integer(longest))"
     }
 
-    private func item(_ label: String, value: String, detail: String?) -> some View {
+    /// `reserve` is the widest text of the value and its detail. The item keeps that width,
+    /// so that the items after it do not move when the text gets longer or shorter.
+    private func item(_ label: String, value: String, detail: String?, reserve: String? = nil) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             NameText(label)
-            Text(value).fontWeight(.semibold).monospacedDigit()
-            if let detail {
-                Text(detail).foregroundStyle(.secondary)
+            ZStack(alignment: .leading) {
+                if let reserve {
+                    Text(reserve).fontWeight(.semibold).monospacedDigit().hidden().accessibilityHidden(true)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(value).fontWeight(.semibold).monospacedDigit()
+                    if let detail {
+                        Text(detail).foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }

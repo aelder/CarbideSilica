@@ -63,14 +63,10 @@ struct NotarizationLanesCard: View {
     private var header: some View {
         HStack {
             if perspectives.count > 1 {
-                Picker("Perspective", selection: $active) {
-                    ForEach(Array(perspectives.enumerated()), id: \.offset) { index, perspective in
-                        Text("\(name(perspective.observerId, perspective.observerName)) view").tag(index)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 360)
+                LampSegments(
+                    options: perspectives.enumerated().map { index, perspective in
+                        (index, "\(name(perspective.observerId, perspective.observerName)) view")
+                    }, selection: $active)
             }
             if let perspective = perspectives[safe: active] {
                 Text("The \(name(perspective.observerId, perspective.observerName)) node asked about \(name(perspective.subjectId, perspective.subjectName)).")

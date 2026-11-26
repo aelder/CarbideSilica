@@ -19,6 +19,8 @@ struct PlacePage<Content: View>: View {
     @State private var position = ScrollPosition(edge: .top)
     @State private var restored = false
     @State private var cursor = PageCursor()
+    /// The width of the scroll view with its bar.
+    @State private var outer: CGFloat?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -31,8 +33,9 @@ struct PlacePage<Content: View>: View {
                 .overlayPreferenceValue(StopMarksKey.self) { StopCollector(marks: $0, cursor: cursor) }
                 .overlayPreferenceValue(CardMarksKey.self) { CardCollector(marks: $0, cursor: cursor) }
                 .id(PageCursor.topID)
-                .frame(maxWidth: .infinity)
+                .modifier(SteadyWidth(outer: outer))
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { outer = $0 }
             .modifier(CursorHost(cursor: cursor, proxy: proxy))
             .background(Tone.screen)
             .scrollPosition($position)
@@ -138,6 +141,11 @@ struct SourceLine: View {
     var labelled = false
 
     var body: some View {
+        // Before the source answers, the line keeps its height, so that the page below it
+        // does not move down when the answer comes.
+        if provenance == nil || provenance?.source.isEmpty == true {
+            Text(" ").accessibilityHidden(true)
+        }
         if let provenance, !provenance.source.isEmpty {
             HStack(spacing: 5) {
                 Image(systemName: provenance.retained ? "clock.arrow.circlepath" : "circle.fill")

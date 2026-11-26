@@ -21,6 +21,17 @@ final class CurrencyBrowserState {
     /// The currency opened last, so the list shows where the user was.
     var selected: String?
     var showFlags = false
+    /// The column that gives the order of the list. Nil is the order of the source.
+    var sort: CurrencySort?
+    var descending = false
+}
+
+/// The columns that can give the order of the currency list.
+enum CurrencySort: String {
+    case name = "Currency"
+    case reserves = "Reserves"
+    case supply = "Supply"
+    case start = "Start"
 }
 
 /// Requests to open a currency page with its notarization browser on one perspective.

@@ -53,12 +53,7 @@ struct CurrencyOverTimeCard: View {
         let _ = showsNames
         Card("Over time", trailing: "\(samples) samples") {
             HStack {
-                Picker("Span", selection: $span) {
-                    ForEach(Span.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 340)
+                LampSegments(options: Span.allCases.map { ($0, $0.rawValue) }, selection: $span)
                 Spacer()
                 if let point = selected {
                     VStack(alignment: .trailing, spacing: 1) {
@@ -85,9 +80,9 @@ struct CurrencyOverTimeCard: View {
                 }
             } else {
                 limitNote
-                Slider(
+                LampSlider(
                     value: Binding(get: { index }, set: { index = $0.rounded() }),
-                    in: 0...Double(points.count - 1))
+                    range: 0...Double(points.count - 1))
                     .accessibilityLabel("Date")
                 DisplayPanel {
                     VStack(spacing: 0) {

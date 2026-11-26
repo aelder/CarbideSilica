@@ -25,6 +25,28 @@ struct TransactionView: View {
     @State private var paymentAnnotations: [UInt32: String] = [:]
     /// The row of the statement whose inputs and outputs are marked in the lists.
     @State private var marked: StatementSelection?
+    /// True when a long list of inputs or outputs shows all of its rows.
+    @State private var allInputs = false
+    @State private var allOutputs = false
+    /// A list longer than this shows only its first rows until the person asks for all.
+    private static let longList = 40
+    private static let firstRows = 20
+
+    /// A row that the statement marks can be out of the first rows: the list then shows all.
+    private var showsAllInputs: Bool { allInputs || !(marked?.inputs.isEmpty ?? true) }
+    private var showsAllOutputs: Bool { allOutputs || !(marked?.outputs.isEmpty ?? true) }
+
+    /// The key below a long list: it shows all the rows, or only the first rows again.
+    private func listKey(count: Int, noun: String, all: Bool, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 12) {
+            Button(all ? "Show the first \(Self.firstRows)" : "Show all \(count) \(noun)", action: action)
+            if !all {
+                Text("The first \(Self.firstRows) of \(count) \(noun) are shown.")
+                    .font(Tone.caption).foregroundStyle(Tone.label)
+            }
+        }
+        .padding(.top, 8)
+    }
 
     private var names: Bool { showNames ?? showsNamesSetting }
     private var dates: Bool { showDates ?? showsDatesSetting }
@@ -37,8 +59,14 @@ struct TransactionView: View {
                 page(transaction)
                     .onChange(of: scrollTarget) { _, target in
                         guard let target else { return }
-                        withAnimation { proxy.scrollTo(target, anchor: .top) }
                         scrollTarget = nil
+                        // A row of a long list can be out of the first rows: show all first.
+                        if target.hasPrefix("input-") { allInputs = true }
+                        if target.hasPrefix("output-") { allOutputs = true }
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(60))
+                            withAnimation { proxy.scrollTo(target, anchor: .top) }
+                        }
                     }
             }
             .publishInvestigations(investigations(transaction))
@@ -63,6 +91,8 @@ struct TransactionView: View {
             }
             .task(id: transaction.txid) {
                 marked = nil
+                allInputs = false
+                allOutputs = false
                 consumePendingTrace(transaction)
                 await model.resolveNames(Self.ids(in: transaction))
             }
@@ -124,8 +154,10 @@ struct TransactionView: View {
             }
 
             Card("Inputs", trailing: "\(transaction.inputs.count)") {
-                VStack(spacing: 0) {
-                    ForEach(Array(transaction.inputs.enumerated()), id: \.element.index) {
+                let long = transaction.inputs.count > Self.longList
+                let shown = long && !showsAllInputs ? Array(transaction.inputs.prefix(Self.firstRows)) : transaction.inputs
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(shown.enumerated()), id: \.element.index) {
                         position, input in
                         if position > 0 { Divider() }
                         InputRow(input: input, spentInBlock: transaction.blockHash != nil, showDates: dates)
@@ -133,11 +165,16 @@ struct TransactionView: View {
                             .id("input-\(input.index)")
                     }
                 }
+                if long {
+                    listKey(count: transaction.inputs.count, noun: "inputs", all: showsAllInputs) { allInputs.toggle() }
+                }
             }
 
             Card("Outputs", trailing: "\(transaction.outputs.count)") {
-                VStack(spacing: 0) {
-                    ForEach(Array(transaction.outputs.enumerated()), id: \.element.index) {
+                let long = transaction.outputs.count > Self.longList
+                let shown = long && !showsAllOutputs ? Array(transaction.outputs.prefix(Self.firstRows)) : transaction.outputs
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(shown.enumerated()), id: \.element.index) {
                         position, output in
                         if position > 0 { Divider() }
                         OutputRow(
@@ -147,6 +184,9 @@ struct TransactionView: View {
                             .background(mark(marked?.outputs.contains(output.index) == true))
                             .id("output-\(output.index)")
                     }
+                }
+                if long {
+                    listKey(count: transaction.outputs.count, noun: "outputs", all: showsAllOutputs) { allOutputs.toggle() }
                 }
             }
 

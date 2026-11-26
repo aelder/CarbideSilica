@@ -25,7 +25,7 @@ struct BlockEstimator: View {
                 TextField(
                     "Target", text: $text,
                     prompt: Text("Future height or date. Examples: 5000000, in 2 hours, 2028-11-08, unix:1857254400"))
-                    .textFieldStyle(.roundedBorder)
+                    .displayField()
                     .onSubmit { Task { await run() } }
                 Button("Estimate") { Task { await run() } }
                     .disabled(running || text.trimmingCharacters(in: .whitespaces).isEmpty)

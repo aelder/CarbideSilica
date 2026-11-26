@@ -23,10 +23,10 @@ struct NodeView: View {
                         SpeedCard(samples: model.speeds)
                     }
                     if node.peersError == nil {
-                        PeersCard(node: node, feed: feed, proxy: proxy, open: { detailPeer = $0.id })
                         if showsMap {
                             PeerMapCard(peers: node.peers, feed: feed, open: { detailPeer = $0.id })
                         }
+                        PeersCard(node: node, feed: feed, proxy: proxy, open: { detailPeer = $0.id })
                         PeerControlsCard(banned: feed.banned.count, commands: commands, reload: reload)
                     } else {
                         Card("Peers") {
@@ -124,13 +124,35 @@ private struct SyncCard: View {
                             .formatted(.dateTime.month(.wide).year())
                     ).fontWeight(.semibold))
                     .font(.title3)
-            } else if !syncing {
-                Text("The node has validated all blocks. It validates each new block on arrival.")
-                    .foregroundStyle(.secondary)
             }
 
-            DisplayPanel {
-                VStack(alignment: .leading, spacing: 10) {
+            DisplayPanel(padding: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // The figures, as in the other instruments.
+                    HStack(alignment: .lastTextBaseline, spacing: 26) {
+                        Readout(
+                            "Block",
+                            syncing
+                                ? "\(Format.integer(node.blocks))" + (node.longestChain.map { " of \(Format.integer($0))" } ?? "")
+                                : Format.integer(node.blocks),
+                            reserve: syncing ? nil : "0,000,000")
+                        Readout("Validated", fraction.formatted(.percent.precision(.fractionLength(1))), reserve: "100.0%")
+                        if let headerDetail { Readout("Headers", headerDetail) }
+                        if syncing {
+                            Readout("Speed", speed.map { "\(Int($0.rounded())) blocks/s" } ?? "Measuring…")
+                            Readout("Time remaining", timeLeft)
+                        }
+                        if let waiting = node.mempoolCount, !syncing {
+                            Readout("Unconfirmed", "\(waiting)", reserve: "00")
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    .clipped()
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    PanelRule()
+                    VStack(alignment: .leading, spacing: 10) {
                     Canvas { context, size in
                         draw(context, size)
                     }
@@ -146,29 +168,11 @@ private struct SyncCard: View {
                         .font(Tone.caption)
                         .foregroundStyle(Tone.label)
                     }
+                    }
+                    .padding(16)
                 }
             }
 
-            HStack(spacing: 28) {
-                Stat(
-                    label: "Block",
-                    value: Format.integer(node.blocks),
-                    detail: node.longestChain.map { "of \(Format.integer($0))" })
-                Stat(
-                    label: "Validated",
-                    value: fraction.formatted(.percent.precision(.fractionLength(1))),
-                    detail: headerDetail)
-                if syncing {
-                    Stat(
-                        label: "Speed",
-                        value: speed.map { "\(Int($0.rounded())) blocks/s" } ?? "Measuring…",
-                        detail: nil)
-                    Stat(label: "Time remaining", value: timeLeft, detail: "at the current speed")
-                }
-                if let waiting = node.mempoolCount, !syncing {
-                    Stat(label: "Waiting", value: "\(waiting)", detail: "unconfirmed transactions")
-                }
-            }
         }
     }
 
@@ -187,7 +191,7 @@ private struct SyncCard: View {
         guard let headers = headerFraction, headers > fraction + 0.005, headers < 0.999 else {
             return nil
         }
-        return "headers at \(Format.percent(headers))"
+        return Format.percent(headers)
     }
 
     private var timeLeft: String {
@@ -353,15 +357,6 @@ private struct PeersCard: View {
                 Text("The ban list is not available: \(error)").font(.callout).foregroundStyle(.secondary)
             }
             totals
-            Text(
-                "The dot is the last response time that the node measured. The line is the range since this "
-                    + "page opened. The bar is the data received for each second of the connection."
-                    + (isSyncing(node)
-                        ? " Response times are high during synchronization because the peers send many blocks."
-                        : ""))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

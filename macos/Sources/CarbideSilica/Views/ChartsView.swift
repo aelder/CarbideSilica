@@ -688,7 +688,7 @@ private struct SeekCard: View {
                 TextField(
                     "Target", text: $text,
                     prompt: Text("Height, Unix seconds or date. Examples: 4000000, 2026-11-07 14:30, height:3000000"))
-                    .textFieldStyle(.roundedBorder)
+                    .displayField()
                     .focused($focused)
                     .onSubmit { submit(nil) }
                     .onChange(of: text) { old, new in

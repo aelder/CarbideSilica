@@ -249,22 +249,18 @@ struct FeePoolSection: View {
         HStack(spacing: 16) {
             // A chain without a reserve currency has one series, so there is nothing to choose.
             if fee.hasReserve {
-                Picker("Currency", selection: $state.fee.currency) {
-                    Text("Both").tag(FeePoolState.Currency.both)
-                    Text(labels.0).tag(FeePoolState.Currency.native)
-                    Text(labels.1).tag(FeePoolState.Currency.reserve)
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 260)
+                LampSegments(
+                    options: [
+                        (FeePoolState.Currency.both, "Both"), (FeePoolState.Currency.native, labels.0),
+                        (FeePoolState.Currency.reserve, labels.1),
+                    ], selection: $state.fee.currency)
                 .help("Key v cycles the currencies. Each choice has its own vertical range.")
             }
-            Picker("Scale", selection: $state.fee.scale) {
-                Text("Linear from zero").tag(FeePoolState.Scale.zero)
-                Text("Linear, fitted").tag(FeePoolState.Scale.fit)
-                Text("Log-like").tag(FeePoolState.Scale.log)
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 340)
+            LampSegments(
+                options: [
+                    (FeePoolState.Scale.zero, "Linear from zero"), (FeePoolState.Scale.fit, "Linear, fitted"),
+                    (FeePoolState.Scale.log, "Log-like"),
+                ], selection: $state.fee.scale)
             .help("Key z cycles the scales.")
             Toggle("Detail", isOn: $state.fee.detail)
                 .help("Up to 2,000 checkpoints instead of 100. Key t switches.")

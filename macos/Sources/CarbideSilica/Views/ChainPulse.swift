@@ -230,27 +230,38 @@ struct ChainPulse: View {
         let counts = history?.windowCounts ?? []
         let usual: (Int, Int)? = counts.count >= 10 && covered >= span
             ? (Int(counts[counts.count / 10]), Int(counts[counts.count * 9 / 10])) : nil
-        return HStack(alignment: .lastTextBaseline, spacing: 26) {
-            Readout("Blocks in \(minutes) min", "\(inWindow.count)")
-            BulletBar(value: inWindow.count, target: goal, usual: usual)
-                .frame(width: 120, height: 10)
-                .alignmentGuide(.lastTextBaseline) { $0[.bottom] - 4 }
-            Readout("Target", "\(goal)")
-            if let usual {
-                Readout("Usual", "\(usual.0)–\(usual.1)")
-                    .help("Four in five 25-minute periods in the record had this number of blocks.")
-            }
-            Readout("Staked", "\(staked)", tone: Tone.staked)
-            Readout("Mined", "\(inWindow.count - staked)", tone: Tone.mined)
-            if live, let waiting {
-                Readout("Unconfirmed", "\(waiting)")
-            }
-            Spacer(minLength: 0)
-            if let historyProblem {
-                Text("The app cannot read the record of waits. \(historyProblem)")
-                    .font(.system(size: 11.5)).foregroundStyle(Tone.alert).lineLimit(1)
+        func row(_ spacing: CGFloat) -> some View {
+            HStack(alignment: .lastTextBaseline, spacing: spacing) {
+                Readout("Blocks in \(minutes) min", "\(inWindow.count)", reserve: "00")
+                BulletBar(value: inWindow.count, target: goal, usual: usual)
+                    .frame(width: 120, height: 10)
+                    .alignmentGuide(.lastTextBaseline) { $0[.bottom] - 4 }
+                Readout("Target", "\(goal)", reserve: "00")
+                if let usual {
+                    Readout("Usual", "\(usual.0)–\(usual.1)", reserve: "00–00")
+                        .help("Four in five 25-minute periods in the record had this number of blocks.")
+                }
+                Readout("Staked", "\(staked)", tone: Tone.staked, reserve: "00")
+                Readout("Mined", "\(inWindow.count - staked)", tone: Tone.mined, reserve: "00")
+                if live, let waiting {
+                    Readout("Unconfirmed", "\(waiting)", reserve: "00")
+                }
+                Spacer(minLength: 0)
+                if let historyProblem {
+                    Text("The app cannot read the record of waits. \(historyProblem)")
+                        .font(.system(size: 11.5)).foregroundStyle(Tone.alert).lineLimit(1)
+                }
             }
         }
+        // The row gets less space between its figures when the page is narrow, and it never
+        // makes the page wider: a wider row moved the page when a figure got one more digit.
+        return ViewThatFits(in: .horizontal) {
+            row(26)
+            row(16)
+            row(9)
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 
     // MARK: Caption

@@ -37,7 +37,7 @@ struct CurrencyStateCard: View {
                     "Block or time", text: $query,
                     prompt: Text("3962166, #3962166, 2024-06-01 12:00 or unix:1717243200")
                 )
-                .textFieldStyle(.roundedBorder)
+                .displayField()
                 .frame(maxWidth: 420)
                 .focused($fieldFocused)
                 .onChange(of: focusRequests) { fieldFocused = true }

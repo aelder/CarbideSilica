@@ -402,7 +402,7 @@ struct MarketplaceView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 TextField("Search the names", text: $search)
-                    .textFieldStyle(.roundedBorder)
+                    .displayField()
                     .frame(maxWidth: 240)
                 Text("\(Format.integer(UInt64(ordered.count))) of \(Format.integer(UInt64(items.count))) offers")
                     .font(Tone.figureSmall).monospacedDigit().foregroundStyle(Tone.value)
@@ -420,15 +420,13 @@ struct MarketplaceView: View {
                 Spacer(minLength: 0)
             }
             HStack {
-                Picker("Sort by", selection: $sort) {
-                    Text("Ask amount").tag(OfferSort.askAmount)
-                    Text("Name").tag(OfferSort.name)
-                    Text("Expiry").tag(OfferSort.expiry)
-                    Text("Listing age").tag(OfferSort.listingAge)
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 400)
-                Toggle("Reverse", isOn: $descending).toggleStyle(.button)
+                NameText("Sort by")
+                LampSegments(
+                    options: [
+                        (OfferSort.askAmount, "Ask amount"), (OfferSort.name, "Name"), (OfferSort.expiry, "Expiry"),
+                        (OfferSort.listingAge, "Listing age"),
+                    ], selection: $sort)
+                Toggle("Reverse", isOn: $descending)
                 Spacer(minLength: 0)
             }
             Text(sortNote).font(.caption).foregroundStyle(.secondary)

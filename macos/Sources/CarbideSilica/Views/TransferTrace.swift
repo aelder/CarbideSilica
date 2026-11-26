@@ -211,7 +211,7 @@ struct TransferTraceCard: View {
                     }
                     Divider().frame(height: 18)
                     TextField("Destination height", text: $jumpHeight)
-                        .textFieldStyle(.roundedBorder)
+                        .displayField()
                         .frame(width: 150)
                         .onSubmit { jump(trace) }
                     Button("Go") { jump(trace) }
