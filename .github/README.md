@@ -28,7 +28,7 @@
 
 ![The chain pulse on the Dashboard. Staked and mined blocks of the last 25 minutes are on a time axis, above a dot plot of the waits between blocks in the last 25 hours.](../macos/docs/images/chain-pulse.webp)
 
-Carbide Silica is a second front end for [Carbide](https://github.com/alexenglish/VerusCarbide), the terminal explorer by Alex English. The app compiles Carbide's own source files, so it uses the same RPC client, the same decoding and the same cache as the terminal app. Only the screen is different.
+Carbide Silica is a second front end for [Carbide](https://github.com/alexenglish/VerusCarbide), the terminal explorer by [alexenglish](https://github.com/alexenglish). The app compiles Carbide's own source files, so it uses the same RPC client, the same decoding and the same cache as the terminal app. Only the screen is different.
 
 The app is read-only. It does not read a wallet, and it cannot create, sign or send a transaction.
 
@@ -245,7 +245,7 @@ Carbide's cache is an SQLite file. The default location is `~/Library/Caches/ver
 
 ## Credits and license
 
-- [Carbide](https://github.com/alexenglish/VerusCarbide) by Alex English supplies all chain logic. Carbide Silica adds the macOS interface.
+- [Carbide](https://github.com/alexenglish/VerusCarbide) by [alexenglish](https://github.com/alexenglish) supplies all chain logic. Carbide Silica adds the macOS interface.
 - Peer locations come from [DB-IP](https://db-ip.com) City Lite and ASN Lite, under CC BY 4.0.
 - The interface sounds are under the MIT license. `macos/Resources/Sounds/LICENSE-button-sounds.txt` has the notice.
 
