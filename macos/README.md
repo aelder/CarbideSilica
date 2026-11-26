@@ -13,7 +13,7 @@
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-c9b27c?style=flat-square">
   <img alt="The app has no wallet access" src="https://img.shields.io/badge/wallet_access-none-3c8f6b?style=flat-square">
   <img alt="Status: experimental" src="https://img.shields.io/badge/status-experimental-a8842c?style=flat-square">
-  <img alt="Last commit" src="https://img.shields.io/github/last-commit/aelder/VerusCarbide/carbide-silica?style=flat-square&color=55616d">
+  <img alt="Last commit" src="https://img.shields.io/github/last-commit/aelder/CarbideSilica/carbide-silica?style=flat-square&color=55616d">
 </p>
 
 <p align="center">
@@ -125,8 +125,8 @@ The left pictures are from Carbide's own readme. The right pictures show the sam
 You need macOS 15, Xcode with Swift 6, and Rust 1.88 or later.
 
 ```sh
-git clone --branch carbide-silica https://github.com/aelder/VerusCarbide.git
-cd VerusCarbide/macos
+git clone https://github.com/aelder/CarbideSilica.git
+cd CarbideSilica/macos
 ./build.sh
 open "Carbide Silica.app"
 ```
