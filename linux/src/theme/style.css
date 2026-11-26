@@ -60,12 +60,19 @@ headerbar, .titlebar {
     padding: 0 6px;
 }
 headerbar windowcontrols button { color: @label; }
+headerbar > windowhandle > box { padding-top: 0; padding-bottom: 0; }
+/* The macOS title bar is 37 high: the keys of the bar have no room of their own above and
+   below them. */
+headerbar button, headerbar menubutton, headerbar menubutton > button, headerbar windowcontrols button {
+    margin-top: 0; margin-bottom: 0; min-height: 22px;
+}
+headerbar windowcontrols button { padding: 2px; }
 
 .search-field {
     background-color: @screen;
     border: 1px solid @axis;
     border-radius: 0;
-    padding: 3px 9px;
+    padding: 1px 9px;
     min-height: 22px;
     color: @value;
     box-shadow: none;

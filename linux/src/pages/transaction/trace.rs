@@ -124,7 +124,7 @@ impl TraceCard {
             let mark = confidence_mark(trace.confidence, None);
             mark.set_valign(gtk::Align::Center);
             head.append(&mark);
-            let verdict = page::paragraph(&trace.verdict, &["tx-verdict"]);
+            let verdict = page::paragraph(&trace.verdict, &["title3"]);
             verdict.set_hexpand(true);
             head.append(&verdict);
         }

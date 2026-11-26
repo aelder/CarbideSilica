@@ -92,6 +92,15 @@ impl StatementView {
     fn build(self: &Rc<Self>) {
         let Some(ctx) = self.ctx.upgrade() else { return };
         let Some(page) = ctx.page() else { return };
+        // The key that asked for the new layout goes away with it. The window keeps no
+        // focus then, so that GTK does not give it to the selectable sentence, which would
+        // select all of its text.
+        let window = self.root.root().and_downcast::<gtk::Window>();
+        if let Some(window) = &window
+            && gtk::prelude::GtkWindowExt::focus(window).is_some_and(|f| f.is_ancestor(&self.root))
+        {
+            gtk::prelude::GtkWindowExt::set_focus(window, None::<&gtk::Widget>);
+        }
         clear(&self.root);
         *self.flow.borrow_mut() = None;
         *self.grid.borrow_mut() = None;
@@ -102,7 +111,7 @@ impl StatementView {
         let layout = Rc::new(StatementLayout::new(statement, self.only.borrow().clone(), |p| words.row_title(p)));
         *self.layout.borrow_mut() = Some(layout.clone());
 
-        let sentence = page::paragraph(&words.sentence(), &["tx-sentence"]);
+        let sentence = page::paragraph(&words.sentence(), &["title3"]);
         sentence.set_selectable(true);
         self.root.append(&sentence);
 

@@ -516,8 +516,7 @@ pub fn json_section_keeping(page: &Rc<Page>, json: &str, filename: &str, open: R
 /// Save), for a page to put where it shows JSON (`JSONTreeView`). Each line is a stop of
 /// the page's cursor. While the tree is on screen, s saves its document as `filename`.
 pub fn json_tree(page: &Rc<Page>, json: &str, filename: &str) -> gtk::Box {
-    let tree = JsonTree::new(page, json, filename);
-    let root = tree.root.upgrade().expect("the tree's root is new");
+    let (tree, root) = JsonTree::new(page, json, filename);
     // The tree lives as long as its widgets.
     root.connect_destroy(move |_| {
         let _ = &tree;
@@ -551,7 +550,8 @@ struct JsonTree {
 }
 
 impl JsonTree {
-    fn new(page: &Rc<Page>, json: &str, filename: &str) -> Rc<Self> {
+    /// The tree and its root widget. The tree holds the root weakly, so the caller keeps it.
+    fn new(page: &Rc<Page>, json: &str, filename: &str) -> (Rc<Self>, gtk::Box) {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 8);
         let body = gtk::Box::new(gtk::Orientation::Vertical, 8);
         let path = page::text("", &["mono", "secondary", "caption-text"]);
@@ -627,7 +627,7 @@ impl JsonTree {
             }
             tree.render();
         });
-        tree
+        (tree, root)
     }
 
     fn toolbar(self: &Rc<Self>) -> gtk::Box {

@@ -30,7 +30,11 @@ pub fn build(model: &Rc<AppModel>, menu: &gio::Menu, open_settings: Rc<dyn Fn()>
     lamp::key_sounds(&menu_key, true);
     bar.pack_start(&menu_key);
 
-    bar.set_title_widget(Some(&search_field(model)));
+    // The field is centred over the page column, as the macOS toolbar centres it over the
+    // detail column: the margin of the sidebar's width moves its centre to the right.
+    let field = search_field(model);
+    field.set_margin_start(super::sidebar::WIDTH);
+    bar.set_title_widget(Some(&field));
 
     let badge = connection_badge(model, open_settings);
     bar.pack_end(&badge);

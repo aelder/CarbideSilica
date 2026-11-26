@@ -28,7 +28,7 @@ app=$!
 # The window of the app that was shown last: the main window, or a dialog over it.
 window=""
 find_window() {
-    xdotool search --sync --onlyvisible --name "Carbide Silica" >/dev/null 2>&1 || true
+    timeout 10 xdotool search --sync --onlyvisible --name "Carbide Silica" >/dev/null 2>&1 || true
     window=$(xdotool search --onlyvisible --pid "$app" 2>/dev/null | tail -1 || true)
 }
 
@@ -40,7 +40,9 @@ focused=0
 focus() {
     find_window
     [ -n "$window" ] || return 0
-    xdotool windowfocus --sync "$window" 2>/dev/null || true
+    # Without --sync: a window that cannot take the focus must not stop the run.
+    xdotool windowfocus "$window" 2>/dev/null || true
+    sleep 0.2
     if [ "$focused" = 0 ]; then
         sleep 0.3
         xdotool key --clearmodifiers shift
@@ -136,4 +138,6 @@ import -window root "$out"
 echo "picture: $(basename "$out")"
 kill "$app" 2>/dev/null || true
 # The app's own messages, without anything that looks like a credential.
+# A panic is named first, with the lines of this crate in its backtrace.
+grep -viE 'rpcuser|rpcpassword|password' /tmp/app.log | grep -E "panicked|carbide_silica::" -A1 | head -30 || true
 grep -viE 'rpcuser|rpcpassword|password' /tmp/app.log | tail -20 || true
