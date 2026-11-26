@@ -1,5 +1,5 @@
 #!/bin/sh
-# The part of shot.sh that runs in the container. See shot.sh.
+# The part of shot.sh that runs in the container. See shot.sh for the steps.
 set -eu
 object="$1"
 out="$2"
@@ -22,20 +22,117 @@ set -- "-conf=/conf/VRSC.conf"
 [ -n "$object" ] && set -- "$@" "-open=$object"
 "$binary" "$@" >/tmp/app.log 2>&1 &
 app=$!
+
+# The window of the app, when it is on the display.
+window=""
+find_window() {
+    if [ -z "$window" ]; then
+        window=$(xdotool search --sync --onlyvisible --name "Carbide Silica" 2>/dev/null | head -1 || true)
+    fi
+}
+
+# Gives the window the keyboard. Xvfb has no window manager, so the window does not get the
+# focus by itself, and without the focus the first key goes to the root window. The focus is
+# set directly, and a Shift press makes GTK take the focus before a real key comes.
+focused=0
+focus() {
+    find_window
+    [ -n "$window" ] || return 0
+    xdotool windowfocus --sync "$window" 2>/dev/null || true
+    if [ "$focused" = 0 ]; then
+        sleep 0.3
+        xdotool key --clearmodifiers shift
+        sleep 0.3
+        focused=1
+    fi
+}
+
+# A picture of the whole display. A name without a folder goes to the folder of <out.png>.
+picture() {
+    name="$1"
+    case "$name" in
+        */*) echo "shot: a picture name has no folder: $name" >&2; return 1 ;;
+    esac
+    import -window root "$(dirname "$out")/$name"
+    echo "picture: $name"
+}
+
+# One step of STEPS. See shot.sh.
+step() {
+    verb="$1"
+    shift
+    case "$verb" in
+        wait | sleep) sleep "${1:-1}" ;;
+        key)
+            focus
+            for key in "$@"; do xdotool key --clearmodifiers "$key"; sleep 0.4; done
+            ;;
+        type)
+            focus
+            xdotool type --delay 60 "$*"
+            ;;
+        move) xdotool mousemove "$1" "$2"; sleep 0.6 ;;
+        click)
+            xdotool mousemove "$1" "$2"
+            sleep 0.3
+            xdotool click "${3:-1}"
+            focused=1
+            sleep 0.6
+            ;;
+        dclick)
+            xdotool mousemove "$1" "$2"
+            sleep 0.3
+            xdotool click --repeat 2 --delay 80 1
+            focused=1
+            sleep 0.6
+            ;;
+        scroll)
+            # scroll up|down|left|right [count] [x y]
+            [ $# -ge 4 ] && xdotool mousemove "$3" "$4" && sleep 0.3
+            case "$1" in
+                up) button=4 ;;
+                down) button=5 ;;
+                left) button=6 ;;
+                right) button=7 ;;
+                *) echo "shot: scroll needs up, down, left or right" >&2; return 1 ;;
+            esac
+            xdotool click --repeat "${2:-1}" --delay 40 "$button"
+            sleep 0.6
+            ;;
+        shot) picture "$1" ;;
+        focus) focus ;;
+        "") ;;
+        *) echo "shot: unknown step: $verb" >&2; return 1 ;;
+    esac
+}
+
 sleep "$WAIT"
-# KEYS: keys to press before the picture, for xdotool (for example "ctrl+k" or "j j Return").
+find_window
+
+# The older variables, as steps before STEPS.
 if [ -n "${KEYS:-}" ]; then
-    xdotool search --name "Carbide Silica" windowactivate --sync 2>/dev/null || true
-    for key in $KEYS; do xdotool key "$key"; sleep 0.4; done
+    # shellcheck disable=SC2086
+    step key $KEYS
     sleep "${KEYWAIT:-3}"
 fi
-# MOUSE: "x y" moves the pointer there before the picture, to show a hover state.
 if [ -n "${MOUSE:-}" ]; then
-    xdotool mousemove $MOUSE
-    sleep 1
+    # shellcheck disable=SC2086
+    step move $MOUSE
 fi
+
+# STEPS: steps separated by ";" or new lines, done in order.
+if [ -n "${STEPS:-}" ]; then
+    printf '%s\n' "$STEPS" | tr ';' '\n' > /tmp/steps
+    while IFS= read -r line; do
+        # shellcheck disable=SC2086
+        set -f; set -- $line; set +f
+        [ $# -eq 0 ] && continue
+        step "$@"
+    done < /tmp/steps
+fi
+
 import -window root "$out"
+echo "picture: $(basename "$out")"
 kill "$app" 2>/dev/null || true
 # The app's own messages, without anything that looks like a credential.
 grep -viE 'rpcuser|rpcpassword|password' /tmp/app.log | tail -20 || true
-echo "picture: $out"

@@ -9,12 +9,26 @@
 # hash, a transaction ID, name@ or currency@@. An empty object shows the Dashboard.
 #
 # Environment:
-#   WAIT=60          seconds to wait for data before the picture
-#   KEYS="j j"       keys to press (xdotool names) before the picture
-#   KEYWAIT=3        seconds to wait after the keys
-#   MOUSE="x y"      a place for the pointer, to show a hover state
+#   WAIT=60          seconds to wait for data before the first step
+#   STEPS="..."      steps done in order after WAIT, separated by ";" or new lines (below)
+#   KEYS="j j"       keys to press (xdotool names) before STEPS
+#   KEYWAIT=3        seconds to wait after KEYS
+#   MOUSE="x y"      a place for the pointer before STEPS, to show a hover state
 #   CONF=<file>      the node configuration (default: the VRSC.conf of the Extreme SSD)
 #   GSK_RENDERER=... GTK's renderer (default: GTK's choice)
+#
+# Steps (coordinates are pixels of the 1281x1084 display):
+#   wait 5              wait 5 seconds
+#   key Tab ctrl+k      press keys, with xdotool's key names
+#   type vETH@          type a text
+#   move 400 300        move the pointer
+#   click 400 300 [b]   move the pointer and click (button b, 1 by default)
+#   dclick 400 300      double-click
+#   scroll down 5 [x y] turn the wheel 5 steps (up, down, left, right), at x y if given
+#   shot name.png       take a picture now, into the folder of <out.png>
+# The picture <out.png> is taken after the last step. For example:
+#   STEPS="key Tab; wait 2; shot json.png; scroll down 10 640 600; wait 1" \
+#     ./shot.sh 4338679 /tmp/block/end.png
 #
 # The container uses the network of the host to reach the node's RPC port. Its HOME, its
 # settings and its cache are in /tmp of the container and are gone after the run. No
@@ -40,6 +54,7 @@ docker run --rm --network host \
     -e KEYS="${KEYS:-}" \
     -e KEYWAIT="${KEYWAIT:-3}" \
     -e MOUSE="${MOUSE:-}" \
+    -e STEPS="${STEPS:-}" \
     -e GSK_RENDERER="${GSK_RENDERER:-}" \
     -w /src/linux \
     "$image" sh /src/linux/tools/shot-inside.sh "$object" "/out/$(basename "$out")"
