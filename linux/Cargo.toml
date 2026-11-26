@@ -1,0 +1,31 @@
+[package]
+name = "carbide-silica"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+publish = false
+description = "Carbide Silica for Linux: the GTK 4 explorer for Verus"
+
+[workspace]
+
+[[bin]]
+name = "carbide-silica"
+path = "src/main.rs"
+
+[dependencies]
+carbide-bridge = { package = "carbide-bridge-rust", path = "../macos/bridge/rust" }
+gtk = { version = "0.10", package = "gtk4", features = ["v4_14"] }
+tokio = { version = "1.53", features = ["rt-multi-thread", "sync", "time", "macros"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+directories = "6"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+rand = "0.9"
+rodio = { version = "0.20", default-features = false, features = ["symphonia-mp3"] }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2

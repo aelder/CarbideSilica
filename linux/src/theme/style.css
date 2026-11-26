@@ -1,0 +1,265 @@
+/* The style sheet of the display. The named colours (@screen, @rule, ...) are defined in
+   theme/mod.rs from the same constants that the canvases draw with. */
+
+/* No frame around the window: the display goes to its edge. */
+window.csd, window.solid-csd { border: none; box-shadow: none; margin: 0; padding: 0; border-radius: 0; outline: none; }
+window.solid-csd > decoration, window.csd > decoration { border: none; box-shadow: none; }
+
+window, window.background, .display {
+    background-color: @screen;
+    color: @value;
+    font-family: "Inter";
+    font-size: 13px;
+}
+
+/* Text colours, as the Swift app's foreground styles. */
+.value { color: @value; }
+.label { color: @label; }
+.secondary { color: @secondary; }
+.tertiary { color: @tertiary; }
+.present { color: @present; }
+.record { color: @record; }
+.staked { color: @staked; }
+.mined { color: @mined; }
+.good { color: @good; }
+.alert { color: @alert; }
+.warning { color: @system_orange; }
+.callout { font-size: 12px; }
+.caption-text { font-size: 11.5px; }
+.mono { font-family: "IBM Plex Mono"; font-size: 12px; }
+.semibold { font-weight: 600; }
+.medium { font-weight: 500; }
+.tabular { font-feature-settings: "tnum"; }
+
+/* A thin rule across a panel or above a card. */
+.rule { min-height: 1px; min-width: 1px; background-color: @rule; }
+
+/* A display panel: black, a thin border, round corners of 4. The corner marks are a canvas
+   above it. */
+.panel {
+    background-color: @screen;
+    border: 1px solid @rule;
+    border-radius: 4px;
+}
+
+/* The title bar: a part of the display. */
+headerbar, .titlebar {
+    background: @screen;
+    box-shadow: none;
+    border-bottom: 1px solid @rule;
+    min-height: 40px;
+    padding: 0 6px;
+}
+headerbar windowcontrols button { color: @label; }
+
+.search-field {
+    background-color: @screen;
+    border: 1px solid @axis;
+    border-radius: 0;
+    padding: 3px 9px;
+    min-height: 22px;
+    color: @value;
+    box-shadow: none;
+    outline: none;
+}
+.search-field:focus-within { border-color: alpha(@present, 0.7); }
+.search-field text { background: none; color: @value; caret-color: @present; }
+.search-field text placeholder { color: @tertiary; }
+.search-field image { color: @label; }
+
+.chain-badge { background: none; border: none; box-shadow: none; padding: 2px 6px; color: @value; }
+.chain-badge:hover { background-color: alpha(@present, 0.06); }
+
+/* The sidebar: black, with a thin rule at its edge. */
+.sidebar { background-color: @screen; border-right: 1px solid @rule; }
+
+/* The path bar. */
+.breadcrumb {
+    background-color: @screen;
+    border-bottom: 1px solid @rule;
+    padding: 5px 16px;
+    font-size: 12px;
+}
+.breadcrumb .separator { color: @axis; }
+
+/* ---------------------------------------------------------------- lamp keys */
+
+/* A key with a lamp behind it. Dark when it is off; a cool blue light under the pointer;
+   a warm amber light for the open place, a press or a selection. The light comes up
+   quickly and goes down more slowly, as the filament of a lamp does: the transition of
+   each state is the time to reach it. */
+.lamp {
+    background-color: @face;
+    background-image: none;
+    border: 1px solid @axis;
+    border-radius: 0;
+    box-shadow: none;
+    color: alpha(@value, 0.85);
+    padding: 0 10px;
+    min-height: 0;
+    outline: none;
+    text-shadow: none;
+    transition: background-image 340ms ease-out, border-color 340ms ease-out,
+                box-shadow 340ms ease-out, color 340ms ease-out;
+}
+.lamp:hover {
+    background-image: radial-gradient(ellipse closest-side, @blue_centre 10%, @blue_edge 150%);
+    border-color: rgba(0, 0, 0, 0.22);
+    box-shadow: 0 0 4px alpha(@blue_edge, 0.3), 0 0 5px alpha(@halation, 0.3), 0 0 12px alpha(@halation, 0.28);
+    color: @legend;
+    transition: background-image 100ms ease-out, border-color 100ms ease-out,
+                box-shadow 100ms ease-out, color 100ms ease-out;
+}
+.lamp.chosen, .lamp.chosen:hover, .lamp.pressed {
+    background-image: radial-gradient(ellipse closest-side, @amber_centre 10%, @amber_edge 150%);
+    border-color: rgba(0, 0, 0, 0.22);
+    box-shadow: 0 0 5px alpha(@halation, 0.75), 0 0 12px alpha(@halation, 0.28);
+    color: @legend;
+    transition: background-image 100ms ease-out, border-color 100ms ease-out,
+                box-shadow 100ms ease-out, color 100ms ease-out;
+}
+.lamp:disabled { opacity: 0.5; color: alpha(@value, 0.35); background-image: none; box-shadow: none; }
+.lamp .figure { color: @label; }
+.lamp:hover .figure, .lamp.chosen .figure { color: alpha(@legend, 0.8); }
+.lamp.recent { color: @label; }
+
+/* The small key of a page: LampButtonStyle, LampSegments, LampToggle, LampMenu. */
+.lamp.small { padding: 5px 10px; }
+.lamp.segment { padding: 5px 12px; }
+.lamp.small:hover, .lamp.segment:hover { box-shadow: 0 0 3px alpha(@blue_edge, 0.3), 0 0 4px alpha(@halation, 0.25), 0 0 9px alpha(@halation, 0.22); }
+.lamp.small.pressed, .lamp.small.chosen, .lamp.segment.chosen { box-shadow: 0 0 4px alpha(@halation, 0.7), 0 0 9px alpha(@halation, 0.22); }
+.lamp.struck { color: @alert; border-color: alpha(@alert, 0.8); }
+.lamp.struck.chosen { color: @legend; }
+.lamp.menu-key { padding: 5px 10px; }
+
+/* A link: pale blue text with no underline. Under the pointer it gets light and a line
+   below it. */
+.display-link {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    min-height: 0;
+    min-width: 0;
+    color: @record;
+    text-shadow: none;
+    transition: color 280ms ease-out, text-shadow 280ms ease-out;
+}
+.display-link:hover {
+    color: rgb(214, 242, 235);
+    text-shadow: 0 0 4px alpha(@record, 0.75);
+    transition: color 80ms ease-out, text-shadow 80ms ease-out;
+}
+.display-link:hover label { text-decoration: underline; text-decoration-color: rgba(214, 242, 235, 0.7); }
+.display-link.pressed { opacity: 0.6; }
+.display-link.secondary-link { color: @secondary; }
+.display-link:disabled { color: @tertiary; }
+
+/* The light of a row of a list under the pointer: a faint field and a lit line at its left
+   edge. Quick up, slower down, as the keys. */
+.row-light {
+    background-color: transparent;
+    box-shadow: none;
+    transition: background-color 300ms ease-out, box-shadow 300ms ease-out;
+}
+.row-light.hover {
+    background-color: alpha(@present, 0.07);
+    box-shadow: inset 2px 0 0 @present, inset 5px 0 4px -2px alpha(@present, 0.5);
+    transition: background-color 80ms ease-out, box-shadow 80ms ease-out;
+}
+
+/* The keyboard cursor of a page. */
+.cursor-on { background-color: alpha(@record, 0.22); border-radius: 5px; }
+
+/* A separator between rows, as SwiftUI's Divider. */
+.divider { min-height: 1px; background-color: alpha(@value, 0.12); }
+
+/* A disclosure: a small mark and the name in capitals. */
+.disclosure { background: none; border: none; box-shadow: none; padding: 0; color: alpha(@value, 0.9); }
+.disclosure .mark { color: @present; }
+
+/* A check box of the display. */
+checkbutton { color: @value; padding: 0; }
+checkbutton check {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid @axis;
+    border-radius: 3px;
+    min-width: 14px;
+    min-height: 14px;
+    color: @screen;
+    box-shadow: none;
+    -gtk-icon-size: 12px;
+}
+checkbutton check:checked { background-color: @record; border-color: @record; }
+
+/* A text field of the display: plain, in a thin frame. */
+entry.display-field, .display-field {
+    background-color: @screen;
+    border: 1px solid @axis;
+    border-radius: 0;
+    color: @value;
+    padding: 5px 8px;
+    box-shadow: none;
+    min-height: 0;
+    caret-color: @present;
+    outline: none;
+}
+entry.display-field:focus-within { border-color: alpha(@present, 0.7); }
+
+/* Scroll bars on black. */
+scrollbar { background: none; border: none; }
+scrollbar slider { background-color: alpha(@value, 0.25); min-width: 6px; min-height: 6px; border-radius: 4px; }
+scrollbar slider:hover { background-color: alpha(@value, 0.4); }
+scrolledwindow undershoot, scrolledwindow overshoot { background: none; }
+
+/* Popovers and menus of the display. */
+popover > contents, popover.menu > contents {
+    background-color: rgb(14, 15, 15);
+    border: 1px solid @rule;
+    border-radius: 4px;
+    color: @value;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+popover modelbutton, popover .menu-row { color: @value; padding: 4px 10px; border-radius: 2px; }
+popover modelbutton:hover, popover .menu-row:hover { background-color: alpha(@present, 0.1); }
+popover .menu-heading { color: @label; }
+
+/* The command list. */
+.palette-shade { background-color: rgba(0, 0, 0, 0.18); }
+.palette entry { background: none; border: none; box-shadow: none; font-size: 15px; color: @value; padding: 12px; outline: none; }
+.palette-row { padding: 6px 12px; margin: 0 4px; }
+.palette-row.selected { background-color: alpha(@present, 0.14); box-shadow: inset 2px 0 0 @present; }
+.key-cap { border: 1px solid alpha(@label, 0.7); padding: 1px 5px; font-family: "IBM Plex Mono"; font-size: 12px; color: @value; }
+
+/* Dialogs and the other windows. */
+.dialog-body { padding: 20px; }
+.dialog-title { font-size: 15px; font-weight: 600; color: @value; }
+
+/* The progress bar of known progress. */
+.fraction-bar trough { background-color: alpha(@axis, 0.5); min-height: 3px; border-radius: 0; }
+.fraction-bar progress { background-color: @record; min-height: 3px; border-radius: 0; }
+
+tooltip, tooltip.background {
+    background-color: rgb(20, 21, 21);
+    border: 1px solid @rule;
+    color: @value;
+}
+
+/* A plate: a name in capitals on a field of its colour, or in an outline. */
+.plate { padding: 2px 6px; border: 1px solid alpha(@label, 0.7); color: @label; }
+.plate.fill-staked { background-color: @staked; border-color: @staked; color: @screen; }
+.plate.fill-mined { background-color: @mined; border-color: @mined; color: @screen; }
+.plate.fill-record { background-color: @record; border-color: @record; color: @screen; }
+.plate.fill-good { background-color: @good; border-color: @good; color: @screen; }
+.plate.fill-alert { background-color: @alert; border-color: @alert; color: @screen; }
+
+/* The copy key: an icon with no frame. */
+.copy-key { background: none; border: none; box-shadow: none; padding: 0 2px; min-height: 0; min-width: 16px; color: @tertiary; }
+.copy-key:hover { color: @value; }
+.copy-key.copied { color: @good; }
+
+/* The keys of the title bar have no frame of their own. */
+.chain-badge > button, menubutton.chain-badge > button { background: none; box-shadow: none; border: none; padding: 2px 6px; color: @value; }
+.chain-badge > button:hover, button.chain-badge:hover { background-color: alpha(@present, 0.06); }
+button.chain-badge { background: none; box-shadow: none; border: none; }
+checkbutton check:checked { background-image: none; }

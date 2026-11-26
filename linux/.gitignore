@@ -1,0 +1,3 @@
+# Build output lives in the Docker volume carbide-linux-target. These are for a local build.
+/target/
+/out/

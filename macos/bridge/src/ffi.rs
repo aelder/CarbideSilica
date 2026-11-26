@@ -1862,3 +1862,19 @@ mod transaction;
 #[cfg(test)]
 #[path = "ffi_tests.rs"]
 mod tests;
+
+/// Every record, enum and function of the bridge, for a caller in Rust such as the Linux app
+/// (`linux/`). Swift reaches them through UniFFI. A Rust crate needs a public path, and the
+/// area modules above are private. `macos/bridge/rust` compiles the bridge as a Rust library
+/// and makes this module public as `carbide_bridge::api`.
+#[allow(unused_imports, ambiguous_glob_reexports)]
+pub mod rust_api {
+    pub use super::*;
+    pub use super::charts::*;
+    pub use super::currency::*;
+    pub use super::identity::*;
+    pub use super::shell::*;
+    pub use super::sources::*;
+    pub use super::transaction::*;
+    pub use super::transaction::statement::*;
+}
