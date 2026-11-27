@@ -16,7 +16,7 @@ The pictures are from the app in a container with a live VRSC node. [docs/progre
 - ALSA (`libasound2`) for the interface sounds. PipeWire and PulseAudio serve ALSA.
 - fontconfig.
 - The CA certificates of the system (`ca-certificates`). The HTTP client of the app loads them at start, also for a local node.
-- A Verus node with its RPC port open to this computer.
+- A Verus node with its RPC port open for live chain data, or Python 3 for the packaged synthetic demo.
 
 The `.deb` package is built and tested on Debian 13 (trixie), which has GTK 4.18. Its `Depends` list asks for glibc 2.38 or later and GTK 4.13.5 or later. The package was not tested on other distributions. If the package does not install, build the app from source.
 
@@ -57,6 +57,21 @@ cd carbide-silica-0.1.0-linux-aarch64
 ```
 
 The tarball does not install the libraries. Install GTK 4, ALSA, fontconfig and the CA certificates with the package manager of your distribution.
+
+### Run the packaged synthetic demo
+
+Both packages include a demo launcher. In a graphical Linux session, run
+`carbide-silica-demo` or choose **Run Synthetic Demo** from the Carbide Silica
+application shortcut. To open the synthetic tip directly after a default tarball
+install:
+
+```sh
+~/.local/bin/carbide-silica-demo --open 5000
+```
+
+The launcher starts the bundled explorer and serves synthetic blocks over loopback.
+Closing the window stops the demo and removes its temporary settings and cache.
+The regular `carbide-silica` command opens the explorer with your usual node settings.
 
 ### Flatpak, AppImage and Snap
 

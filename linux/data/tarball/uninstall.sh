@@ -20,7 +20,7 @@ while IFS= read -r file; do
     rm -f "$prefix/$file"
 done < "$list"
 rm -f "$list"
-for folder in fonts sounds ""; do
+for folder in fonts sounds demo ""; do
     rmdir "$prefix/share/carbide-silica/$folder" 2>/dev/null || true
 done
 rmdir "$prefix/share/doc/carbide-silica" 2>/dev/null || true

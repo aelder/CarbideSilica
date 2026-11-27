@@ -22,8 +22,9 @@ find bin share -type f | sort | while IFS= read -r file; do
     cp "$file" "$prefix/$file"
     printf '%s\n' "$file" >> "$list.new"
 done
-chmod 755 "$prefix/bin/carbide-silica"
-sed -e "s|^Exec=.*|Exec=\"$prefix/bin/carbide-silica\"|" \
+chmod 755 "$prefix/bin/carbide-silica" "$prefix/bin/carbide-silica-demo"
+sed -e "s|^Exec=carbide-silica$|Exec=\"$prefix/bin/carbide-silica\"|" \
+    -e "s|^Exec=carbide-silica-demo$|Exec=\"$prefix/bin/carbide-silica-demo\"|" \
     -e "s|^TryExec=.*|TryExec=$prefix/bin/carbide-silica|" \
     "$desktop" > "$prefix/$desktop"
 printf '%s\n' "share/carbide-silica/installed-files" >> "$list.new"
@@ -34,3 +35,4 @@ case ":$PATH:" in
     *":$prefix/bin:"*) echo "Type carbide-silica to start the app." ;;
     *) echo "Type $prefix/bin/carbide-silica to start the app, or add $prefix/bin to PATH." ;;
 esac
+echo "Run the synthetic demo with: $prefix/bin/carbide-silica-demo"

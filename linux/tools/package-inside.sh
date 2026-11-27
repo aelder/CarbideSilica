@@ -14,7 +14,7 @@ desktop-file-validate "data/$app_id.desktop"
 appstreamcli validate --no-net --pedantic "data/$app_id.metainfo.xml"
 
 echo "Build the release binary."
-cargo build --release --quiet
+cargo build --release --locked --quiet
 binary=/target/release/carbide-silica
 test -x "$binary"
 
@@ -23,6 +23,9 @@ stage() {
     prefix="$1"
     share="$prefix/share"
     install -D -m 755 "$binary" "$prefix/bin/carbide-silica"
+    install -m 755 data/carbide-silica-demo "$prefix/bin/carbide-silica-demo"
+    install -d "$share/carbide-silica/demo"
+    install -m 644 ../tests/synthetic_demo.py ../tests/synthetic_chain.py "$share/carbide-silica/demo/"
     install -d "$share/carbide-silica/fonts" "$share/carbide-silica/sounds"
     install -m 644 resources/fonts/* "$share/carbide-silica/fonts/"
     install -m 644 resources/sounds/* "$share/carbide-silica/sounds/"
@@ -53,7 +56,7 @@ depends=$(cd "$work/shlibs" && dpkg-shlibdeps -O "$root/usr/bin/carbide-silica" 
 test -n "$depends"
 # The HTTP client of the bridge loads the CA certificates of the system when it starts, also
 # for a node on 127.0.0.1. Without them it does not connect. dpkg-shlibdeps cannot see this.
-depends="$depends, ca-certificates"
+depends="$depends, ca-certificates, python3"
 size=$(du -sk "$root/usr" | cut -f1)
 mkdir -p "$root/DEBIAN"
 cat > "$root/DEBIAN/control" <<CONTROL
@@ -81,6 +84,7 @@ echo "Make the tarball."
 name="carbide-silica-$version-linux-$machine"
 tree="$work/tar/$name"
 stage "$tree"
+install -m 644 data/tarball/README.txt "$tree/README.txt"
 install -m 755 data/tarball/install.sh data/tarball/uninstall.sh "$tree/"
 rm -f "$dist"/carbide-silica-*-linux-*.tar.gz
 tar -C "$work/tar" --owner=0 --group=0 -czf "$dist/$name.tar.gz" "$name"

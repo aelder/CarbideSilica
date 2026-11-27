@@ -14,8 +14,7 @@ from tempfile import TemporaryDirectory
 from threading import Thread
 import time
 
-from bookmarks_terminal import VRSC
-from charts_terminal import header as chart_header
+from synthetic_chain import VRSC, header as chart_header
 
 ROOT = Path(__file__).resolve().parents[1]
 TIP = 5000
@@ -141,7 +140,7 @@ def main():
     args = parser.parse_args()
     binary = args.binary.resolve()
     if not os.access(binary, os.X_OK):
-        parser.error(f"Build the Linux app first (missing executable at {binary})")
+        parser.error(f"Explorer executable missing or not executable: {binary}")
     password = secrets.token_hex(16)
     auth = "Basic " + base64.b64encode(f"demo:{password}".encode()).decode()
     with TemporaryDirectory(prefix="carbide-synthetic-") as tmp, ThreadingHTTPServer(
@@ -152,8 +151,10 @@ def main():
                         f"rpcuser=demo\nrpcpassword={password}\n")
         env = dict(os.environ, HOME=tmp, XDG_CONFIG_HOME=f"{tmp}/config",
                    XDG_DATA_HOME=f"{tmp}/data", XDG_CACHE_HOME=f"{tmp}/cache",
-                   CARBIDE_SILICA_SETTINGS=f"{tmp}/settings.json",
-                   CARBIDE_SILICA_RESOURCES=str(ROOT / "linux/resources"))
+                   CARBIDE_SILICA_SETTINGS=f"{tmp}/settings.json")
+        # A packaged explorer locates its fonts and sounds relative to its binary.
+        if (ROOT / "linux/resources").is_dir():
+            env.setdefault("CARBIDE_SILICA_RESOURCES", str(ROOT / "linux/resources"))
         settings = Path(env["XDG_CONFIG_HOME"]) / "verus-explorer-tui/config.toml"
         settings.parent.mkdir(parents=True)
         settings.write_text('[[connections]]\nnetwork = "mainnet"\nchain = "VRSC"\n'

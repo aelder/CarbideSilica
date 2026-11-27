@@ -11,3 +11,8 @@ Categories=Network;
 Keywords=Verus;PBaaS;blockchain;explorer;block;transaction;identity;
 StartupNotify=true
 StartupWMClass=carbide-silica
+Actions=SyntheticDemo;
+
+[Desktop Action SyntheticDemo]
+Name=Run Synthetic Demo
+Exec=carbide-silica-demo
