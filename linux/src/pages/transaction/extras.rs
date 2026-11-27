@@ -138,7 +138,7 @@ impl Links {
             }
             content.append(&page::paragraph(
                 "Reverse references come from Carbide's cache. They include only transactions that the app or the terminal has already loaded.",
-                &["caption-text", "secondary"],
+                &["caption-small", "secondary"],
             ));
         } else if let Some(failure) = failure.as_ref() {
             content.append(&page::note(failure, true));
@@ -179,7 +179,7 @@ fn link_list(ctx: &Rc<Ctx>, page: &Page, links: &[&api::ProtocolLink], checking:
         space.set_size_request(76, -1);
         second.append(&space);
         second.append(&status(link, checking));
-        second.append(&page::text(&link.field, &["caption-text", "mono", "tertiary"]));
+        second.append(&page::text(&link.field, &["mono-caption", "tertiary"]));
         block.append(&second);
         column.append(&block);
     }
@@ -337,7 +337,7 @@ impl WitnessCard {
             }
             self.content.append(&page::paragraph(
                 "These groups are not a quorum count. The investigation covers reachable evidence. It does not find every witness broadcast, and it does not verify signatures, proofs, quorum membership or consensus.",
-                &["caption-text", "secondary"],
+                &["caption-small", "secondary"],
             ));
             // The tree is made the first time the part opens, as SwiftUI makes the contents
             // of a DisclosureGroup.
@@ -429,7 +429,7 @@ fn signature_group(ctx: &Rc<Ctx>, page: &Page, signature: &api::WitnessSignature
     column.append(&second);
 
     for key in &signature.key_signatures {
-        let text = page::text(key, &["caption-text", "mono"]);
+        let text = page::text(key, &["mono-caption"]);
         text.set_selectable(true);
         text.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
         details.append(&text);

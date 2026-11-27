@@ -143,7 +143,7 @@ pub fn bytes_view(page: &Rc<Page>, hex: &str, script_body: bool) -> gtk::Overlay
 
     let status = gtk::Box::new(gtk::Orientation::Vertical, 2);
     status.set_margin_top(4);
-    let cursor_line = page::text(&status_text(&data, shown, 0), &["caption-text", "present"]);
+    let cursor_line = page::text(&status_text(&data, shown, 0), &["caption-small", "present"]);
     cursor_line.set_selectable(true);
     cursor_line.set_visible(shown > 0);
     status.append(&cursor_line);
@@ -153,7 +153,7 @@ pub fn bytes_view(page: &Rc<Page>, hex: &str, script_body: bool) -> gtk::Overlay
         } else {
             format!("{} bytes. Dots stand for bytes that are not printable.", data.len())
         },
-        &["caption-text", "label"],
+        &["caption-small", "label"],
     ));
     frame.append(&status);
 

@@ -207,7 +207,7 @@ impl StatementView {
         if statement.closing_kind == ClosingKind::InputsLessOutputs {
             self.root.append(&page::paragraph(
                 "Protocol outputs account for value in other transactions. The row \"Inputs less outputs\" is not a fee.",
-                &["caption-text", "secondary"],
+                &["caption-small", "secondary"],
             ));
         }
         if !statement.complete {

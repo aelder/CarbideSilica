@@ -53,7 +53,7 @@ pub fn inclusion_card(page: &Rc<Page>, txid: &str) -> Card {
     card.append(&body);
     card.append(&page::paragraph(
         "The list shows only what sources reported to this app or to the terminal app. It does not search the chain. An empty list does not prove that no other block contained the transaction. \"Active\" and \"Orphaned\" are the last reports of each source. They are not a prediction of which branch stays.",
-        &["caption-text", "secondary"],
+        &["caption-small", "secondary"],
     ));
     card.append(&node_branch_check(page, txid));
     start(page, &card, body, Query::Inclusions(txid.to_string()));
@@ -68,7 +68,7 @@ pub fn block_branches_card(page: &Rc<Page>, hash: &str) -> Card {
     card.append(&body);
     card.append(&page::paragraph(
         "The list shows only what sources reported. An empty list does not prove that no other branch exists.",
-        &["caption-text", "secondary"],
+        &["caption-small", "secondary"],
     ));
     start(page, &card, body, Query::Children(hash.to_string()));
     card

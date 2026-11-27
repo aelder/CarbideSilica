@@ -200,13 +200,13 @@ impl TraceCard {
             line.append(&page::text(&format!("output {} on", step.output), &["secondary"]));
             line.append(&page::route_link(&page, &step.system_id, Route::Currency { name: step.system_id.clone() }, true));
             block.append(&line);
-            let detail = page::paragraph(&step.detail, &["caption-text", "mono", "secondary"]);
+            let detail = page::paragraph(&step.detail, &["mono-caption", "secondary"]);
             detail.set_selectable(true);
             block.append(&detail);
             evidence.append(&block);
         }
         for note in &trace.notes {
-            evidence.append(&page::paragraph(note, &["caption-text", "secondary"]));
+            evidence.append(&page::paragraph(note, &["caption-small", "secondary"]));
         }
         disclosure.content.append(&evidence);
         self.content.append(&disclosure.root);
@@ -599,7 +599,7 @@ impl LegDetail {
                 name.set_valign(gtk::Align::Center);
                 row.append(&name);
                 row.append(&page::route_link(&page, id, Route::Currency { name: id.clone() }, true));
-                row.append(&page::text(id, &["caption-text", "mono", "tertiary"]));
+                row.append(&page::text(id, &["mono-caption", "tertiary"]));
                 list.append(&row);
             }
             self.holder.append(&list);
@@ -754,7 +754,7 @@ fn rate_lines(page: &Page, rate: &api::TraceRate, namer: &crate::shared::stateme
     if !rate.prices.is_empty() {
         column.append(&page::paragraph(
             "Import batch prices are the batch builder's fields. They are not market quotes.",
-            &["caption-text", "secondary"],
+            &["caption-small", "secondary"],
         ));
     }
     column
@@ -765,7 +765,7 @@ fn pool_comparison(ctx: &Rc<Ctx>, page: &Page, comparison: &api::PoolComparison)
     let column = gtk::Box::new(gtk::Orientation::Vertical, 6);
     column.set_margin_top(4);
     column.append(&theme::label(font::HEADING, "Pool states", "value"));
-    column.append(&page::paragraph("Pool-wide changes between notarizations include other transfers and fees.", &["caption-text", "secondary"]));
+    column.append(&page::paragraph("Pool-wide changes between notarizations include other transfers and fees.", &["caption-small", "secondary"]));
     let chain = ctx.chain_id();
     let snapshot = |label: &str, snapshot: &api::PoolSnapshot| {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
@@ -825,7 +825,7 @@ fn pool_comparison(ctx: &Rc<Ctx>, page: &Page, comparison: &api::PoolComparison)
     if comparison.more_reserves {
         column.append(&page::paragraph(
             "The list shows the first 12 reserves. Open the pool for the complete state.",
-            &["caption-text", "secondary"],
+            &["caption-small", "secondary"],
         ));
     }
     column

@@ -554,7 +554,7 @@ impl JsonTree {
     fn new(page: &Rc<Page>, json: &str, filename: &str) -> (Rc<Self>, gtk::Box) {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 8);
         let body = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        let path = page::text("", &["mono", "secondary", "caption-text"]);
+        let path = page::text("", &["mono-caption", "secondary"]);
         path.set_selectable(true);
         path.set_visible(false);
         let tree = Rc::new(Self {
@@ -723,7 +723,7 @@ impl JsonTree {
         }
         self.body.append(&column);
         if let Some(note) = limit_note(rows.len()) {
-            self.body.append(&page::paragraph(&note, &["secondary", "caption-text"]));
+            self.body.append(&page::paragraph(&note, &["secondary", "caption-small"]));
         }
         self.body.append(&self.path);
         self.show_path();
@@ -813,7 +813,7 @@ impl JsonTree {
         {
             let estimated = mark.as_ref().is_some_and(|m| m.estimated);
             let text = format!("{}{}", if estimated { "est. " } else { "" }, format::date(date));
-            let label = page::text(&text, &["label", "caption-text"]);
+            let label = page::text(&text, &["label", "caption-small"]);
             label.set_valign(gtk::Align::Baseline);
             line.append(&label);
         }
@@ -926,7 +926,7 @@ impl JsonTree {
                 });
             });
             if let Some(label) = link::label_of(&key) {
-                label.add_css_class("caption-text");
+                label.add_css_class("caption-small");
             }
             line.append(&key);
         }
