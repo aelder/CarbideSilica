@@ -90,6 +90,19 @@ step() {
             focused=1
             sleep 0.6
             ;;
+        drag)
+            # drag x1 y1 x2 y2: press at the first point, move in steps, release at the second
+            xdotool mousemove "$1" "$2"
+            sleep 0.3
+            xdotool mousedown 1
+            for i in 1 2 3 4 5 6 7 8; do
+                xdotool mousemove $(( $1 + ($3 - $1) * i / 8 )) $(( $2 + ($4 - $2) * i / 8 ))
+                sleep 0.08
+            done
+            xdotool mouseup 1
+            focused=1
+            sleep 0.6
+            ;;
         scroll)
             # scroll up|down|left|right [count] [x y]
             [ $# -ge 4 ] && xdotool mousemove "$3" "$4" && sleep 0.3

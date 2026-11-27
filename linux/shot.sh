@@ -16,6 +16,7 @@
 #   MOUSE="x y"      a place for the pointer before STEPS, to show a hover state
 #   CONF=<file>      the node configuration (default: the VRSC.conf of the Extreme SSD)
 #   GSK_RENDERER=... GTK's renderer (default: GTK's choice)
+#   GEOIP=<folder>   an existing location data folder, mounted read-only where the app looks
 #
 # Steps (coordinates are pixels of the 1281x1084 display):
 #   wait 5              wait 5 seconds
@@ -24,6 +25,7 @@
 #   move 400 300        move the pointer
 #   click 400 300 [b]   move the pointer and click (button b, 1 by default)
 #   dclick 400 300      double-click
+#   drag 400 300 600 300  press, move and release button 1
 #   scroll down 5 [x y] turn the wheel 5 steps (up, down, left, right), at x y if given
 #   shot name.png       take a picture now, into the folder of <out.png>
 # The picture <out.png> is taken after the last step. For example:
