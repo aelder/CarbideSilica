@@ -40,6 +40,32 @@ Carbide starts on VRSC and discovers daemon configurations in the standard Verus
 
 Use `-testnet` for testnet or `-conf=/path/to/daemon.conf` for a nonstandard daemon configuration. For toolchain and portable build instructions, see the [build notes](BUILD.md).
 
+## Linux desktop build
+
+Carbide Silica is the GTK 4 desktop explorer. To build it from the `linux` branch, use Rust with Cargo (the project’s build image uses Rust 1.91.1), GTK 4.14 or newer, ALSA and fontconfig. On Debian 13, install the native build dependencies and Python for the demo.
+
+```sh
+sudo apt update
+sudo apt install build-essential pkg-config libgtk-4-dev libasound2-dev libfontconfig-dev ca-certificates python3
+```
+
+From the repository root, build the desktop binary and run its unit tests.
+
+```sh
+cargo build --locked --manifest-path linux/Cargo.toml
+cargo test --locked --manifest-path linux/Cargo.toml
+```
+
+To try the explorer before syncing a Verus node, launch the synthetic demo from a graphical Linux session.
+
+```sh
+python3 tests/synthetic_demo.py --open 5000
+```
+
+The demo opens block 5,000. Select its coinbase transaction to inspect the synthetic 3 VRSC reward. Closing the window stops the local RPC server and clears the demo cache.
+
+To explore a running node, start `./linux/target/debug/carbide-silica`. It reads the standard Verus configuration, or you can pass `-conf=/path/to/VRSC.conf`. For release builds, Docker and packaging, see the [Linux build guide](linux/README.md#build).
+
 ## Follow a transaction
 
 1. Press `/`, type `4226272`, and press `Enter`. This mined VRSC block contains one transaction. Its tile identifies the input as **Coinbase**.
