@@ -1,13 +1,14 @@
 <h1 align="center">Carbide Silica</h1>
 
 <p align="center">
-  A native macOS explorer for Verus and PBaaS chains.<br>
+  A native explorer for Verus and PBaaS chains, for macOS and Linux.<br>
   It shows chain data as charts and diagrams. Each page also gives the exact figures.
 </p>
 
 <p align="center">
   <img alt="macOS 15 or later" src="https://img.shields.io/badge/macOS-15%2B-1c1c1c?style=flat-square&logo=apple&logoColor=white">
   <img alt="Linux with GTK 4.14 or later" src="https://img.shields.io/badge/Linux-GTK_4.14%2B-1c1c1c?style=flat-square&logo=linux&logoColor=white">
+  <a href="https://github.com/aelder/CarbideSilica/releases/tag/linux-v0.1.0"><img alt="Linux release 0.1.0" src="https://img.shields.io/badge/Linux_release-0.1.0-55616d?style=flat-square"></a>
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-f05138?style=flat-square&logo=swift&logoColor=white">
   <img alt="Rust 1.88 or later" src="https://img.shields.io/badge/Rust-1.88%2B-8c4a2f?style=flat-square&logo=rust&logoColor=white">
   <img alt="Bridge made with UniFFI" src="https://img.shields.io/badge/bridge-UniFFI-55616d?style=flat-square">
@@ -20,7 +21,7 @@
 <p align="center">
   <a href="#pages">Pages</a> &nbsp;
   <a href="#comparison-with-the-terminal-app">Comparison</a> &nbsp;
-  <a href="#build-and-run">Build and run</a> &nbsp;
+  <a href="#macos">macOS</a> &nbsp;
   <a href="#linux">Linux</a> &nbsp;
   <a href="#keys">Keys</a> &nbsp;
   <a href="#network-requests">Network requests</a> &nbsp;
@@ -32,11 +33,13 @@
 
 Carbide Silica is a second front end for [Carbide](https://github.com/alexenglish/VerusCarbide), the terminal explorer by [alexenglish](https://github.com/alexenglish). The app compiles Carbide's own source files, so it uses the same RPC client, the same decoding and the same cache as the terminal app. The two apps differ only in the interface.
 
+Carbide Silica has two versions. The macOS version is written in Swift with SwiftUI. The Linux version is written in Rust with GTK 4. The two versions have the same pages, the same functions and the same display.
+
 The app is read-only. It does not read a wallet, and it cannot create, sign or send a transaction.
 
 ## Pages
 
-Each picture below is the app with a live VRSC node. No picture is a mock-up.
+Each picture below is the macOS app with a live VRSC node. No picture is a mock-up. The Linux app has the same pages, and [Linux](#linux) has a picture of it.
 
 ### Transaction page
 
@@ -69,7 +72,7 @@ The app also has the Mempool, Bookmarks, Sources, a Node page with a map of the 
 
 ## Comparison with the terminal app
 
-The two apps use one engine. They read the same node, write the same cache file and share one bookmark file and one settings file. You can use the two apps on one Mac.
+The two apps use one engine. They read the same node, write the same cache file and share one bookmark file and one settings file. You can use the two apps on one computer.
 
 ### The same objects in the two apps
 
@@ -93,18 +96,18 @@ The left pictures are from Carbide's own readme. The right pictures show the sam
 | Marketplace | A list with four sort orders | The same list, a price curve, shared prices as bars, and filters with counts |
 | Peers | A list and a world map of text characters | A drawn map with one line for each peer, and counts by network operator and country |
 | Pointer | Scroll, and click to copy | Each row, link, band and chart point reacts to the pointer |
-| Finding a command | Help page and footer | Command-K lists each command and each card of the open page with its key |
+| Finding a command | Help page and footer | Command-K (Ctrl+K on Linux) lists each command and each card of the open page with its key |
 
 ### Advantages of the terminal app
 
 | Subject | Terminal | App |
 |---|---|---|
-| Remote use | Runs on the server beside the node, through SSH and tmux | Runs only on a Mac. It must reach the node's RPC port from that Mac |
-| Platforms | Linux. Carbide is tested on Debian 13 | macOS 15 or later. A Linux version is in the `linux` folder |
-| Installation | One `cargo build`, one binary | Rust and Xcode, a bridge build and a Swift build. No signed download exists |
-| Size and memory | One small binary in a terminal | A 31 MB app. It used approximately 300 MB of memory on the Dashboard in one measurement |
+| Remote use | Runs on the server beside the node, through SSH and tmux | Runs on a Mac or a Linux desktop. It must reach the node's RPC port from that computer |
+| Platforms | Linux. Carbide is tested on Debian 13 | macOS 15 or later, and Linux with GTK 4.14 or later |
+| Installation | One `cargo build`, one binary | macOS: Rust and Xcode, a bridge build and a Swift build. No signed download exists. Linux: a `.deb` package or a tarball for x86-64, or a build from source |
+| Size and memory | One small binary in a terminal | The macOS app is 31 MB. It used approximately 300 MB of memory on the Dashboard in one measurement. The Linux app was not measured |
 | New chain logic | Arrives here first | Arrives after a merge from Carbide, and a new function needs new bridge code |
-| Tests of the interface | Terminal tests operate the real screens | The tests cover the bridge. No test operates the windows |
+| Tests of the interface | Terminal tests operate the real screens | The tests cover the bridge and the logic of the Linux app. No test operates the windows |
 | PoW Ratio chart | Has it | Does not have it. The staked share panel shows a related measure |
 | Diagnostics | `--probe`, `--clipboard-test` and a UI timing log | None of these |
 | Text workflow | Select, copy and pipe text with terminal tools | Copy one value at a time, or save the JSON |
@@ -119,12 +122,12 @@ The left pictures are from Carbide's own readme. The right pictures show the sam
 ### When to use each app
 
 - The node is on a remote server, and you work through SSH. Use the terminal app.
-- The node is on your Mac, or its RPC port is reachable from your Mac, and you want to see a transaction, an identity or a trend as a picture. Use this app.
+- The node is on your computer, or its RPC port is reachable from your computer, and you want to see a transaction, an identity or a trend as a picture. Use this app.
 - If you are not sure, use the two apps. They do not conflict.
 
-## Build and run
+## macOS
 
-You need macOS 15, Xcode with Swift 6, and Rust 1.88 or later.
+No download exists for macOS. Build the app from source. You need macOS 15, Xcode with Swift 6, and Rust 1.88 or later.
 
 ```sh
 git clone https://github.com/aelder/CarbideSilica.git
@@ -141,11 +144,11 @@ To work on the Swift code in Xcode, run `./build.sh bridge` once, then open `Pac
 
 The app reads the RPC settings of the node from the standard macOS location, `~/Library/Application Support/Komodo/VRSC/VRSC.conf`. PBaaS chains are below `~/Library/Application Support/Verus/pbaas`. You can select a different file in Settings.
 
-A Mac without a node can use one public API. You turn this on in Settings. The operator of that API can then see the addresses and identities that you open.
+A computer without a node can use one public API. You turn this on in Settings. The operator of that API can then see the addresses and identities that you open.
 
 ### Start-up arguments
 
-The arguments are the same as Carbide's, with one dash or two.
+The arguments are the same as Carbide's, with one dash or two. They are the same on Linux.
 
 | Argument | Function |
 |---|---|
@@ -160,23 +163,65 @@ The arguments apply to one run. They do not change the saved settings.
 
 ## Linux
 
-The `linux` folder has a Linux version of the app. It is written in Rust with GTK 4 and calls the same bridge crate. It has the same pages and functions as the macOS app.
-
-It needs GTK 4.14 or later, ALSA, fontconfig and the CA certificates of the system. The `.deb` package is built and tested on Debian 13.
-
-```sh
-cd linux
-./build.sh release      # release build in Docker
-./package.sh            # .deb and .tar.gz in linux/dist/
-```
-
-The app reads the node configuration from `~/.komodo/VRSC/VRSC.conf`. Ctrl replaces Command, and Alt replaces Option. Jost, Inter and IBM Plex Mono replace the Apple fonts. The app was tested only in a container on aarch64. [linux/README.md](../linux/README.md) has the install steps, the keys and the known limits.
+The Linux app is in the `linux` folder. It calls the same bridge crate as the macOS app.
 
 ![The Dashboard of the Linux app with the chain pulse, the recent blocks and the recent transactions.](../linux/docs/progress/dashboard.png)
 
+### Install
+
+[Release 0.1.0](https://github.com/aelder/CarbideSilica/releases/tag/linux-v0.1.0) has two packages for x86-64.
+
+On Debian 13, use the `.deb` package. apt installs the libraries.
+
+```sh
+sudo apt install ./carbide-silica_0.1.0_amd64.deb
+```
+
+On other distributions, use the tarball. It installs into `~/.local`.
+
+```sh
+tar -xzf carbide-silica-0.1.0-linux-x86_64.tar.gz
+./carbide-silica-0.1.0-linux-x86_64/install.sh
+```
+
+The tarball does not install libraries. The app needs GTK 4.14 or later, ALSA, fontconfig and the CA certificates of the system. The demo needs Python 3.
+
+### Demo without a node
+
+The packages include a demo. It starts the app with a local RPC server that supplies a synthetic chain of 5,001 blocks. The demo does not need a Verus node. The server listens only on the loopback address.
+
+```sh
+carbide-silica-demo --open 5000
+```
+
+After a tarball install, the command is `~/.local/bin/carbide-silica-demo`. The Dashboard, the Charts page, the block and transaction pages and the Node page work with the synthetic chain. Other requests give an error. When you close the window, the demo stops its server and removes its settings and its cache.
+
+### Connect to a node
+
+The app reads the RPC settings of the node from `~/.komodo/VRSC/VRSC.conf`. PBaaS chains are below `~/.verus/pbaas`. You can select a different file in Settings.
+
+### Build
+
+The build needs Rust, GTK 4.14 or later, ALSA and fontconfig. On Debian 13:
+
+```sh
+sudo apt install build-essential pkg-config libgtk-4-dev libasound2-dev libfontconfig-dev
+cargo build --release --locked --manifest-path linux/Cargo.toml
+```
+
+`linux/build.sh` and `linux/package.sh` do the build and make the packages in Docker.
+
+### Differences from macOS
+
+- Ctrl replaces Command, and Alt replaces Option. Ctrl+Shift replaces Control-Command.
+- The menus are in the menu key at the left of the title bar.
+- Jost, Inter and IBM Plex Mono replace Futura, SF Pro and SF Mono. The package has the fonts.
+
+[linux/README.md](../linux/README.md) has all install steps, the keys, the file locations and the known limits of the Linux app.
+
 ## Keys
 
-Each function has a menu command and a shortcut. Help > Keyboard Shortcuts lists all of them beside the terminal keys.
+Each function has a menu command and a shortcut. Help > Keyboard Shortcuts lists all of them beside the terminal keys. The table shows the macOS keys. On Linux, use Ctrl for `⌘`, and Ctrl+/ shows the list.
 
 | Key | Function | Terminal key |
 |---|---|---|
@@ -193,7 +238,7 @@ Each function has a menu command and a shortcut. Help > Keyboard Shortcuts lists
 
 ## Network requests
 
-- The app sends RPC requests to your node. With a local node, nothing leaves the Mac.
+- The app sends RPC requests to your node. With a local node, nothing leaves the computer.
 - The public API is off at the start. When the node cannot answer a page that you open, the app asks before it sends that request to the API. The app never sends background requests to an API.
 - The peer map uses location data that you install from the Node page. The app downloads it from DB-IP only after you confirm. The app draws the map itself and makes no request to a map service.
 - The app has no analytics and no update check.
@@ -209,6 +254,7 @@ flowchart LR
         engine["Carbide modules<br>src/, not modified"]
         ui --> core --> bridge --> engine
     end
+    gtk["Linux app<br>GTK 4 in Rust, linux/"] --> bridge
     engine -->|RPC| node["Verus node"]
     engine -.->|only with your approval| api["Public API"]
     engine <--> cache[("SQLite cache<br>shared with the terminal app")]
@@ -221,8 +267,11 @@ flowchart LR
 | `macos/Sources/CarbideCore` | The Swift bindings that UniFFI generates. They are not checked in |
 | `macos/Sources/CarbideSilica` | The SwiftUI app |
 | `macos/design/` | The study behind each picture, as HTML pages |
+| `macos/bridge/rust/` | A crate root that gives the bridge to the Linux app as a Rust library, without UniFFI |
+| `linux/` | The Linux app, its fonts and sounds, the Docker build and the packaging scripts |
+| `tests/synthetic_demo.py`, `tests/synthetic_chain.py` | The demo server and its synthetic chain |
 
-This project adds two files outside `macos/`: `src/desktop_bridge.rs` and this page, `.github/README.md`. It changes no file of Carbide, so a merge from Carbide has no conflicts. Carbide's own readme is [README.md](../README.md).
+Outside `macos/` and `linux/`, this project adds four files: `src/desktop_bridge.rs`, the two demo files in `tests/`, and this page, `.github/README.md`. It changes three files of Carbide: `README.md` has a section about the Linux build, and `tests/bookmarks_terminal.py` and `tests/charts_terminal.py` take their chain data from `tests/synthetic_chain.py`. A merge from Carbide can have conflicts in these three files. Carbide's own readme is [README.md](../README.md).
 
 Two things need attention after a merge from Carbide:
 
@@ -248,12 +297,14 @@ CARBIDE_TEST_CONF=<path to the node's .conf> CARBIDE_TEST_API=https://api.verus.
 
 ### Cache
 
-Carbide's cache is an SQLite file. The default location is `~/Library/Caches/verus-carbide`. Settings shows its size, can clear it, and can move it to a folder on another disk. The cache has no size limit, because Carbide keeps each block and transaction that you open as evidence. Chart loads do not add to it.
+Carbide's cache is an SQLite file. The default location is `~/Library/Caches/verus-carbide` on macOS and `~/.cache/verus-carbide` on Linux. Settings shows its size, can clear it, and can move it to a folder on another disk. The cache has no size limit, because Carbide keeps each block and transaction that you open as evidence. Chart loads do not add to it.
 
 ## Known limits
 
+These limits apply to the two versions. [linux/README.md](../linux/README.md#known-limits) has the limits of the Linux app only.
+
 - The app shows one chain at a time. A block or transaction on another chain is text, with a link to change the chain when that chain's node is configured.
-- A node for another chain that the app finds on the Mac starts in the Disabled state, as in Carbide. A transfer trace into that chain needs the node enabled in Sources.
+- A node for another chain that the app finds on the computer starts in the Disabled state, as in Carbide. A transfer trace into that chain needs the node enabled in Sources.
 - Reverse references include only the transactions in Carbide's cache or opened in this run.
 - A chart cannot read a newer range from a block on a side branch. The node does not supply it.
 - Through a public API, charts load at approximately 10 blocks each second. Use the 2-hour span.
@@ -263,8 +314,9 @@ Carbide's cache is an SQLite file. The default location is `~/Library/Caches/ver
 
 ## Credits and license
 
-- [Carbide](https://github.com/alexenglish/VerusCarbide) by [alexenglish](https://github.com/alexenglish) supplies all chain logic. Carbide Silica adds the macOS interface.
+- [Carbide](https://github.com/alexenglish/VerusCarbide) by [alexenglish](https://github.com/alexenglish) supplies all chain logic. Carbide Silica adds the macOS interface and the Linux interface.
 - Peer locations come from [DB-IP](https://db-ip.com) City Lite and ASN Lite, under CC BY 4.0.
 - The interface sounds are under the MIT license. `macos/Resources/Sounds/LICENSE-button-sounds.txt` has the notice.
+- The Linux app uses the fonts Jost, Inter and IBM Plex Mono, under the SIL Open Font License 1.1. Their licence files are in `linux/resources/fonts`.
 
 Carbide Silica has the same license as Carbide, the [MIT License](../LICENSE). The software is experimental and has no warranty.

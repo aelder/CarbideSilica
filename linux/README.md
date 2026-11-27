@@ -1,6 +1,6 @@
 # Carbide Silica for Linux
 
-Carbide Silica for Linux is the Linux version of the Carbide Silica explorer for Verus and PBaaS chains. It has the same pages, the same functions and the same display as the macOS app. It is written in Rust with GTK 4 (gtk4-rs). It calls the same bridge crate as the macOS app, so it uses Carbide's RPC client, decoding and cache. Carbide is the terminal explorer by [alexenglish](https://github.com/alexenglish).
+Carbide Silica for Linux is the Linux version of the Carbide Silica explorer for Verus and PBaaS chains. [Release 0.1.0](https://github.com/aelder/CarbideSilica/releases/tag/linux-v0.1.0) has a `.deb` package and a tarball for x86-64. It has the same pages, the same functions and the same display as the macOS app. It is written in Rust with GTK 4 (gtk4-rs). It calls the same bridge crate as the macOS app, so it uses Carbide's RPC client, decoding and cache. Carbide is the terminal explorer by [alexenglish](https://github.com/alexenglish).
 
 The app is read-only. It does not read a wallet, and it cannot create, sign or send a transaction.
 
@@ -16,7 +16,8 @@ The pictures are from the app in a container with a live VRSC node. [docs/progre
 - ALSA (`libasound2`) for the interface sounds. PipeWire and PulseAudio serve ALSA.
 - fontconfig.
 - The CA certificates of the system (`ca-certificates`). The HTTP client of the app loads them at start, also for a local node.
-- A Verus node with its RPC port open for live chain data, or Python 3 for the packaged synthetic demo.
+- A Verus node with its RPC port open to this computer, for live chain data.
+- Python 3, for the demo.
 
 The `.deb` package is built and tested on Debian 13 (trixie), which has GTK 4.18. Its `Depends` list asks for glibc 2.38 or later and GTK 4.13.5 or later. The package was not tested on other distributions. If the package does not install, build the app from source.
 
@@ -27,7 +28,7 @@ The app brings its own fonts. For emoji and for Chinese, Japanese, Korean and Ar
 ### Debian package
 
 ```sh
-sudo apt install ./carbide-silica_0.1.0_arm64.deb
+sudo apt install ./carbide-silica_0.1.0_amd64.deb
 ```
 
 Use the file name of your architecture. apt installs the libraries in the `Depends` list of the package. The package puts the binary in `/usr/bin`, the fonts and sounds in `/usr/share/carbide-silica`, and the desktop file, the AppStream file and the icons in `/usr/share`. The app then shows in the application menu of the desktop.
@@ -43,8 +44,8 @@ sudo apt remove carbide-silica
 The tarball has `bin/`, `share/`, `install.sh` and `uninstall.sh`. The scripts install to a prefix. The default prefix is `~/.local`.
 
 ```sh
-tar -xzf carbide-silica-0.1.0-linux-aarch64.tar.gz
-cd carbide-silica-0.1.0-linux-aarch64
+tar -xzf carbide-silica-0.1.0-linux-x86_64.tar.gz
+cd carbide-silica-0.1.0-linux-x86_64
 ./install.sh            # into ~/.local
 ./install.sh /opt/carbide-silica
 ```
@@ -58,20 +59,17 @@ cd carbide-silica-0.1.0-linux-aarch64
 
 The tarball does not install the libraries. Install GTK 4, ALSA, fontconfig and the CA certificates with the package manager of your distribution.
 
-### Run the packaged synthetic demo
+### Demo
 
-Both packages include a demo launcher. In a graphical Linux session, run
-`carbide-silica-demo` or choose **Run Synthetic Demo** from the Carbide Silica
-application shortcut. To open the synthetic tip directly after a default tarball
-install:
+The two packages include a demo command. The demo starts the app with a local RPC server that supplies a synthetic chain. It does not need a Verus node.
 
 ```sh
-~/.local/bin/carbide-silica-demo --open 5000
+carbide-silica-demo --open 5000
 ```
 
-The launcher starts the bundled explorer and serves synthetic blocks over loopback.
-Closing the window stops the demo and removes its temporary settings and cache.
-The regular `carbide-silica` command opens the explorer with your usual node settings.
+After a tarball install into the default prefix, the command is `~/.local/bin/carbide-silica-demo`. The application menu also has the action **Run Synthetic Demo** on the Carbide Silica entry. `--open 5000` opens the tip block at start.
+
+When you close the window, the demo stops its server and removes its temporary settings and cache. The command `carbide-silica` opens the app with your usual node settings.
 
 ### Flatpak, AppImage and Snap
 
@@ -113,22 +111,23 @@ cargo build --release
 
 A binary in the source tree finds its fonts and sounds in `linux/resources`. An installed binary finds them in `<prefix>/share/carbide-silica`, where `<prefix>` is the folder above the folder of the binary. The variable `CARBIDE_SILICA_RESOURCES` names a different folder.
 
-## Run with synthetic data
+## Synthetic data
 
-After a debug build, run this from the repository root:
+After a debug build, run the demo from the repository root:
 
 ```sh
 python3 tests/synthetic_demo.py
 ```
 
-The launcher starts the GTK app and a local RPC server on a free loopback port. The
-chain has a fixed tip at height 5,000, a coinbase transaction in each block, one
-simulated peer and an empty mempool. Blocks are generated on request. The dashboard,
-charts, block and transaction detail, and node status can use these fixtures. RPC
-methods outside the demo return an error. The launcher uses temporary settings and
-cache directories and removes them when you close the window.
+The demo starts the app and an RPC server on a free loopback port. The chain has these properties:
 
-Use `--open 5000` to start at the tip, or `--binary PATH` for a different build.
+- The tip is fixed at height 5,000.
+- Each block has one coinbase transaction.
+- The node has one peer and an empty mempool.
+
+The server makes each block when the app asks for it. The Dashboard, the Charts page, the block and transaction pages and the Node page work with this chain. Other RPC methods give an error. The demo uses temporary folders for the settings and the cache, and removes them when you close the window.
+
+`--open 5000` opens the tip block at start. `--binary PATH` uses a different build.
 
 ## Connect to a node
 
@@ -186,13 +185,11 @@ GTK 4 has no menu bar in this window. The menus of the macOS menu bar (View, Go,
 
 ## Known limits
 
-- The app was tested only in a Docker container on aarch64 (Debian 13), on Xvfb, with no window manager.
-- The container has no audio device. The sounds were not heard. The tests check only the decoding of the sound files.
-- The container has no GPU. GPU rendering and the performance of the app on a real desktop are not verified.
-- The fades of the lamp keys are not verified. A picture shows one frame.
-- The app was not built or run on x86_64.
-- The app was not run on Wayland.
+- The page tests ran in a Docker container on aarch64 (Debian 13), on Xvfb, with no window manager. The x86-64 release ran on a Linux desktop.
+- The container has no audio device and no GPU. The container tests did not cover the sounds, GPU rendering, the fades of the lamp keys or Wayland.
+- The release has packages for x86-64 only. For aarch64, build the packages with `./package.sh`.
 - The `.deb` package was tested only on Debian 13.
+- The demo supplies only the Dashboard, the Charts page, the block and transaction pages and the Node page.
 - Ctrl+Alt+L (the mempool list) can be the lock-screen key of the desktop.
 - Flatpak, AppImage and Snap packages do not exist yet.
 
