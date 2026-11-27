@@ -23,6 +23,10 @@ mod widgets;
 use gtk::glib;
 use gtk::prelude::*;
 
+/// The application ID. It is also the name of the icon, the desktop file and the AppStream
+/// metainfo file (`linux/data`).
+pub const APP_ID: &str = "org.carbide.CarbideSilica";
+
 fn main() -> glib::ExitCode {
     // The fonts must be known to fontconfig before GTK makes its font map.
     if !theme::fonts::register() {
@@ -31,7 +35,7 @@ fn main() -> glib::ExitCode {
     // The start-up arguments are Carbide's (`-conf=`, `-chain=`, ...). GTK must not read them.
     let _ = launch::arguments();
     let app = gtk::Application::builder()
-        .application_id("org.carbide.CarbideSilica")
+        .application_id(APP_ID)
         .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
         .build();
     app.connect_startup(|_| theme::install());

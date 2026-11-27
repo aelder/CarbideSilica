@@ -3,6 +3,7 @@
 # volumes, so a rebuild compiles only what changed and nothing is written to this Mac.
 #   ./build.sh            debug build
 #   ./build.sh test       unit tests
+#   ./build.sh release    optimized build: /target/release/carbide-silica in the volume
 #   ./build.sh <cargo args>
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -12,6 +13,7 @@ docker build -q -t "$image" "$here" >/dev/null
 case "${1:-build}" in
     build) set -- build ;;
     test) set -- test ;;
+    release) set -- build --release ;;
 esac
 exec docker run --rm \
     -v "$repo":/src \

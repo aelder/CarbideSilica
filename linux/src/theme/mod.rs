@@ -185,6 +185,26 @@ pub fn install() {
         &provider,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
+    install_icon(&display);
+}
+
+/// Makes the app icon known to GTK. An installed app has it in `<prefix>/share/icons`, which
+/// the icon theme finds when the prefix is in `XDG_DATA_DIRS`. The icon theme also looks in
+/// the `icons` folder beside the resources folder, for a prefix that is not in that list,
+/// and in `linux/data/icons` of the source tree. Each window then takes the icon by name.
+fn install_icon(display: &gdk::Display) {
+    let theme = gtk::IconTheme::for_display(display);
+    if let Some(share) = fonts::resources().parent() {
+        let folder = share.join("icons");
+        if folder.is_dir() {
+            theme.add_search_path(folder);
+        }
+    }
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data/icons");
+    if source.is_dir() {
+        theme.add_search_path(source);
+    }
+    gtk::Window::set_default_icon_name(crate::APP_ID);
 }
 
 /// The style sheet: the named colours, then `style.css`.

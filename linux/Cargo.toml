@@ -30,3 +30,12 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 2
+
+# The release build of the packages (`./build.sh release`, `./package.sh`). Link-time
+# optimization over all crates; the symbols are stripped. A panic still unwinds, so the app
+# prints its message.
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
