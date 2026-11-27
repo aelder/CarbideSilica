@@ -98,6 +98,23 @@ cargo build --release
 
 A binary in the source tree finds its fonts and sounds in `linux/resources`. An installed binary finds them in `<prefix>/share/carbide-silica`, where `<prefix>` is the folder above the folder of the binary. The variable `CARBIDE_SILICA_RESOURCES` names a different folder.
 
+## Run with synthetic data
+
+After a debug build, run this from the repository root:
+
+```sh
+python3 tests/synthetic_demo.py
+```
+
+The launcher starts the GTK app and a local RPC server on a free loopback port. The
+chain has a fixed tip at height 5,000, a coinbase transaction in each block, one
+simulated peer and an empty mempool. Blocks are generated on request. The dashboard,
+charts, block and transaction detail, and node status can use these fixtures. RPC
+methods outside the demo return an error. The launcher uses temporary settings and
+cache directories and removes them when you close the window.
+
+Use `--open 5000` to start at the tip, or `--binary PATH` for a different build.
+
 ## Connect to a node
 
 The app reads the RPC settings from the node configuration file. These are the standard locations on Linux:
