@@ -104,6 +104,13 @@ step() {
             sleep 0.6
             ;;
         shot) picture "$1" ;;
+        clip)
+            # clip name.txt: writes the text of the clipboard into the folder of <out.png>.
+            command -v xclip >/dev/null 2>&1 \
+                || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq xclip >/dev/null 2>&1; }
+            xclip -o -selection clipboard > "$(dirname "$out")/$1" 2>/dev/null || true
+            echo "clipboard: $1"
+            ;;
         focus) focus ;;
         "") ;;
         *) echo "shot: unknown step: $verb" >&2; return 1 ;;
