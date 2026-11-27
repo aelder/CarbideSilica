@@ -53,6 +53,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.1" date="2026-11-26">
+      <description>
+        <p>The Charts crosshair follows the pointer between blocks. The chart reuses the panels and readout widgets to make hovering smoother.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-11-26">
       <description>
         <p>The first Linux release. It has all pages of the macOS app.</p>

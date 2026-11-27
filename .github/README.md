@@ -8,7 +8,7 @@
 <p align="center">
   <img alt="macOS 15 or later" src="https://img.shields.io/badge/macOS-15%2B-1c1c1c?style=flat-square&logo=apple&logoColor=white">
   <img alt="Linux with GTK 4.14 or later" src="https://img.shields.io/badge/Linux-GTK_4.14%2B-1c1c1c?style=flat-square&logo=linux&logoColor=white">
-  <a href="https://github.com/aelder/CarbideSilica/releases/tag/linux-v0.1.0"><img alt="Linux release 0.1.0" src="https://img.shields.io/badge/Linux_release-0.1.0-55616d?style=flat-square"></a>
+  <a href="https://github.com/aelder/CarbideSilica/releases/tag/linux-v0.1.1"><img alt="Linux release 0.1.1" src="https://img.shields.io/badge/Linux_release-0.1.1-55616d?style=flat-square"></a>
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-f05138?style=flat-square&logo=swift&logoColor=white">
   <img alt="Rust 1.88 or later" src="https://img.shields.io/badge/Rust-1.88%2B-8c4a2f?style=flat-square&logo=rust&logoColor=white">
   <img alt="Bridge made with UniFFI" src="https://img.shields.io/badge/bridge-UniFFI-55616d?style=flat-square">
@@ -169,19 +169,19 @@ The Linux app is in the `linux` folder. It calls the same bridge crate as the ma
 
 ### Install
 
-[Release 0.1.0](https://github.com/aelder/CarbideSilica/releases/tag/linux-v0.1.0) has two packages for x86-64.
+[Release 0.1.1](https://github.com/aelder/CarbideSilica/releases/tag/linux-v0.1.1) has two packages for x86-64.
 
 On Debian 13, use the `.deb` package. apt installs the libraries.
 
 ```sh
-sudo apt install ./carbide-silica_0.1.0_amd64.deb
+sudo apt install ./carbide-silica_0.1.1_amd64.deb
 ```
 
 On other distributions, use the tarball. It installs into `~/.local`.
 
 ```sh
-tar -xzf carbide-silica-0.1.0-linux-x86_64.tar.gz
-./carbide-silica-0.1.0-linux-x86_64/install.sh
+tar -xzf carbide-silica-0.1.1-linux-x86_64.tar.gz
+./carbide-silica-0.1.1-linux-x86_64/install.sh
 ```
 
 The tarball does not install libraries. The app needs GTK 4.14 or later, ALSA, fontconfig and the CA certificates of the system. The demo needs Python 3.

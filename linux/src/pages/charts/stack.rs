@@ -8,7 +8,7 @@
 //! event can be seen in each measure.
 //!
 //! Drawing is in layers: the panels (`base`) redraw only for a new range or width; the
-//! cursor (`cursors`) redraws when the pointer moves to another block or the selection
+//! cursor (`cursors`) redraws when the pointer moves or the selection
 //! changes; the light (`light`) redraws on the frame clock.
 
 use std::cell::{Cell, RefCell};
@@ -20,7 +20,6 @@ use gtk::{gdk, glib, graphene, gsk};
 
 use crate::bridge::api::{BlockProduction, ChartPage};
 use crate::format;
-use crate::page::load::clear;
 use crate::theme::draw::{self, Anchor};
 use crate::theme::{self, font, tone, Color};
 use crate::widgets::canvas::Canvas;
@@ -69,10 +68,9 @@ pub struct ChartStack {
     base: Canvas,
     cursors: Canvas,
     light: Rc<ChartLight>,
-    readout: gtk::Box,
+    readout: Readout,
     waits: WaitsStrip,
     select: Rc<dyn Fn(&str)>,
-    open: Rc<dyn Fn(&str)>,
 }
 
 fn rect(panel: Panel, width: f32) -> graphene::Rect {
@@ -343,7 +341,21 @@ impl ChartStack {
         let base = Canvas::new(0, PLOT_HEIGHT as i32, move |canvas, snapshot, w, _h| {
             let shared = s.borrow();
             if let (Some(input), Some(model)) = (&shared.input, &shared.model) {
-                draw_panels(snapshot, canvas, w, input, model, false);
+                // GTK retains this snapshot between frames. Give the renderer one static
+                // texture to composite under the moving cursor and glow.
+                let Some(renderer) = canvas.native().and_then(|native| native.renderer()) else {
+                    draw_panels(snapshot, canvas, w, input, model, false);
+                    return;
+                };
+                let scale = canvas.scale_factor().max(1) as f32;
+                let panels = gtk::Snapshot::new();
+                panels.scale(scale, scale);
+                draw_panels(&panels, canvas, w, input, model, false);
+                if let Some(node) = panels.to_node() {
+                    let viewport = draw::rect(0.0, 0.0, w * scale, PLOT_HEIGHT * scale);
+                    let texture = renderer.render_texture(node, Some(&viewport));
+                    snapshot.append_texture(&texture, &draw::rect(0.0, 0.0, w, PLOT_HEIGHT));
+                }
             }
         });
         base.set_hexpand(true);
@@ -359,11 +371,8 @@ impl ChartStack {
             let at = |index: usize| model.x(input.page.samples[index].time as f64, left, right);
             // The selected block is a line of the present with a little light. The block
             // under the pointer is a quieter line.
-            if let Some(hovered) = shared.hovered
-                && Some(hovered) != selected_index
-                && hovered < count
-            {
-                let cx = at(hovered);
+            if let Some(x) = shared.pointer.filter(|_| shared.hovered.is_some() && right > left) {
+                let cx = x.clamp(left, right);
                 draw::rule(snapshot, cx, HEADER, cx, bottom, tone::PRESENT.opacity(0.45), 1.0, &[]);
             }
             let strong = selected_index.or(if shared.hovered.is_none() && count > 0 { Some(count - 1) } else { None });
@@ -386,17 +395,22 @@ impl ChartStack {
             "Block rate, mining difficulty, staking difficulty, staked share and fee pool on one time axis",
         )]);
 
-        let readout = gtk::Box::new(gtk::Orientation::Vertical, 7);
-        readout.set_margin_start(18);
-        readout.set_margin_end(18);
-        readout.set_margin_top(14);
-        readout.set_margin_bottom(10);
-        readout.set_size_request(-1, 40);
+        let s = shared.clone();
+        let readout = Readout::new(move || {
+            let shared = s.borrow();
+            if let Some(index) = Self::shown_index(&shared)
+                && let Some(sample) = shared.input.as_ref().and_then(|i| i.page.samples.get(index))
+            {
+                let hash = sample.hash.clone();
+                drop(shared);
+                open(&hash);
+            }
+        });
 
         let waits = WaitsStrip::new();
 
         let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        column.append(&readout);
+        column.append(&readout.root);
         column.append(&display::rule());
         column.append(&plot);
         column.append(&waits.root);
@@ -412,7 +426,6 @@ impl ChartStack {
             readout,
             waits,
             select: Rc::new(select),
-            open: Rc::new(open),
         });
 
         // The pointer: the block under it, and the light it leaves.
@@ -461,8 +474,9 @@ impl ChartStack {
             let width = canvas.width();
             let stale = {
                 let shared = stack.shared.borrow();
-                let key = shared.input.as_ref().map(|i| i.key.clone());
-                key.is_some() && !shared.pictures_pending && shared.pictures.as_ref().map(|(k, w)| (Some(k.clone()), *w)) != Some((key, width))
+                !shared.pictures_pending && shared.input.as_ref().is_some_and(|input| {
+                    !shared.pictures.as_ref().is_some_and(|(key, w)| key == &input.key && *w == width)
+                })
             };
             if stale && width > 0 {
                 stack.schedule_pictures();
@@ -553,25 +567,23 @@ impl ChartStack {
     }
 
     fn hover_at(&self, x: Option<f32>) {
-        self.shared.borrow_mut().pointer = x;
         let width = self.base.width() as f32;
-        let (hovered, place) = {
-            let shared = self.shared.borrow();
-            match (x, &shared.model, &shared.input) {
-                (Some(x), Some(model), Some(input)) => {
-                    let (left, right) = plot_frame(width);
-                    let index = model.nearest(x, left, right).filter(|i| *i < input.page.samples.len());
-                    (index, index.map(|i| model.x(input.page.samples[i].time as f64, left, right)))
-                }
-                _ => (None, None),
-            }
-        };
-        self.light.pointer(place);
-        if self.shared.borrow().hovered == hovered {
+        let mut shared = self.shared.borrow_mut();
+        let previous = shared.pointer;
+        shared.pointer = x;
+        let (left, right) = plot_frame(width);
+        let position = x.filter(|_| right > left && shared.model.is_some()).map(|x| x.clamp(left, right));
+        let hovered = position.and_then(|x| shared.model.as_ref()?.nearest(x, left, right));
+        let changed = shared.hovered != hovered;
+        shared.hovered = hovered;
+        drop(shared);
+        if previous != x || changed {
+            self.light.pointer(position);
+            self.cursors.queue_draw();
+        }
+        if !changed {
             return;
         }
-        self.shared.borrow_mut().hovered = hovered;
-        self.cursors.queue_draw();
         self.update_readout();
     }
 
@@ -588,59 +600,31 @@ impl ChartStack {
 
     /// Each value at the block under the cursor, above the panels and not below the page.
     fn update_readout(&self) {
-        clear(&self.readout);
         let shared = self.shared.borrow();
+        let model = shared.model.as_ref();
         let index = Self::shown_index(&shared);
-        let (Some(input), Some(model), Some(index)) = (&shared.input, &shared.model, index) else {
-            self.readout.append(&theme::label(font::CAPTION, " ", ""));
-            self.readout.append(&theme::label(font::CAPTION, " ", ""));
-            self.waits.set(None, None);
+        let sample = index.and_then(|i| shared.input.as_ref()?.page.samples.get(i));
+        let valid = index.is_some_and(|i| model.is_some_and(|m| m.has(i)));
+        self.readout.first.set_visible(valid);
+        self.readout.second.set_visible(valid);
+        let (Some(index), Some(sample), Some(model)) = (index.filter(|_| valid), sample, model) else {
+            self.waits.set(model.cloned(), None);
             return;
         };
-        if index >= input.page.samples.len() || !model.has(index) {
-            self.readout.append(&theme::label(font::CAPTION, " ", ""));
-            self.readout.append(&theme::label(font::CAPTION, " ", ""));
-            self.waits.set(Some(model.clone()), None);
-            return;
-        }
-        let sample = &input.page.samples[index];
-        let first = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let open = self.open.clone();
-        let hash = sample.hash.clone();
-        let block = link::link_in(font::FIGURE_SMALL, &format!("Block {}", format::integer(sample.height)), move || open(&hash));
-        block.set_tooltip_text(Some("Open this block"));
-        first.append(&block);
-        let fill = match sample.production {
-            BlockProduction::Staked => PlateFill::Staked,
-            BlockProduction::Mined => PlateFill::Mined,
-            BlockProduction::Unknown => PlateFill::None,
-        };
-        let plate = display::plate(chart_format::production(sample.production), fill);
-        plate.set_valign(gtk::Align::Center);
-        first.append(&plate);
-        let date = theme::label(font::CAPTION, &format::date(sample.time), "value");
-        date.set_valign(gtk::Align::Baseline);
-        first.append(&date);
+        let r = &self.readout;
+        r.block.set_text(&format!("Block {}", format::integer(sample.height)));
+        r.production.set_visible_child_name(chart_format::production(sample.production));
+        r.date.set_text(&format::date(sample.time));
+        r.after.set_visible(sample.interval.is_some());
         if let Some(interval) = sample.interval {
-            let after = theme::label(font::CAPTION, &format!("· {} after the block before", chart_format::signed_seconds(interval)), "label");
-            after.set_valign(gtk::Align::Baseline);
-            first.append(&after);
+            r.after.set_text(&format!("· {} after the block before", chart_format::signed_seconds(interval)));
         }
-        if shared.hovered.is_some() {
-            let hint = theme::label(font::CAPTION, "· click to select", "label");
-            hint.set_opacity(0.7);
-            hint.set_valign(gtk::Align::Baseline);
-            first.append(&hint);
-        }
-        self.readout.append(&first);
-
-        let second = gtk::Box::new(gtk::Orientation::Horizontal, 20);
-        second.append(&figure("Rate", &model.rate_text(index), "value"));
-        second.append(&figure("Mining", &model.mining_at[index].map(format::difficulty).unwrap_or_else(|| "–".into()), "mined"));
-        second.append(&figure("Staking", &model.staking_at[index].map(format::difficulty).unwrap_or_else(|| "–".into()), "staked"));
-        second.append(&figure("Staked share", &sample.share100.map(format::percent).unwrap_or_else(|| "–".into()), "value"));
-        second.append(&figure("Fee pool", &model.pool_text(index), "value"));
-        self.readout.append(&second);
+        r.hint.set_visible(shared.hovered.is_some());
+        r.rate.set_text(&model.rate_text(index));
+        r.mining.set_text(&model.mining_at[index].map(format::difficulty).unwrap_or_else(|| "–".into()));
+        r.staking.set_text(&model.staking_at[index].map(format::difficulty).unwrap_or_else(|| "–".into()));
+        r.share.set_text(&sample.share100.map(format::percent).unwrap_or_else(|| "–".into()));
+        r.pool.set_text(&model.pool_text(index));
 
         // The wait that ended with the shown block, when that block started a burst.
         let wait = sample.interval.filter(|i| *i > BURST_SECONDS).map(|i| i as f64);
@@ -648,16 +632,77 @@ impl ChartStack {
     }
 }
 
-/// A name and its figure at the shown block: "MINING 1.23T".
-fn figure(label: &str, value: &str, class: &str) -> gtk::Box {
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    let name = display::name_text(label);
-    name.set_valign(gtk::Align::Baseline);
-    let figure = theme::label(font::FIGURE_SMALL, value, class);
-    figure.set_valign(gtk::Align::Baseline);
-    row.append(&name);
-    row.append(&figure);
-    row
+struct Readout {
+    root: gtk::Box,
+    first: gtk::Box,
+    second: gtk::Box,
+    block: gtk::Label,
+    production: gtk::Stack,
+    date: gtk::Label,
+    after: gtk::Label,
+    hint: gtk::Label,
+    rate: gtk::Label,
+    mining: gtk::Label,
+    staking: gtk::Label,
+    share: gtk::Label,
+    pool: gtk::Label,
+}
+
+impl Readout {
+    fn new(open: impl Fn() + 'static) -> Self {
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 7);
+        root.set_margin_start(18);
+        root.set_margin_end(18);
+        root.set_margin_top(14);
+        root.set_margin_bottom(10);
+        root.set_size_request(-1, 40);
+        let first = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let button = link::link_in(font::FIGURE_SMALL, "", open);
+        button.set_tooltip_text(Some("Open this block"));
+        let block = link::label_of(&button).unwrap();
+        theme::set_role(&block, font::FIGURE_SMALL);
+        first.append(&button);
+        let production = gtk::Stack::new();
+        production.set_valign(gtk::Align::Center);
+        for (kind, fill) in [(BlockProduction::Staked, PlateFill::Staked), (BlockProduction::Mined, PlateFill::Mined),
+                             (BlockProduction::Unknown, PlateFill::None)] {
+            let name = chart_format::production(kind);
+            production.add_named(&display::plate(name, fill), Some(name));
+        }
+        first.append(&production);
+        let value_label = |role, class| {
+            let label = theme::text_label(role, "", &[class]);
+            label.set_valign(gtk::Align::Baseline);
+            label
+        };
+        let date = value_label(font::CAPTION, "value");
+        let after = value_label(font::CAPTION, "label");
+        first.append(&date);
+        first.append(&after);
+        let hint = theme::label(font::CAPTION, "· click to select", "label");
+        hint.set_opacity(0.7);
+        hint.set_valign(gtk::Align::Baseline);
+        first.append(&hint);
+        let second = gtk::Box::new(gtk::Orientation::Horizontal, 20);
+        let figure = |name: &str, class| {
+            let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            let title = display::name_text(name);
+            title.set_valign(gtk::Align::Baseline);
+            row.append(&title);
+            let value = value_label(font::FIGURE_SMALL, class);
+            row.append(&value);
+            second.append(&row);
+            value
+        };
+        let rate = figure("Rate", "value");
+        let mining = figure("Mining", "mined");
+        let staking = figure("Staking", "staked");
+        let share = figure("Staked share", "value");
+        let pool = figure("Fee pool", "value");
+        root.append(&first);
+        root.append(&second);
+        Self { root, first, second, block, production, date, after, hint, rate, mining, staking, share, pool }
+    }
 }
 
 // MARK: - Waits
@@ -692,7 +737,7 @@ impl WaitsStrip {
         canvas.set_hexpand(true);
         canvas.update_property(&[gtk::accessible::Property::Label("Distribution of waits between bursts in this range")]);
         root.append(&canvas);
-        let caption = theme::label(font::CAPTION, "", "label");
+        let caption = theme::text_label(font::CAPTION, "", &["label"]);
         caption.set_wrap(true);
         caption.set_margin_start(18);
         caption.set_margin_end(18);
@@ -728,7 +773,7 @@ impl WaitsStrip {
             ),
             None => "The shown block followed its parent within the burst time.".into(),
         };
-        theme::set_label(&self.caption, font::CAPTION, &text);
+        self.caption.set_text(&text);
         *self.shown.borrow_mut() = (Some(model), wait);
         self.canvas.queue_draw();
     }

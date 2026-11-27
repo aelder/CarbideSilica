@@ -1,6 +1,6 @@
 # Carbide Silica for Linux
 
-Carbide Silica for Linux is the Linux version of the Carbide Silica explorer for Verus and PBaaS chains. [Release 0.1.0](https://github.com/aelder/CarbideSilica/releases/tag/linux-v0.1.0) has a `.deb` package and a tarball for x86-64. It has the same pages, the same functions and the same display as the macOS app. It is written in Rust with GTK 4 (gtk4-rs). It calls the same bridge crate as the macOS app, so it uses Carbide's RPC client, decoding and cache. Carbide is the terminal explorer by [alexenglish](https://github.com/alexenglish).
+Carbide Silica for Linux is the Linux version of the Carbide Silica explorer for Verus and PBaaS chains. [Release 0.1.1](https://github.com/aelder/CarbideSilica/releases/tag/linux-v0.1.1) has a `.deb` package and a tarball for x86-64. It has the same pages, the same functions and the same display as the macOS app. It is written in Rust with GTK 4 (gtk4-rs). It calls the same bridge crate as the macOS app, so it uses Carbide's RPC client, decoding and cache. Carbide is the terminal explorer by [alexenglish](https://github.com/alexenglish).
 
 The app is read-only. It does not read a wallet, and it cannot create, sign or send a transaction.
 
@@ -28,7 +28,7 @@ The app brings its own fonts. For emoji and for Chinese, Japanese, Korean and Ar
 ### Debian package
 
 ```sh
-sudo apt install ./carbide-silica_0.1.0_amd64.deb
+sudo apt install ./carbide-silica_0.1.1_amd64.deb
 ```
 
 Use the file name of your architecture. apt installs the libraries in the `Depends` list of the package. The package puts the binary in `/usr/bin`, the fonts and sounds in `/usr/share/carbide-silica`, and the desktop file, the AppStream file and the icons in `/usr/share`. The app then shows in the application menu of the desktop.
@@ -44,8 +44,8 @@ sudo apt remove carbide-silica
 The tarball has `bin/`, `share/`, `install.sh` and `uninstall.sh`. The scripts install to a prefix. The default prefix is `~/.local`.
 
 ```sh
-tar -xzf carbide-silica-0.1.0-linux-x86_64.tar.gz
-cd carbide-silica-0.1.0-linux-x86_64
+tar -xzf carbide-silica-0.1.1-linux-x86_64.tar.gz
+cd carbide-silica-0.1.1-linux-x86_64
 ./install.sh            # into ~/.local
 ./install.sh /opt/carbide-silica
 ```

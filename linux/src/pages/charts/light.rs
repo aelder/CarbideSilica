@@ -247,7 +247,7 @@ impl ChartLight {
         self.canvas.queue_draw();
     }
 
-    /// The place of the block under the pointer, in the coordinates of the panels, or None.
+    /// The pointer position in panel coordinates, or None when it leaves the plot.
     pub fn pointer(&self, x: Option<f32>) {
         let now = seconds(&self.canvas);
         let mut state = self.state.borrow_mut();

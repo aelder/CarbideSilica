@@ -212,6 +212,8 @@ pub struct StackModel {
     pub end: f64,
     pub index: HashMap<String, usize>,
     times: Vec<f64>,
+    /// Original indices in timestamp order, keeping the first block at each timestamp.
+    by_time: Vec<usize>,
 
     pub bucket_seconds: f64,
     pub bucket_name: &'static str,
@@ -279,8 +281,10 @@ impl StackModel {
         let rate_target = bucket_seconds / 60.0;
         let mut periods: Vec<Bucket> = Vec::new();
         let mut period_end = end;
-        let mut sorted = times.clone();
-        sorted.sort_by(f64::total_cmp);
+        let mut by_time: Vec<_> = (0..samples.len()).collect();
+        by_time.sort_by_key(|&i| samples[i].time);
+        let sorted: Vec<_> = by_time.iter().map(|&i| times[i]).collect();
+        by_time.dedup_by_key(|i| samples[*i].time);
         while period_end - bucket_seconds >= start {
             let low = period_end - bucket_seconds;
             let from = partition_index(&sorted, |t| t > low);
@@ -421,6 +425,7 @@ impl StackModel {
             end,
             index,
             times,
+            by_time,
             bucket_seconds,
             bucket_name,
             rate_target,
@@ -456,20 +461,18 @@ impl StackModel {
 
     /// The block nearest in time to a horizontal position.
     pub fn nearest(&self, x: f32, left: f32, right: f32) -> Option<usize> {
-        if self.times.is_empty() {
-            return None;
-        }
         let share = ((x - left) / (right - left)) as f64;
         let time = self.start + share.clamp(0.0, 1.0) * (self.end - self.start);
-        let mut best = 0;
-        let mut distance = f64::INFINITY;
-        for (position, value) in self.times.iter().enumerate() {
-            if (value - time).abs() < distance {
-                distance = (value - time).abs();
-                best = position;
-            }
+        let next = self.by_time.partition_point(|&i| self.times[i] < time);
+        let (before, after) = self.by_time.split_at(next);
+        match (before.last(), after.first()) {
+            (Some(&a), Some(&b)) => Some(match (time - self.times[a]).total_cmp(&(self.times[b] - time)) {
+                std::cmp::Ordering::Less => a,
+                std::cmp::Ordering::Greater => b,
+                std::cmp::Ordering::Equal => a.min(b),
+            }),
+            (a, b) => a.or(b).copied(),
         }
-        Some(best)
     }
 
     /// The fee pool's log-like scale keeps zero defined. The other panels are linear.
@@ -779,6 +782,16 @@ mod tests {
         assert_eq!(model.x(model.end, 10.0, 110.0), 110.0);
         assert!(model.has(9));
         assert!(!model.has(10));
+    }
+
+    #[test]
+    fn nearest_handles_out_of_order_and_equal_block_times() {
+        let samples: Vec<_> = [0, 80, 20, 80, 100].into_iter().enumerate()
+            .map(|(i, t)| sample(i as u64, t, None)).collect();
+        let model = StackModel::new(&samples, 7_200, &FeePoolState::default(), "VRSC");
+        assert_eq!(model.nearest(21.0, 0.0, 100.0), Some(2));
+        assert_eq!(model.nearest(80.0, 0.0, 100.0), Some(1));
+        assert_eq!(model.nearest(50.0, 0.0, 100.0), Some(1));
     }
 
     #[test]
