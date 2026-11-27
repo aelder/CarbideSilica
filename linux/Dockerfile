@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl build-essential pkg-config \
         libgtk-4-dev libasound2-dev libfontconfig-dev \
-        xvfb xauth imagemagick x11-utils xdotool \
+        xvfb xauth imagemagick x11-utils xdotool xclip \
         fontconfig dbus-x11 \
         fonts-noto-color-emoji fonts-noto-cjk fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*

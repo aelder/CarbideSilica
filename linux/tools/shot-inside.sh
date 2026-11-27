@@ -86,6 +86,13 @@ step() {
             focused=1
             sleep 0.6
             ;;
+        dclick)
+            xdotool mousemove "$1" "$2"
+            sleep 0.3
+            xdotool click --repeat 2 --delay 80 1
+            focused=1
+            sleep 0.6
+            ;;
         drag)
             # drag x1 y1 x2 y2: press at the first point, move in steps, release at the second
             xdotool mousemove "$1" "$2"
@@ -121,8 +128,6 @@ step() {
             ;;
         clip)
             # clip name.txt: writes the text of the clipboard into the folder of <out.png>.
-            command -v xclip >/dev/null 2>&1 \
-                || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq xclip >/dev/null 2>&1; }
             xclip -o -selection clipboard > "$(dirname "$out")/$1" 2>/dev/null || true
             echo "clipboard: $1"
             ;;
