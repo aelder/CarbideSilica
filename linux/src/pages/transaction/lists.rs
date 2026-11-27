@@ -216,7 +216,7 @@ fn annotation_row(annotations: &[String], badges: &[String]) -> Option<gtk::Box>
     for badge in badges {
         let label = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         label.append(&icons::icon(Icon::Hourglass, 11, tone::MINED));
-        let text = page::text(badge, &["caption-text", "medium", "mined"]);
+        let text = page::text(badge, &["caption-small", "medium", "mined"]);
         label.append(&text);
         label.set_tooltip_text(Some(if badge == "Immature" {
             "A coinbase output cannot be spent until it is 100 blocks deep."
@@ -243,7 +243,7 @@ fn value_text(model: &AppModel, sats: Option<i64>, derived: bool, shielded: bool
             amount.set_halign(gtk::Align::End);
             column.append(&amount);
             if derived {
-                let note = page::text("Derived from Sapling valueBalance", &["caption-text", "secondary"]);
+                let note = page::text("Derived from Sapling valueBalance", &["caption-small", "secondary"]);
                 note.set_xalign(1.0);
                 column.append(&note);
             }

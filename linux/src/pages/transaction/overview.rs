@@ -209,7 +209,7 @@ fn value_lines(page: &Page, tx: &api::TransactionDetail, body: &gtk::Box) {
         body.append(&labelled("Public native delta", &value));
         body.append(&page::paragraph(
             "Transparent inputs minus transparent outputs, plus the net shielded flow. It is not the fee.",
-            &["caption-text", "secondary"],
+            &["caption-small", "secondary"],
         ));
     }
 }

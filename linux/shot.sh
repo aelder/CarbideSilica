@@ -28,6 +28,7 @@
 #   scroll down 5 [x y] turn the wheel 5 steps (up, down, left, right), at x y if given
 #   shot name.png       take a picture now, into the folder of <out.png>
 #   size 980 700        resize the last window of the app
+#   clip name.txt       write the text of the clipboard into the folder of <out.png>
 # The picture <out.png> is taken after the last step. For example:
 #   STEPS="key Tab; wait 2; shot json.png; scroll down 10 640 600; wait 1" \
 #     ./shot.sh 4338679 /tmp/block/end.png

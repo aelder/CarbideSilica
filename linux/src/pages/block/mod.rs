@@ -170,7 +170,7 @@ fn show(page: &Rc<Page>, holder: &gtk::Box, block: api::BlockDetail) {
         transactions.append(&page::tag_row(&tags));
         transactions.append(&page::text(
             "The tags of all transactions in the block, without Coinbase and Stake.",
-            &["secondary", "caption-text"],
+            &["secondary", "caption-small"],
         ));
     }
     let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
