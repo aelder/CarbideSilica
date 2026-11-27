@@ -307,6 +307,8 @@ menubutton.lamp > button { background: none; border: none; box-shadow: none; pad
 .table-row { background-color: transparent; }
 .table-row:hover { background-color: @grid; }
 .table-row.selected { background-color: alpha(@present, 0.1); box-shadow: inset 2px 0 0 @present; }
+/* The keyboard cursor on a row: the rules above must not hide it. */
+.table-row.cursor-on, .table-row.cursor-on:hover { background-color: alpha(@record, 0.22); }
 
 /* Text at 85% of the value tone. */
 .value-soft { color: alpha(@value, 0.85); }
