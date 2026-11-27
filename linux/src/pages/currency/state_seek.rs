@@ -499,6 +499,7 @@ impl Activity {
     }
 
     fn render(self: &Rc<Self>) {
+        crate::page::load::release_focus(&self.body);
         clear(&self.body);
         let (Some(page), Some(model)) = (self.page.upgrade(), self.model.upgrade()) else { return };
         let rule = display::rule();

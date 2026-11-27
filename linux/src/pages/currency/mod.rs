@@ -200,6 +200,7 @@ fn show(page: &Rc<Page>, holder: &gtk::Box, route: &str, currency: api::Currency
     let render: Rc<dyn Fn()> = {
         let (page, fixed, currency, unit, chosen) = (Rc::downgrade(page), fixed.downgrade(), currency.clone(), unit.clone(), chosen_unit.clone());
         let (over_time, again) = (Rc::downgrade(&over_time), again.clone());
+        let menu_cache: Rc<MenuCache> = Rc::default();
         Rc::new(move || {
             let (Some(page), Some(fixed)) = (page.upgrade(), fixed.upgrade()) else { return };
             let changed: Rc<dyn Fn(String)> = {
@@ -218,7 +219,7 @@ fn show(page: &Rc<Page>, holder: &gtk::Box, route: &str, currency: api::Currency
                     });
                 })
             };
-            fill_fixed(&page, &fixed, &currency, unit(), changed);
+            fill_fixed(&page, &fixed, &currency, unit(), changed, &menu_cache);
         })
     };
     *again.borrow_mut() = Some(Rc::downgrade(&render));
@@ -320,7 +321,17 @@ fn reserve_name(model: &AppModel, reserve: &api::ReserveRow) -> String {
 }
 
 /// The definition, the current state and the reserves.
-fn fill_fixed(page: &Rc<Page>, holder: &gtk::Box, currency: &api::CurrencyDetail, unit: Option<String>, changed: Rc<dyn Fn(String)>) {
+/// The "Show values in" menu that the reserves card keeps, with its titles.
+type MenuCache = RefCell<Option<(Vec<String>, Rc<lamp::Menu>)>>;
+
+fn fill_fixed(
+    page: &Rc<Page>,
+    holder: &gtk::Box,
+    currency: &api::CurrencyDetail,
+    unit: Option<String>,
+    changed: Rc<dyn Fn(String)>,
+    menu_cache: &MenuCache,
+) {
     clear(holder);
     let model = page.model.clone();
     let definition = page.card("Definition", None);
@@ -376,14 +387,28 @@ fn fill_fixed(page: &Rc<Page>, holder: &gtk::Box, currency: &api::CurrencyDetail
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
         row.append(&display::name_text("Show values in"));
         let titles: Vec<String> = currency.reserves.iter().map(|r| reserve_name(&model, r)).collect();
-        let titles: Vec<&str> = titles.iter().map(String::as_str).collect();
         let ids: Vec<String> = currency.reserves.iter().map(|r| r.currency_id.clone()).collect();
         let selected = ids.iter().position(|id| Some(id) == unit.as_ref()).unwrap_or(0);
-        let menu = lamp::Menu::new(&titles, selected, move |index| {
-            if let Some(id) = ids.get(index) {
-                changed(id.clone());
+        // The menu is kept while its titles stay the same: it is the parent of its open
+        // list, which is still closing when the reserves are drawn again.
+        let mut cache = menu_cache.borrow_mut();
+        let menu = match cache.as_ref() {
+            Some((kept, menu)) if *kept == titles => menu.clone(),
+            _ => {
+                let names: Vec<&str> = titles.iter().map(String::as_str).collect();
+                let menu = lamp::Menu::new(&names, selected, move |index| {
+                    if let Some(id) = ids.get(index) {
+                        changed(id.clone());
+                    }
+                });
+                *cache = Some((titles.clone(), menu.clone()));
+                menu
             }
-        });
+        };
+        menu.set_selected(selected);
+        if menu.button.parent().is_some() {
+            menu.button.unparent();
+        }
         row.append(&menu.button);
         reserves.append(&row);
     }

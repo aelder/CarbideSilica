@@ -247,7 +247,7 @@ pub fn install(app: &gtk::Application, shell: &Rc<Shell>) -> gio::Menu {
     };
     let owner = shell.window.clone();
     update(&shell.model);
-    shell.model.watch(&[Topic::Path, Topic::Display, Topic::Status, Topic::Node], &owner, update);
+    shell.model.watch(&[Topic::Path, Topic::Display, Topic::Status, Topic::Node, Topic::Hooks], &owner, update);
 
     // "Previous Block", "Next Version": the items name what the open page steps through.
     let steps = gio::Menu::new();

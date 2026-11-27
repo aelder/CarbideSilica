@@ -297,13 +297,19 @@ impl IdentityView {
         state.status.is_some() && state.status_error.is_none()
     }
 
+    /// Views another version. The parts are built again after the click that asked for it
+    /// has ended, because the key or link that was clicked is one of the parts.
     fn select(self: &Rc<Self>, index: usize) {
         if index >= self.timeline.versions.len() {
             return;
         }
-        let changed = index != self.viewed.get();
-        self.viewed.set(index);
-        self.render_kept(changed);
+        let weak = Rc::downgrade(self);
+        glib::idle_add_local_once(move || {
+            let Some(view) = weak.upgrade() else { return };
+            let changed = index != view.viewed.get();
+            view.viewed.set(index);
+            view.render_kept(changed);
+        });
     }
 
     /// Builds the parts of the viewed version again and keeps the keyboard cursor on the
@@ -759,10 +765,15 @@ impl IdentityView {
         let toggle: Rc<dyn Fn()> = {
             let weak = Rc::downgrade(self);
             Rc::new(move || {
-                if let Some(view) = weak.upgrade() {
-                    view.show_all_history.set(!view.show_all_history.get());
-                    view.render_history();
-                }
+                // After the click: the link that was clicked is part of the card.
+                let weak = weak.clone();
+                glib::idle_add_local_once(move || {
+                    if let Some(view) = weak.upgrade() {
+                        view.show_all_history.set(!view.show_all_history.get());
+                        let Some(page) = view.page.upgrade() else { return };
+                        page.cursor.keeping_selection(|| view.render_history());
+                    }
+                });
             })
         };
         self.history.append(&control::history_card(
