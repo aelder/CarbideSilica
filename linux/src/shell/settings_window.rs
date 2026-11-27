@@ -8,7 +8,7 @@ use gtk::{gio, glib};
 
 use crate::bridge;
 use crate::format;
-use crate::model::AppModel;
+use crate::model::{AppModel, Topic};
 use crate::page::{note, paragraph};
 use crate::settings::{self, key};
 use crate::widgets::{display, lamp};
@@ -44,7 +44,7 @@ fn text_entry(setting: &'static str, placeholder: &str, default: &str) -> gtk::E
 
 fn check(model: &Rc<AppModel>, title: &str, setting: &'static str, default: bool, display_setting: bool) -> gtk::CheckButton {
     let weak = Rc::downgrade(model);
-    crate::page::check_box(title, settings::bool(setting, default), move |on| {
+    let check = crate::page::check_box(title, settings::bool(setting, default), move |on| {
         if let Some(model) = weak.upgrade() {
             if display_setting {
                 model.set_display(setting, on);
@@ -52,7 +52,19 @@ fn check(model: &Rc<AppModel>, title: &str, setting: &'static str, default: bool
                 settings::set_bool(setting, on);
             }
         }
-    })
+    });
+    // A display setting also changes with a key or a menu command while the window is
+    // open. The box follows it, as a toggle bound to `@AppStorage` does.
+    if display_setting {
+        let shown = check.clone();
+        model.watch(&[Topic::Display], &check, move |_| {
+            let on = settings::bool(setting, default);
+            if shown.is_active() != on {
+                shown.set_active(on);
+            }
+        });
+    }
+    check
 }
 
 pub fn window(model: &Rc<AppModel>, parent: &impl IsA<gtk::Window>) -> gtk::Window {
@@ -77,6 +89,13 @@ pub fn window(model: &Rc<AppModel>, parent: &impl IsA<gtk::Window>) -> gtk::Wind
         lamp::button("Choose…", move || {
             let dialog = gtk::FileDialog::new();
             dialog.set_title("Select the .conf file of the Verus node");
+            // The node's own folder, as the macOS panel opens in Komodo/VRSC.
+            if let Some(home) = std::env::var_os("HOME") {
+                let folder = std::path::Path::new(&home).join(".komodo/VRSC");
+                if folder.is_dir() {
+                    dialog.set_initial_folder(Some(&gio::File::for_path(folder)));
+                }
+            }
             let conf = conf.clone();
             dialog.open(window.upgrade().as_ref(), gio::Cancellable::NONE, move |result| {
                 if let Ok(file) = result
@@ -91,6 +110,11 @@ pub fn window(model: &Rc<AppModel>, parent: &impl IsA<gtk::Window>) -> gtk::Wind
     body.append(&conf_row);
     let summary = paragraph(&daemon_summary(model), &["label"]);
     body.append(&summary);
+    // The summary follows the connection, as the footer of the Swift form does.
+    {
+        let shown = summary.clone();
+        model.watch(&[Topic::Connection], &summary, move |model| shown.set_text(&daemon_summary(model)));
+    }
     column.append(&node);
 
     // Public API.
@@ -149,6 +173,14 @@ pub fn window(model: &Rc<AppModel>, parent: &impl IsA<gtk::Window>) -> gtk::Wind
         lamp::button("Choose Folder…", move || {
             let dialog = gtk::FileDialog::new();
             dialog.set_title("Select a folder for the cache. The app stores one file for each network in it.");
+            dialog.set_accept_label(Some("Use Folder"));
+            // The dialog opens at the folder of the cache in use.
+            if let Some(info) = model.upgrade().and_then(|m| m.explorer()).map(|e| e.cache_info())
+                && let Some(folder) = std::path::Path::new(&info.path).parent()
+                && folder.is_dir()
+            {
+                dialog.set_initial_folder(Some(&gio::File::for_path(folder)));
+            }
             let (model, message) = (model.clone(), message.clone());
             dialog.select_folder(window.upgrade().as_ref(), gio::Cancellable::NONE, move |result| {
                 if let Ok(folder) = result
@@ -215,6 +247,21 @@ pub fn window(model: &Rc<AppModel>, parent: &impl IsA<gtk::Window>) -> gtk::Wind
     };
     clear.set_sensitive(model.explorer().is_some());
     keys.append(&clear);
+    // The section follows the connection: a new cache folder reconnects, and the Swift
+    // form reads the cache again for each connection (`.task(id: model.generation)`).
+    let follow = {
+        let (fill_info, default_folder, show_folder, clear) =
+            (fill_info.clone(), default_folder.clone(), show_folder.clone(), clear.clone());
+        move |model: &Rc<AppModel>| {
+            fill_info();
+            default_folder.set_sensitive(!settings::string(key::CACHE_DIR).unwrap_or_default().is_empty());
+            let info = model.explorer().map(|e| e.cache_info());
+            show_folder.set_sensitive(info.as_ref().is_some_and(|i| std::path::Path::new(&i.path).exists()));
+            clear.set_sensitive(info.is_some());
+        }
+    };
+    follow(model);
+    model.watch(&[Topic::Connection], &keys, follow);
     body.append(&keys);
     body.append(&message);
     body.append(&paragraph(
