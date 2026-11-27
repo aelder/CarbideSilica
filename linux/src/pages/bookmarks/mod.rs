@@ -229,6 +229,9 @@ impl Bookmarks {
                 if file.entries.is_empty() {
                     let field = gtk::Box::new(gtk::Orientation::Vertical, 0);
                     field.set_size_request(-1, 160);
+                    // At least 160 high, as `.frame(minHeight: 160)`: the centred text
+                    // must not make the card fill the window.
+                    field.set_vexpand(false);
                     let empty = gtk::Box::new(gtk::Orientation::Vertical, 6);
                     empty.set_valign(gtk::Align::Center);
                     empty.set_halign(gtk::Align::Center);
@@ -571,10 +574,6 @@ fn add_sheet(model: &Rc<AppModel>, parent: &gtk::Window, default_system: &str, d
     window.set_resizable(false);
     window.set_default_size(520, -1);
     let column = gtk::Box::new(gtk::Orientation::Vertical, 14);
-    column.set_margin_top(20);
-    column.set_margin_bottom(20);
-    column.set_margin_start(20);
-    column.set_margin_end(20);
     column.set_size_request(480, -1);
     let title = gtk::Label::new(None);
     title.set_markup(&format!("<span font_size=\"{}\" weight=\"600\">Add a bookmark</span>", crate::theme::pango_points(17.0)));
@@ -668,7 +667,9 @@ fn add_sheet(model: &Rc<AppModel>, parent: &gtk::Window, default_system: &str, d
             }
         });
     }
-    let frame = display::panel(&column, 0);
+    // The panel sets the margins of its child: 20, as `.padding(20)`. With 0 here the
+    // panel took away the margins above, and the text stood at the edge of the sheet.
+    let frame = display::panel(&column, 20);
     window.set_child(Some(&frame));
     window.set_default_widget(Some(&save));
     let escape = gtk::EventControllerKey::new();
