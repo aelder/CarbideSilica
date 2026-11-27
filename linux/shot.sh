@@ -15,6 +15,7 @@
 #   KEYWAIT=3        seconds to wait after KEYS
 #   MOUSE="x y"      a place for the pointer before STEPS, to show a hover state
 #   ARGS="-rpcport=1" more start-up arguments for the app, separated by spaces
+#   STANDARD_CONF=1  put the configuration at ~/.komodo/VRSC and give no -conf argument
 #   CONF=<file>      the node configuration (default: the VRSC.conf of the Extreme SSD)
 #   GSK_RENDERER=... GTK's renderer (default: GTK's choice)
 #   GEOIP=<folder>   an existing location data folder, mounted read-only where the app looks
@@ -66,6 +67,7 @@ docker run --rm --network host "$@" \
     -e MOUSE="${MOUSE:-}" \
     -e STEPS="${STEPS:-}" \
     -e ARGS="${ARGS:-}" \
+    -e STANDARD_CONF="${STANDARD_CONF:-}" \
     -e GSK_RENDERER="${GSK_RENDERER:-}" \
     -w /src/linux \
     "$image" sh /src/linux/tools/shot-inside.sh "$object" "/out/$(basename "$out")"

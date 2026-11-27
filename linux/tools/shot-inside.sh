@@ -22,7 +22,15 @@ display=$(( 300 + $(od -An -N2 -tu2 /dev/urandom) % 600 ))
 Xvfb ":$display" -screen 0 1281x1084x24 -nolisten tcp -nolisten local >/tmp/xvfb.log 2>&1 &
 export DISPLAY=":$display"
 sleep 1
-set -- "-conf=/conf/VRSC.conf"
+# STANDARD_CONF=1: no -conf argument. The configuration is at the standard Linux location,
+# so the run checks the app's own search for the node.
+if [ -n "${STANDARD_CONF:-}" ]; then
+    mkdir -p "$HOME/.komodo/VRSC"
+    ln -s /conf/VRSC.conf "$HOME/.komodo/VRSC/VRSC.conf"
+    set --
+else
+    set -- "-conf=/conf/VRSC.conf"
+fi
 [ -n "$object" ] && set -- "$@" "-open=$object"
 # More start-up arguments (ARGS), split at spaces.
 # shellcheck disable=SC2086

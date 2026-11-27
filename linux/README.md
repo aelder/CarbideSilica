@@ -109,6 +109,8 @@ The app reads the RPC settings from the node configuration file. These are the s
 | A PBaaS chain | `~/.verus/pbaas/<chain ID>/<chain ID>.conf` |
 | A PBaaS chain on the testnet | `~/.verustest/pbaas/<chain ID>/<chain ID>.conf` |
 
+The chain menu in the title bar lists the chains that have a file in these locations.
+
 To use a different file, select it in Settings (Ctrl+,), or start the app with `-conf=`. The start-up arguments are the same as on macOS and in Carbide: `-chain=`, `-testnet`, `-conf=`, `-datadir=`, `-rpcconnect=`, `-rpcport=`, `-rpcuser=`, `-rpcpassword=`, `-pollinterval=` and `-open=`. The arguments apply to one run.
 
 ```sh
@@ -159,7 +161,6 @@ GTK 4 has no menu bar in this window. The menus of the macOS menu bar (View, Go,
 - The app was not built or run on x86_64.
 - The app was not run on Wayland.
 - The `.deb` package was tested only on Debian 13.
-- The chain menu does not list the nodes on this computer. The bridge looks for them only in the macOS locations. Select a configuration file in Settings, or use `-conf=`.
 - Ctrl+Alt+L (the mempool list) can be the lock-screen key of the desktop.
 - Flatpak, AppImage and Snap packages do not exist yet.
 

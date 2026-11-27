@@ -100,7 +100,7 @@ The left pictures are from Carbide's own readme. The right pictures show the sam
 | Subject | Terminal | App |
 |---|---|---|
 | Remote use | Runs on the server beside the node, through SSH and tmux | Runs only on a Mac. It must reach the node's RPC port from that Mac |
-| Platforms | Linux. Carbide is tested on Debian 13 | macOS 15 or later only |
+| Platforms | Linux. Carbide is tested on Debian 13 | macOS 15 or later. A Linux version is in the `linux` folder |
 | Installation | One `cargo build`, one binary | Rust and Xcode, a bridge build and a Swift build. No signed download exists |
 | Size and memory | One small binary in a terminal | A 31 MB app. It used approximately 300 MB of memory on the Dashboard in one measurement |
 | New chain logic | Arrives here first | Arrives after a merge from Carbide, and a new function needs new bridge code |
