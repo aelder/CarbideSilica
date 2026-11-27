@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Carbide Silica
+GenericName=Verus Explorer
+Comment=Show the blocks, transactions, identities and currencies of a Verus node
+Exec=carbide-silica
+TryExec=carbide-silica
+Icon=org.carbide.CarbideSilica
+Terminal=false
+Categories=Network;
+Keywords=Verus;PBaaS;blockchain;explorer;block;transaction;identity;
+StartupNotify=true
+StartupWMClass=carbide-silica

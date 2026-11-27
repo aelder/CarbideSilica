@@ -1,0 +1,12 @@
+# A clean Debian 13 for "package.sh verify". It has the X tools of the picture and no GTK, no
+# fonts of its own and no build tools: the package under test brings its libraries through
+# its Depends, and its own fonts.
+FROM debian:trixie
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        xvfb xauth imagemagick x11-utils xdotool \
+    && rm -rf /var/lib/apt/lists/*
+
+# No accessibility bus in the container: without this, GTK waits for it at start.
+ENV NO_AT_BRIDGE=1 GTK_A11Y=none

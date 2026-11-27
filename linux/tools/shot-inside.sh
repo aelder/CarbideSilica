@@ -3,8 +3,12 @@
 set -eu
 object="$1"
 out="$2"
-cargo build --quiet 2>&1 | grep -E '^error' -A5 || true
-binary=/target/debug/carbide-silica
+# BINARY names an installed binary (package.sh verify). Without it, the debug build.
+binary="${BINARY:-}"
+if [ -z "$binary" ]; then
+    cargo build --quiet 2>&1 | grep -E '^error' -A5 || true
+    binary=/target/debug/carbide-silica
+fi
 test -x "$binary"
 export HOME=/tmp/home
 export XDG_CONFIG_HOME=/tmp/home/config XDG_CACHE_HOME=/tmp/home/cache XDG_DATA_HOME=/tmp/home/data
@@ -130,6 +134,32 @@ step() {
             # clip name.txt: writes the text of the clipboard into the folder of <out.png>.
             xclip -o -selection clipboard > "$(dirname "$out")/$1" 2>/dev/null || true
             echo "clipboard: $1"
+            ;;
+        icon)
+            # icon name.png: the largest window icon of the app as a picture, and WM_CLASS.
+            find_window
+            [ -n "$window" ] || return 0
+            xprop -id "$window" WM_CLASS
+            xprop -notype -id "$window" 32c _NET_WM_ICON | tr -d ' ' | cut -d= -f2 | tr ',' '\n' \
+                | awk 'BEGIN { best = 0 }
+                    { v[NR] = $1 }
+                    END {
+                        i = 1
+                        while (i + 1 <= NR) {
+                            w = v[i]; h = v[i + 1]
+                            if (w * h > best) { best = w * h; bw = w; bh = h; start = i + 2 }
+                            i += 2 + w * h
+                        }
+                        if (best == 0) { print "no icon" > "/dev/stderr"; exit 1 }
+                        print "P3"; print bw, bh; print 255
+                        for (j = 0; j < best; j++) {
+                            p = v[start + j]; a = int(p / 16777216) % 256
+                            r = int(p / 65536) % 256; g = int(p / 256) % 256; b = p % 256
+                            # On the black of the display, as a dock shows it.
+                            print int(r * a / 255), int(g * a / 255), int(b * a / 255)
+                        }
+                    }' > /tmp/icon.ppm && convert /tmp/icon.ppm "$(dirname "$out")/$1" \
+                && echo "icon: $1 ($(identify -format '%wx%h' "$(dirname "$out")/$1"))"
             ;;
         focus) focus ;;
         "") ;;

@@ -31,6 +31,8 @@
 #   shot name.png       take a picture now, into the folder of <out.png>
 #   size 980 700        resize the last window of the app
 #   clip name.txt       write the text of the clipboard into the folder of <out.png>
+#   icon name.png       write the largest window icon of the app into that folder, and
+#                       print the WM_CLASS of the window
 # The picture <out.png> is taken after the last step. For example:
 #   STEPS="key Tab; wait 2; shot json.png; scroll down 10 640 600; wait 1" \
 #     ./shot.sh 4338679 /tmp/block/end.png

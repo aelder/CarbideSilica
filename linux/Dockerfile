@@ -1,4 +1,6 @@
 # Build and test image for the Linux app. The app is built and run only in this container.
+# package.sh also makes the packages here: dpkg-dev (dpkg-deb, dpkg-shlibdeps), fakeroot,
+# rsvg-convert (icon sizes), desktop-file-validate and appstreamcli.
 # Debian 13 (trixie) has GTK 4.18. Rust comes from rustup.
 FROM debian:trixie
 
@@ -9,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         xvfb xauth imagemagick x11-utils xdotool xclip \
         fontconfig dbus-x11 \
         fonts-noto-color-emoji fonts-noto-cjk fonts-noto-core \
+        dpkg-dev fakeroot librsvg2-bin desktop-file-utils appstream \
     && rm -rf /var/lib/apt/lists/*
 
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH
