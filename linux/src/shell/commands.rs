@@ -249,12 +249,43 @@ pub fn install(app: &gtk::Application, shell: &Rc<Shell>) -> gio::Menu {
     update(&shell.model);
     shell.model.watch(&[Topic::Path, Topic::Display, Topic::Status, Topic::Node], &owner, update);
 
-    menus()
+    // "Previous Block", "Next Version": the items name what the open page steps through.
+    let steps = gio::Menu::new();
+    let update_steps = {
+        let (weak, steps) = (Rc::downgrade(shell), steps.clone());
+        let shown = std::cell::RefCell::new(String::new());
+        move |_: &Rc<crate::model::AppModel>| {
+            let Some(shell) = weak.upgrade() else { return };
+            let page_noun = shell.navigator.current().and_then(|p| p.hooks.borrow().adjacent.as_ref().map(|a| a.noun.clone()));
+            let block_open = matches!(shell.model.state().path.last(), Some(crate::bridge::api::Route::Block { .. }));
+            let noun = adjacent_noun(page_noun.as_deref(), block_open);
+            if *shown.borrow() == noun {
+                return;
+            }
+            steps.remove_all();
+            steps.append(Some(&format!("Previous {noun}")), Some("app.previous"));
+            steps.append(Some(&format!("Next {noun}")), Some("app.next"));
+            *shown.borrow_mut() = noun;
+        }
+    };
+    update_steps(&shell.model);
+    shell.model.watch(&[Topic::Path, Topic::Status], &owner, update_steps);
+
+    menus(&steps)
+}
+
+/// The noun of the Go menu's Previous and Next items (`ShellCommands.adjacentNoun`).
+fn adjacent_noun(page_noun: Option<&str>, block_open: bool) -> String {
+    match page_noun {
+        Some(noun) => noun.to_string(),
+        None if block_open => "Block".to_string(),
+        None => "Block or Version".to_string(),
+    }
 }
 
 /// The menus of the app, as the menu bar of the Swift app: View, Go, Investigate, Peers,
 /// File and Help.
-fn menus() -> gio::Menu {
+fn menus(steps: &gio::Menu) -> gio::Menu {
     let root = gio::Menu::new();
 
     let view = gio::Menu::new();
@@ -278,10 +309,7 @@ fn menus() -> gio::Menu {
     history.append(Some("Back"), Some("app.back"));
     history.append(Some("Forward"), Some("app.forward"));
     go.append_section(None, &history);
-    let steps = gio::Menu::new();
-    steps.append(Some("Previous Block or Version"), Some("app.previous"));
-    steps.append(Some("Next Block or Version"), Some("app.next"));
-    go.append_section(None, &steps);
+    go.append_section(None, steps);
     let other = gio::Menu::new();
     other.append(Some("Go To or Do…"), Some("app.palette"));
     other.append(Some("Estimate a Future Block…"), Some("app.estimate"));
@@ -328,6 +356,13 @@ mod tests {
         assert_eq!(words("<Control><Alt>bracketleft"), "Ctrl+Alt+[");
         assert_eq!(words("<Control>k"), "Ctrl+K");
         assert_eq!(keys_of("app.palette"), "Ctrl+K");
+    }
+
+    #[test]
+    fn step_items_name_what_the_page_steps_through() {
+        assert_eq!(adjacent_noun(Some("Version"), false), "Version");
+        assert_eq!(adjacent_noun(None, true), "Block");
+        assert_eq!(adjacent_noun(None, false), "Block or Version");
     }
 
     #[test]

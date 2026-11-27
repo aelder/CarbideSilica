@@ -28,6 +28,7 @@ pub fn build(model: &Rc<AppModel>, menu: &gio::Menu, open_settings: Rc<dyn Fn()>
     menu_key.set_menu_model(Some(menu));
     menu_key.set_tooltip_text(Some("Menus"));
     lamp::key_sounds(&menu_key, true);
+    quiet_tooltip_while_open(&menu_key);
     bar.pack_start(&menu_key);
 
     // The field is centred over the page column, as the macOS toolbar centres it over the
@@ -46,8 +47,15 @@ pub fn build(model: &Rc<AppModel>, menu: &gio::Menu, open_settings: Rc<dyn Fn()>
     bookmark_key.connect_clicked(move |_| bookmark());
     lamp::key_sounds(&bookmark_key, true);
     let key = bookmark_key.clone();
+    // The key keeps its room when the page has no bookmark: the bar has little room, and
+    // without the key the search field moved to the right on such a page.
     let update = move |model: &Rc<AppModel>| {
-        key.set_visible(model.state().path.last().is_some_and(route::is_bookmarkable));
+        let shown = model.state().path.last().is_some_and(route::is_bookmarkable);
+        key.set_opacity(if shown { 1.0 } else { 0.0 });
+        key.set_can_target(shown);
+        key.set_can_focus(shown);
+        key.set_has_tooltip(shown);
+        key.set_sensitive(shown);
     };
     update(model);
     model.watch(&[Topic::Path], &bookmark_key, update);
@@ -73,14 +81,16 @@ fn search_field(model: &Rc<AppModel>) -> gtk::Box {
     field.append(&mark_holder);
     field.append(&text);
 
-    let weak = Rc::downgrade(model);
+    // The place in the earlier searches. None when the text is the person's own.
+    let place: Rc<Cell<Option<usize>>> = Rc::default();
+    let (weak, submitted) = (Rc::downgrade(model), place.clone());
     text.connect_activate(move |text| {
+        // A search starts the earlier searches again from the newest (`onSubmit`).
+        submitted.set(None);
         if let Some(model) = weak.upgrade() {
             model.search(text.text().to_string());
         }
     });
-    // The place in the earlier searches. None when the text is the person's own.
-    let place: Rc<Cell<Option<usize>>> = Rc::default();
     let keys = gtk::EventControllerKey::new();
     let (weak, field_text, history_place) = (Rc::downgrade(model), text.clone(), place.clone());
     keys.connect_key_pressed(move |_, key, _, _| {
@@ -90,15 +100,14 @@ fn search_field(model: &Rc<AppModel>) -> gtk::Box {
             if history.is_empty() {
                 return glib::Propagation::Proceed;
             }
-            let next = history_place.get().map(|p| p as i64).unwrap_or(-1) + step;
-            if next < 0 {
-                history_place.set(None);
-                field_text.set_text("");
-            } else {
-                let index = (next as usize).min(history.len() - 1);
-                history_place.set(Some(index));
-                field_text.set_text(&history[index]);
-                field_text.set_position(-1);
+            let next = recall_place(history_place.get(), step, history.len());
+            history_place.set(next);
+            match next {
+                None => field_text.set_text(""),
+                Some(index) => {
+                    field_text.set_text(&history[index]);
+                    field_text.set_position(-1);
+                }
             }
             glib::Propagation::Stop
         };
@@ -175,6 +184,7 @@ fn connection_badge(model: &Rc<AppModel>, open_settings: Rc<dyn Fn()>) -> gtk::M
     list.set_margin_bottom(6);
     popover.set_child(Some(&list));
     button.set_popover(Some(&popover));
+    quiet_tooltip_while_open(&button);
     // The chains are read each time the menu opens.
     let (weak, list_ref, pop) = (Rc::downgrade(model), list.clone(), popover.clone());
     popover.connect_show(move |_| {
@@ -249,11 +259,54 @@ fn connection_badge(model: &Rc<AppModel>, open_settings: Rc<dyn Fn()>) -> gtk::M
     button
 }
 
+/// The place in the earlier searches after Up (`step` 1) or Down (-1) from `place`, as
+/// `SearchField.recall`: None is the person's own text, before the newest search.
+fn recall_place(place: Option<usize>, step: i64, count: usize) -> Option<usize> {
+    let next = place.map(|p| p as i64).unwrap_or(-1) + step;
+    (next >= 0 && count > 0).then(|| (next as usize).min(count - 1))
+}
+
+/// A menu key shows no help text while its menu is open, as a macOS menu hides it: the
+/// text stayed over the first lines of the menu.
+fn quiet_tooltip_while_open(key: &gtk::MenuButton) {
+    let Some(popover) = key.popover() else { return };
+    let weak = key.downgrade();
+    popover.connect_show(move |_| {
+        if let Some(key) = weak.upgrade() {
+            key.set_has_tooltip(false);
+        }
+    });
+    let weak = key.downgrade();
+    popover.connect_closed(move |_| {
+        if let Some(key) = weak.upgrade() {
+            key.set_has_tooltip(true);
+        }
+    });
+}
+
 /// PBaaS chains are stored under a hex folder name; show a short form of it.
 fn chain_label(chain: &api::KnownChain) -> String {
     if chain.chain.chars().count() == 40 {
         format!("PBaaS chain {}…", &chain.chain[..8])
     } else {
         chain.chain.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::recall_place;
+
+    #[test]
+    fn earlier_searches_step_and_stop_at_the_ends() {
+        // Up from the person's own text goes to the newest search, then to older ones.
+        assert_eq!(recall_place(None, 1, 3), Some(0));
+        assert_eq!(recall_place(Some(0), 1, 3), Some(1));
+        // Up at the oldest search stays there.
+        assert_eq!(recall_place(Some(2), 1, 3), Some(2));
+        // Down from the newest search gives the field back to the person.
+        assert_eq!(recall_place(Some(0), -1, 3), None);
+        assert_eq!(recall_place(None, -1, 3), None);
+        assert_eq!(recall_place(None, 1, 0), None);
     }
 }

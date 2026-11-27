@@ -107,7 +107,9 @@ pub fn key_cap(keys: &str) -> gtk::Label {
     let label = gtk::Label::new(Some(keys));
     label.add_css_class("key-cap");
     label.set_halign(gtk::Align::Start);
-    label.set_valign(gtk::Align::Baseline);
+    // Its own height on the first baseline of the row: `Align::Baseline` fills the row,
+    // and the outline then took the height of an action of three lines.
+    label.set_valign(gtk::Align::BaselineCenter);
     label
 }
 
@@ -142,12 +144,14 @@ pub fn window(model: &Rc<AppModel>, parent: &impl IsA<gtk::Window>) -> gtk::Wind
             let action = paragraph(entry.action, &["value"]);
             action.set_hexpand(true);
             action.set_max_width_chars(48);
+            // The three cells share the first baseline (`.leadingFirstTextBaseline`).
+            action.set_valign(gtk::Align::BaselineCenter);
             grid.attach(&action, 1, row, 1, 1);
             let terminal = gtk::Label::new(Some(entry.terminal));
             terminal.add_css_class("mono");
             terminal.add_css_class("label");
             terminal.set_xalign(0.0);
-            terminal.set_valign(gtk::Align::Start);
+            terminal.set_valign(gtk::Align::BaselineCenter);
             grid.attach(&terminal, 2, row, 1, 1);
             row += 1;
         }
