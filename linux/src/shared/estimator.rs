@@ -344,7 +344,9 @@ fn timeline(forecast: &api::Forecast) -> Canvas {
             draw::lit(snapshot, &dot, color, if anchor == Anchor::Top { 0.6 } else { 0.0 });
             // The tip's label goes above the line, so that it does not meet the target's label.
             if anchor == Anchor::Top {
-                draw::name(snapshot, canvas, label, px, y - 8.0, Anchor::Bottom, tone::PRESENT);
+                // The label stays inside the panel when the tip is near one end of the line.
+                let width = draw::text_size(canvas, crate::theme::font::SMALL, label).0;
+                draw::name(snapshot, canvas, label, centre_inside(px, width, w), y - 8.0, Anchor::Bottom, tone::PRESENT);
             } else {
                 draw::name(snapshot, canvas, label, px, y + 10.0, anchor, tone::LABEL);
             }
@@ -358,9 +360,29 @@ fn timeline(forecast: &api::Forecast) -> Canvas {
     canvas
 }
 
+/// The centre of a label of `width` at `x`, moved so that the label is inside 0 to `total`.
+fn centre_inside(x: f32, width: f32, total: f32) -> f32 {
+    if width >= total {
+        return total / 2.0;
+    }
+    x.clamp(width / 2.0, total - width / 2.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_tip_label_stays_inside() {
+        // Near the right end the label moves left so that its end is at the edge.
+        assert_eq!(centre_inside(1030.0, 100.0, 1040.0), 990.0);
+        // Near the left end it moves right.
+        assert_eq!(centre_inside(4.0, 100.0, 1040.0), 50.0);
+        // In the middle it stays above its dot.
+        assert_eq!(centre_inside(500.0, 100.0, 1040.0), 500.0);
+        // A label wider than the panel is centred.
+        assert_eq!(centre_inside(10.0, 200.0, 100.0), 50.0);
+    }
 
     #[test]
     fn relative_dates() {
