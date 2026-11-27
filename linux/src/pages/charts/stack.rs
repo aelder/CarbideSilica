@@ -53,6 +53,9 @@ struct Shared {
     input: Option<Input>,
     model: Option<Rc<StackModel>>,
     hovered: Option<usize>,
+    /// The place of the pointer over the panels, so that the block under it is found again
+    /// when a new range or more of the range comes.
+    pointer: Option<f32>,
     /// The width the pictures of the light were made for, and their key.
     pictures: Option<(String, i32)>,
     pictures_pending: bool,
@@ -333,7 +336,7 @@ fn picture(widget: &impl IsA<gtk::Widget>, width: f32, input: &Input, model: &St
 
 impl ChartStack {
     pub fn new(select: impl Fn(&str) + 'static, open: impl Fn(&str) + 'static) -> Rc<Self> {
-        let shared = Rc::new(RefCell::new(Shared { input: None, model: None, hovered: None, pictures: None, pictures_pending: false }));
+        let shared = Rc::new(RefCell::new(Shared { input: None, model: None, hovered: None, pointer: None, pictures: None, pictures_pending: false }));
 
         let s = shared.clone();
         let base = Canvas::new(0, PLOT_HEIGHT as i32, move |canvas, snapshot, w, _h| {
@@ -505,6 +508,11 @@ impl ChartStack {
         };
         if rebuilt {
             self.base.queue_draw();
+            // The pointer has not moved: the block under it is the hovered block again.
+            let pointer = self.shared.borrow().pointer;
+            if pointer.is_some() {
+                self.hover_at(pointer);
+            }
         }
         self.cursors.queue_draw();
         self.update_readout();
@@ -544,6 +552,7 @@ impl ChartStack {
     }
 
     fn hover_at(&self, x: Option<f32>) {
+        self.shared.borrow_mut().pointer = x;
         let width = self.base.width() as f32;
         let (hovered, place) = {
             let shared = self.shared.borrow();
