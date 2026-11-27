@@ -14,6 +14,7 @@
 #   KEYS="j j"       keys to press (xdotool names) before STEPS
 #   KEYWAIT=3        seconds to wait after KEYS
 #   MOUSE="x y"      a place for the pointer before STEPS, to show a hover state
+#   ARGS="-rpcport=1" more start-up arguments for the app, separated by spaces
 #   CONF=<file>      the node configuration (default: the VRSC.conf of the Extreme SSD)
 #   GSK_RENDERER=... GTK's renderer (default: GTK's choice)
 #
@@ -26,6 +27,7 @@
 #   dclick 400 300      double-click
 #   scroll down 5 [x y] turn the wheel 5 steps (up, down, left, right), at x y if given
 #   shot name.png       take a picture now, into the folder of <out.png>
+#   size 980 700        resize the last window of the app
 # The picture <out.png> is taken after the last step. For example:
 #   STEPS="key Tab; wait 2; shot json.png; scroll down 10 640 600; wait 1" \
 #     ./shot.sh 4338679 /tmp/block/end.png
@@ -55,6 +57,7 @@ docker run --rm --network host \
     -e KEYWAIT="${KEYWAIT:-3}" \
     -e MOUSE="${MOUSE:-}" \
     -e STEPS="${STEPS:-}" \
+    -e ARGS="${ARGS:-}" \
     -e GSK_RENDERER="${GSK_RENDERER:-}" \
     -w /src/linux \
     "$image" sh /src/linux/tools/shot-inside.sh "$object" "/out/$(basename "$out")"

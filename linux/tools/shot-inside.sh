@@ -20,6 +20,9 @@ export DISPLAY=":$display"
 sleep 1
 set -- "-conf=/conf/VRSC.conf"
 [ -n "$object" ] && set -- "$@" "-open=$object"
+# More start-up arguments (ARGS), split at spaces.
+# shellcheck disable=SC2086
+[ -n "${ARGS:-}" ] && set -- "$@" $ARGS
 # The app runs in its home folder, so a file dialog does not open in the source tree and a
 # file saved during a run is gone with the container.
 (cd "$HOME" && exec "$binary" "$@") >/tmp/app.log 2>&1 &
@@ -104,6 +107,12 @@ step() {
             sleep 0.6
             ;;
         shot) picture "$1" ;;
+        size)
+            # size W H: the size of the last window of the app, such as a narrow window.
+            find_window
+            [ -n "$window" ] && xdotool windowsize "$window" "$1" "$2"
+            sleep 1
+            ;;
         focus) focus ;;
         "") ;;
         *) echo "shot: unknown step: $verb" >&2; return 1 ;;
