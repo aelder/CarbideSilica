@@ -194,6 +194,13 @@ impl Page {
         self.cursor.add_stop(row, Some(id.to_string()), copy, open.clone());
         let click = gtk::GestureClick::new();
         let (cursor, id) = (Rc::downgrade(&self.cursor), id.to_string());
+        // The second press of a double-click is the row's: a list that holds the row, such
+        // as a FlowBox, otherwise took it for its own activation and the row did not open.
+        click.connect_pressed(|gesture, presses, _, _| {
+            if presses == 2 {
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+            }
+        });
         click.connect_released(move |_, presses, _, _| {
             if let Some(cursor) = cursor.upgrade() {
                 cursor.select(Some(&id), false);

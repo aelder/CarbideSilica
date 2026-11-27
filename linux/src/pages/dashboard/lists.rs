@@ -182,10 +182,12 @@ impl Lists {
         } else {
             let (weak, model_weak) = (Rc::downgrade(self), Rc::downgrade(model));
             let feed_weak = self.feed.clone();
-            self.older.append(&lamp::button("Load Older Blocks", move || {
+            let key = lamp::button("Load Older Blocks", move || {
                 let (Some(lists), Some(model), Some(feed)) = (weak.upgrade(), model_weak.upgrade(), feed_weak.upgrade()) else { return };
                 glib::spawn_future_local(async move { feed.load_older(&model, &lists).await });
-            }));
+            });
+            keep_place_on_click(&key);
+            self.older.append(&key);
         }
         if let Some(error) = feed.older_error.borrow().as_ref() {
             let text = page::paragraph(error, &["secondary"]);
@@ -283,6 +285,7 @@ impl Lists {
                 lists.show_transactions(&model, &feed);
             });
             key.set_margin_top(12);
+            keep_place_on_click(&key);
             self.transaction_rows.append(&key);
         }
     }
@@ -335,4 +338,11 @@ impl Lists {
         column.append(&bottom);
         column
     }
+}
+
+/// A key that the list replaces when it is pressed, such as Load Older Blocks, does not
+/// take the keyboard focus. When the focused key went away, GTK gave the focus to a
+/// different part of the page and scrolled the page to it, far from the end of the list.
+fn keep_place_on_click(key: &gtk::Button) {
+    key.set_focus_on_click(false);
 }
