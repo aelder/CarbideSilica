@@ -28,6 +28,10 @@ pub struct CardMark {
 pub struct PageCursor {
     selection: RefCell<Option<String>>,
     stops: RefCell<Vec<Stop>>,
+    /// The place of each stop in `stops`, by its ID.
+    places: RefCell<std::collections::HashMap<String, usize>>,
+    /// The number of stops after the last removal of the stops whose widgets are gone.
+    pruned: Cell<usize>,
     cards: RefCell<Vec<CardMark>>,
     /// The column of the page, for positions.
     content: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
@@ -70,9 +74,15 @@ impl PageCursor {
             format!("stop-{next}")
         });
         let widget = widget.upcast_ref::<gtk::Widget>();
-        let mut stops = self.stops.borrow_mut();
-        stops.retain(|stop| stop.widget.upgrade().is_some() && stop.id != id);
-        stops.push(Stop { id: id.clone(), widget: widget.downgrade(), copy, open });
+        let stop = Stop { id: id.clone(), widget: widget.downgrade(), copy, open };
+        insert(
+            &mut self.stops.borrow_mut(),
+            &mut self.places.borrow_mut(),
+            &self.pruned,
+            stop,
+            |stop| &stop.id,
+            |stop| stop.widget.upgrade().is_some(),
+        );
         if self.selection.borrow().as_deref() == Some(id.as_str()) {
             widget.add_css_class("cursor-on");
         }
@@ -351,5 +361,66 @@ impl PageCursor {
         } else if bottom > value + page {
             adjustment.set_value(bottom - page + 8.0);
         }
+    }
+}
+
+/// Adds an item to a list of stops. An item with the ID of an earlier item takes its place.
+/// The items that are no longer alive go now and then, not at each new item: a tree of
+/// thousands of lines adds thousands of stops at once, and a removal at each one made that
+/// take more than a second.
+fn insert<T>(
+    items: &mut Vec<T>,
+    places: &mut std::collections::HashMap<String, usize>,
+    pruned: &Cell<usize>,
+    item: T,
+    id: impl Fn(&T) -> &String,
+    alive: impl Fn(&T) -> bool,
+) {
+    if items.len() >= 2 * pruned.get() + 64 {
+        items.retain(|item| alive(item));
+        places.clear();
+        places.extend(items.iter().enumerate().map(|(place, item)| (id(item).clone(), place)));
+        pruned.set(items.len());
+    }
+    match places.get(id(&item)) {
+        Some(&place) => items[place] = item,
+        None => {
+            places.insert(id(&item).clone(), items.len());
+            items.push(item);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stops_keep_one_place_for_each_id_and_drop_the_dead_ones() {
+        let (mut items, mut places, pruned) = (Vec::new(), std::collections::HashMap::new(), Cell::new(0));
+        let add = |items: &mut Vec<(String, bool)>, places: &mut _, id: &str, alive: bool| {
+            insert(items, places, &pruned, (id.to_string(), alive), |item| &item.0, |item| item.1)
+        };
+        add(&mut items, &mut places, "a", true);
+        add(&mut items, &mut places, "b", true);
+        add(&mut items, &mut places, "a", true);
+        assert_eq!(items.iter().map(|i| i.0.as_str()).collect::<Vec<_>>(), ["a", "b"]);
+        // Many dead items go once the list has grown.
+        for n in 0..100 {
+            add(&mut items, &mut places, &format!("dead-{n}"), false);
+        }
+        add(&mut items, &mut places, "c", true);
+        assert!(items.len() < 50);
+        assert!(items.iter().any(|i| i.0 == "a") && items.iter().any(|i| i.0 == "c"));
+        for (id, place) in &places {
+            assert_eq!(&items[*place].0, id);
+        }
+        // Five thousand lines with the same IDs, twice, take one place each.
+        for _ in 0..2 {
+            for n in 0..5000 {
+                add(&mut items, &mut places, &format!("json:/{n}"), true);
+            }
+        }
+        assert_eq!(items.iter().filter(|i| i.0.starts_with("json:")).count(), 5000);
     }
 }
