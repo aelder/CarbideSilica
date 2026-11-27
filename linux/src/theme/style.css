@@ -334,6 +334,10 @@ menubutton.lamp > button { background: none; border: none; box-shadow: none; pad
 /* Currencies: a row of the table. */
 .currencies-tile { padding: 9px 8px; }
 
+/* Charts: the two tables, on the black of the display with a faint field on every second row. */
+listview.chart-table { background-color: transparent; color: @value; }
+listview.chart-table > row:nth-child(even) { background-color: alpha(@value, 0.04); }
+
 /* Marketplace: an offer, and the name of an offer as a link. */
 .market-offer { padding: 7px 8px; }
 .display-link.market-title label { font-size: 15px; font-weight: 500; }
