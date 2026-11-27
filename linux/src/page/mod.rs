@@ -22,7 +22,7 @@ pub use cursor::PageCursor;
 #[allow(unused_imports)]
 pub use load::LoadView;
 
-use crate::model::AppModel;
+use crate::model::{AppModel, Topic};
 use crate::theme::{self, font};
 use crate::widgets::{clamp::Clamp, display};
 
@@ -175,8 +175,15 @@ impl Page {
         card
     }
 
-    /// Changes the hooks.
+    /// Changes the hooks. The shell's menus and shortcuts follow the hooks, so they are
+    /// told once the change is made.
     pub fn hooks(&self) -> std::cell::RefMut<'_, PageHooks> {
+        let model = Rc::downgrade(&self.model);
+        glib::idle_add_local_once(move || {
+            if let Some(model) = model.upgrade() {
+                model.notify(Topic::Hooks);
+            }
+        });
         self.hooks.borrow_mut()
     }
 

@@ -55,6 +55,8 @@ pub enum Topic {
     Display,
     /// Dates for heights arrived (`HeightDates`).
     HeightDates,
+    /// A page changed its hooks: its keys, adjacent objects or menu functions.
+    Hooks,
 }
 
 /// One measurement of how fast the node is validating blocks.
