@@ -83,6 +83,20 @@ step() {
             focused=1
             sleep 0.6
             ;;
+        drag)
+            # drag x1 y1 x2 y2: press at the first place, move to the second, release.
+            xdotool mousemove "$1" "$2"
+            sleep 0.3
+            xdotool mousedown 1
+            sleep 0.2
+            xdotool mousemove "$(( ($1 + $3) / 2 ))" "$(( ($2 + $4) / 2 ))"
+            sleep 0.2
+            xdotool mousemove "$3" "$4"
+            sleep 0.2
+            xdotool mouseup 1
+            focused=1
+            sleep 0.6
+            ;;
         dclick)
             xdotool mousemove "$1" "$2"
             sleep 0.3

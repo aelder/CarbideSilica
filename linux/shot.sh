@@ -24,6 +24,7 @@
 #   move 400 300        move the pointer
 #   click 400 300 [b]   move the pointer and click (button b, 1 by default)
 #   dclick 400 300      double-click
+#   drag 400 300 600 300  press, move to the second place and release (button 1)
 #   scroll down 5 [x y] turn the wheel 5 steps (up, down, left, right), at x y if given
 #   shot name.png       take a picture now, into the folder of <out.png>
 # The picture <out.png> is taken after the last step. For example:
