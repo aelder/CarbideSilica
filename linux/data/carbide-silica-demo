@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+bindir=$(dirname "$(readlink -f "$0")")
+exec python3 -EB "$bindir/../share/carbide-silica/demo/synthetic_demo.py" --binary "$bindir/carbide-silica" "$@"

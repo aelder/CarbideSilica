@@ -1692,14 +1692,25 @@ fn read_tail(path: &std::path::Path, limit: u64) -> Result<String> {
     })
 }
 
-/// Daemon configurations in the standard macOS locations: the main chain and any PBaaS
-/// chains. Reads folder names only; it does not open wallets or contact any daemon.
+/// The configuration file of the main chain in the standard location of this platform:
+/// the macOS location on macOS, and Carbide's own (Linux) location elsewhere.
+fn known_main_config(chain: &str, network: Network) -> Option<PathBuf> {
+    if cfg!(target_os = "macos") {
+        return platform_config_path(chain, network);
+    }
+    let base = directories::BaseDirs::new()?;
+    let path = crate::config::standard_config_path(base.home_dir(), chain, network).ok()?;
+    path.is_file().then_some(path)
+}
+
+/// Daemon configurations in the standard locations of this platform: the main chain and
+/// any PBaaS chains. Reads folder names only; it does not open wallets or contact any daemon.
 #[uniffi::export]
 pub fn known_chains(testnet: bool) -> Vec<KnownChain> {
     let network = Network::from_testnet(testnet);
     let mut chains = Vec::new();
     let main = if testnet { "vrsctest" } else { "VRSC" };
-    if let Some(path) = platform_config_path(main, network) {
+    if let Some(path) = known_main_config(main, network) {
         chains.push(KnownChain {
             chain: main.into(),
             config_file: path.display().to_string(),
@@ -1709,11 +1720,15 @@ pub fn known_chains(testnet: bool) -> Vec<KnownChain> {
     let Some(base) = directories::BaseDirs::new() else {
         return chains;
     };
-    let root = base
-        .home_dir()
-        .join("Library/Application Support")
-        .join(if testnet { "VerusTest" } else { "Verus" })
-        .join("pbaas");
+    let root = if cfg!(target_os = "macos") {
+        base.home_dir()
+            .join("Library/Application Support")
+            .join(if testnet { "VerusTest" } else { "Verus" })
+    } else {
+        base.home_dir()
+            .join(if testnet { ".verustest" } else { ".verus" })
+    }
+    .join("pbaas");
     for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         let config = entry.path().join(format!("{name}.conf"));
@@ -1862,3 +1877,19 @@ mod transaction;
 #[cfg(test)]
 #[path = "ffi_tests.rs"]
 mod tests;
+
+/// Every record, enum and function of the bridge, for a caller in Rust such as the Linux app
+/// (`linux/`). Swift reaches them through UniFFI. A Rust crate needs a public path, and the
+/// area modules above are private. `macos/bridge/rust` compiles the bridge as a Rust library
+/// and makes this module public as `carbide_bridge::api`.
+#[allow(unused_imports, ambiguous_glob_reexports)]
+pub mod rust_api {
+    pub use super::*;
+    pub use super::charts::*;
+    pub use super::currency::*;
+    pub use super::identity::*;
+    pub use super::shell::*;
+    pub use super::sources::*;
+    pub use super::transaction::*;
+    pub use super::transaction::statement::*;
+}

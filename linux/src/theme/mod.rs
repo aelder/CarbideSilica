@@ -1,0 +1,368 @@
+//! The design of the app: the display of a ship's computer (`DisplayTheme.swift`).
+//!
+//! The app is a black display. Colour is a signal and not decoration: violet is staked,
+//! amber is mined, warm white is the present and the selection, pale blue is a link and a
+//! part of a record that is done, red is an alert. Lines are thin and flat. Light is for
+//! the things that are live. Names and figures are in Jost, the open face that takes the
+//! place of Futura. Long text is in Inter and IDs are in IBM Plex Mono, because a person
+//! must read them and compare them.
+//!
+//! The colours are here as constants for drawing ([`Color`]) and in `style.css` as named
+//! colours (`@screen`, `@rule` and so on) for widgets. Keep the two in step.
+
+pub mod draw;
+pub mod fonts;
+pub mod sound;
+
+use gtk::gdk;
+use gtk::prelude::*;
+
+/// A colour of the display, in sRGB from 0 to 1.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Color {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
+}
+
+impl Color {
+    pub const fn rgb(r: f32, g: f32, b: f32) -> Self {
+        Self { r, g, b, a: 1.0 }
+    }
+
+    pub const fn with_alpha(self, a: f32) -> Self {
+        Self { a, ..self }
+    }
+
+    /// The colour with its alpha multiplied by `factor`, as SwiftUI's `.opacity()`.
+    pub fn opacity(self, factor: f64) -> Self {
+        Self { a: self.a * factor as f32, ..self }
+    }
+
+    pub fn rgba(self) -> gdk::RGBA {
+        gdk::RGBA::new(self.r, self.g, self.b, self.a)
+    }
+
+    /// The colour as CSS: `rgba(…)`.
+    pub fn css(self) -> String {
+        format!(
+            "rgba({},{},{},{})",
+            (self.r * 255.0).round(),
+            (self.g * 255.0).round(),
+            (self.b * 255.0).round(),
+            self.a
+        )
+    }
+}
+
+/// The colours of the display (`Tone` in the Swift app).
+///
+/// The colours are those of the display on film stock: the white is a pale grey-green at
+/// four fifths of full light, a signal colour is a pale core with its colour in the light
+/// around it, and the black is a little above zero.
+pub mod tone {
+    use super::Color;
+
+    pub const SCREEN: Color = Color::rgb(0.012, 0.012, 0.016);
+    /// The border of a panel and the rule above a card.
+    pub const RULE: Color = Color::rgb(0.75, 0.8, 0.75).with_alpha(0.15);
+    pub const GRID: Color = Color::rgb(0.75, 0.8, 0.75).with_alpha(0.09);
+    pub const AXIS: Color = Color::rgb(0.75, 0.8, 0.75).with_alpha(0.36);
+    /// Names of things: axis labels, readout names.
+    pub const LABEL: Color = Color::rgb(0.62, 0.67, 0.64);
+    /// Figures and text that a person reads.
+    pub const VALUE: Color = Color::rgb(0.75, 0.8, 0.75);
+    /// The present and the selection: the lightest tone of the display.
+    pub const PRESENT: Color = Color::rgb(0.8, 0.84, 0.77);
+    pub const STAKED: Color = Color::rgb(0.72, 0.68, 0.8);
+    pub const MINED: Color = Color::rgb(0.74, 0.67, 0.44);
+    /// A link, and the part of a record that is done or passed.
+    pub const RECORD: Color = Color::rgb(0.5, 0.74, 0.71);
+    pub const GOOD: Color = Color::rgb(0.26, 0.65, 0.48);
+    pub const ALERT: Color = Color::rgb(0.82, 0.33, 0.24);
+    /// The light around a staked mark and around a mined mark. On film the core of a
+    /// strong colour goes pale, and the colour is in the light around it.
+    pub const STAKED_GLOW: Color = Color::rgb(0.56, 0.3, 0.86);
+    pub const MINED_GLOW: Color = Color::rgb(1.0, 0.5, 0.12);
+    /// Secondary text: SwiftUI's `.secondary` on the white of the display.
+    pub const SECONDARY: Color = Color::rgb(0.75, 0.8, 0.75).with_alpha(0.6);
+    /// SwiftUI's `.tertiary`.
+    pub const TERTIARY: Color = Color::rgb(0.75, 0.8, 0.75).with_alpha(0.38);
+    /// The system colours that the Swift app uses for the state of a source.
+    pub const SYSTEM_GREEN: Color = Color::rgb(0.19, 0.82, 0.35);
+    pub const SYSTEM_ORANGE: Color = Color::rgb(1.0, 0.62, 0.04);
+    /// Series of a chart, in order, when a chart has more than the named signals.
+    pub const SERIES: [Color; 6] = [RECORD, MINED, STAKED, GOOD, Color::rgb(0.78, 0.5, 0.56), VALUE];
+}
+
+/// The colours of the lamps and of a legend on a lit key (`LampTone`).
+pub mod lamp {
+    use super::Color;
+
+    pub const BLUE_CENTRE: Color = Color::rgb(0.62, 0.73, 0.73);
+    pub const BLUE_EDGE: Color = Color::rgb(0.42, 0.57, 0.6);
+    pub const AMBER_CENTRE: Color = Color::rgb(0.71, 0.74, 0.64);
+    pub const AMBER_EDGE: Color = Color::rgb(0.62, 0.53, 0.44);
+    /// A legend on a lit key: a dark red-brown, as a legend on film is.
+    pub const LEGEND: Color = Color::rgb(0.33, 0.24, 0.2);
+    /// The red-orange edge that film gives to a strong light.
+    pub const HALATION: Color = Color::rgb(0.95, 0.33, 0.14);
+    /// The face of a key that is off.
+    pub const FACE: Color = Color::rgb(0.045, 0.045, 0.045);
+}
+
+/// The type roles. Each is a font, a size in logical pixels, a tracking and a case.
+pub mod font {
+    /// The face of the Futura roles.
+    pub const DISPLAY: &str = "Jost";
+    /// The face of text that a person reads as sentences: the system face on macOS.
+    pub const TEXT: &str = "Inter";
+    /// The face of IDs and hashes: the monospaced system face on macOS.
+    pub const MONO: &str = "IBM Plex Mono";
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct Role {
+        pub family: &'static str,
+        pub size: f64,
+        /// 500 is Futura-Medium, 700 is Futura-Bold.
+        pub weight: i32,
+        /// Space between letters, in logical pixels (SwiftUI's `tracking`).
+        pub tracking: f64,
+        pub uppercase: bool,
+        /// Figures of one width, as `monospacedDigit()`.
+        pub tabular: bool,
+    }
+
+    const fn display(size: f64, weight: i32, tracking: f64, uppercase: bool) -> Role {
+        Role { family: DISPLAY, size, weight, tracking, uppercase, tabular: false }
+    }
+
+    /// Axis labels and readout names.
+    pub const SMALL: Role = display(9.5, 500, 1.1, true);
+    /// The lettering of a plate.
+    pub const PLATE: Role = display(8.5, 700, 0.8, true);
+    /// A figure of a readout.
+    pub const FIGURE: Role = Role { tabular: true, ..display(17.0, 500, 0.0, false) };
+    pub const FIGURE_SMALL: Role = Role { tabular: true, ..display(11.5, 500, 0.0, false) };
+    /// The heading of a card.
+    pub const HEADING: Role = display(13.0, 500, 2.2, true);
+    /// The title of a page.
+    pub const TITLE: Role = display(26.0, 500, 0.0, false);
+    /// The legend of a small key.
+    pub const KEY: Role = display(10.5, 500, 1.2, true);
+    /// The legend of a key of the sidebar.
+    pub const PLACE: Role = display(11.5, 500, 1.6, true);
+    /// Text in a panel that a person reads as a sentence.
+    pub const CAPTION: Role = Role { family: TEXT, size: 11.5, weight: 400, tracking: 0.0, uppercase: false, tabular: false };
+    /// Body text (`.body` on macOS).
+    pub const BODY: Role = Role { family: TEXT, size: 13.0, weight: 400, tracking: 0.0, uppercase: false, tabular: false };
+    /// `.callout` on macOS.
+    pub const CALLOUT: Role = Role { size: 12.0, ..BODY };
+    pub const MONO_CALLOUT: Role = Role { family: MONO, size: 12.0, weight: 400, tracking: 0.0, uppercase: false, tabular: false };
+    /// `.title2` on macOS: the title of a sheet.
+    pub const TITLE2: Role = Role { size: 17.0, ..BODY };
+    /// `.title3` on macOS: a sentence that leads a card.
+    pub const TITLE3: Role = Role { size: 15.0, ..BODY };
+    /// `.subheadline` on macOS.
+    pub const SUBHEADLINE: Role = Role { size: 11.0, ..BODY };
+    /// `.caption`, `.caption2` and `.footnote` on macOS: the small text under a mark.
+    pub const TEXT_CAPTION: Role = Role { size: 10.0, ..BODY };
+}
+
+/// Loads the fonts, the colours and the style sheet. Call once after GTK starts.
+pub fn install() {
+    let Some(display) = gdk::Display::default() else { return };
+    if let Some(settings) = gtk::Settings::for_display(&display).into() {
+        let settings: gtk::Settings = settings;
+        settings.set_gtk_application_prefer_dark_theme(true);
+        settings.set_gtk_font_name(Some("Inter 10"));
+    }
+    let provider = gtk::CssProvider::new();
+    provider.load_from_string(&stylesheet());
+    gtk::style_context_add_provider_for_display(
+        &display,
+        &provider,
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+    install_icon(&display);
+}
+
+/// Makes the app icon known to GTK. An installed app has it in `<prefix>/share/icons`, which
+/// the icon theme finds when the prefix is in `XDG_DATA_DIRS`. The icon theme also looks in
+/// the `icons` folder beside the resources folder, for a prefix that is not in that list,
+/// and in `linux/data/icons` of the source tree. Each window then takes the icon by name.
+fn install_icon(display: &gdk::Display) {
+    let theme = gtk::IconTheme::for_display(display);
+    if let Some(share) = fonts::resources().parent() {
+        let folder = share.join("icons");
+        if folder.is_dir() {
+            theme.add_search_path(folder);
+        }
+    }
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data/icons");
+    if source.is_dir() {
+        theme.add_search_path(source);
+    }
+    gtk::Window::set_default_icon_name(crate::APP_ID);
+}
+
+/// The style sheet: the named colours, then `style.css`.
+pub fn stylesheet() -> String {
+    let mut css = String::new();
+    let colours: [(&str, Color); 22] = [
+        ("screen", tone::SCREEN),
+        ("rule", tone::RULE),
+        ("grid", tone::GRID),
+        ("axis", tone::AXIS),
+        ("label", tone::LABEL),
+        ("value", tone::VALUE),
+        ("present", tone::PRESENT),
+        ("staked", tone::STAKED),
+        ("mined", tone::MINED),
+        ("record", tone::RECORD),
+        ("good", tone::GOOD),
+        ("alert", tone::ALERT),
+        ("secondary", tone::SECONDARY),
+        ("tertiary", tone::TERTIARY),
+        ("blue_centre", lamp::BLUE_CENTRE),
+        ("blue_edge", lamp::BLUE_EDGE),
+        ("amber_centre", lamp::AMBER_CENTRE),
+        ("amber_edge", lamp::AMBER_EDGE),
+        ("legend", lamp::LEGEND),
+        ("halation", lamp::HALATION),
+        ("face", lamp::FACE),
+        ("system_orange", tone::SYSTEM_ORANGE),
+    ];
+    for (name, colour) in colours {
+        css.push_str(&format!("@define-color {name} {};\n", colour.css()));
+    }
+    css.push_str(include_str!("style.css"));
+    css
+}
+
+/// Points in one logical pixel. Pango takes font sizes in points, and a point is 4/3 of a
+/// pixel at the 96 dots per inch of a GTK display. The Swift sizes are pixels (points of a
+/// Mac screen), so a font size is multiplied by this factor. GTK's text scale changes points
+/// and the pixels of CSS in the same way, so the roles keep their size relative to the CSS
+/// text. Letter spacing is not a font size: Pango takes it in pixels.
+pub const POINTS_PER_PIXEL: f64 = 0.75;
+
+/// A font size in logical pixels as the value of Pango markup's `font_size` and of
+/// `FontDescription::set_size` (1024ths of a point).
+pub fn pango_points(pixels: f64) -> i64 {
+    (pixels * POINTS_PER_PIXEL * 1024.0).round() as i64
+}
+
+/// A letter spacing in logical pixels as the value of Pango's `letter_spacing` (1024ths of
+/// a pixel).
+pub fn pango_spacing(pixels: f64) -> i64 {
+    (pixels * 1024.0).round() as i64
+}
+
+/// The size of Jost against the size of Futura for the same role. Jost is a little smaller
+/// than Futura at one size: its capitals are 0.70 of the size against 0.76, and its
+/// lettering is approximately 3.5% narrower (measured with the advances of both fonts over
+/// the names of the app). At 1.05 the widths of the names match the macOS pictures within
+/// approximately 2%, and the capitals are approximately 3% lower.
+pub const DISPLAY_SCALE: f64 = 1.05;
+
+/// The line height of Jost against its own size, to give a Jost line the height of a
+/// Futura line: Futura's line is 1.328 of its size (ascent, descent and gap), Jost's 1.445.
+/// Without it each line of a name or a key is 9% taller than on macOS.
+pub const DISPLAY_LINE_HEIGHT: f64 = 0.92;
+
+/// The size in pixels at which a role is drawn: its Swift size, times [`DISPLAY_SCALE`] for
+/// the Jost roles.
+pub fn drawn_size(role: font::Role) -> f64 {
+    if role.family == font::DISPLAY { role.size * DISPLAY_SCALE } else { role.size }
+}
+
+/// Pango markup for a text in a role: font, size, tracking and case. The text is escaped.
+pub fn markup(role: font::Role, text: &str) -> String {
+    let text = if role.uppercase { text.to_uppercase() } else { text.to_string() };
+    let features = if role.tabular { " font_features=\"tnum\"" } else { "" };
+    let line = if role.family == font::DISPLAY { format!(" line_height=\"{DISPLAY_LINE_HEIGHT}\"") } else { String::new() };
+    format!(
+        "<span font_family=\"{}\" font_size=\"{}\" font_weight=\"{}\" letter_spacing=\"{}\"{}{}>{}</span>",
+        role.family,
+        pango_points(drawn_size(role)),
+        role.weight,
+        pango_spacing(role.tracking),
+        features,
+        line,
+        gtk::glib::markup_escape_text(&text)
+    )
+}
+
+/// Pango markup for a text in the text face at a size in logical pixels, as the Swift app's
+/// system sizes (`.title2` 17, `.title3` 15, `.callout` 12, `.caption` 10). `weight` is
+/// 400 for regular, 500 medium, 600 semibold, 700 bold. The text is escaped.
+pub fn text_markup(size: f64, weight: i32, text: &str) -> String {
+    format!(
+        "<span font_size=\"{}\" font_weight=\"{}\">{}</span>",
+        pango_points(size),
+        weight,
+        gtk::glib::markup_escape_text(text)
+    )
+}
+
+/// Pango attributes for a role: font, size, tracking and figures. A label with them keeps
+/// its role when its text changes with `set_text`. They do not change the case.
+pub fn role_attributes(role: font::Role) -> gtk::pango::AttrList {
+    use gtk::pango;
+    let mut description = pango::FontDescription::new();
+    description.set_family(role.family);
+    description.set_size(pango_points(drawn_size(role)) as i32);
+    description.set_weight(match role.weight {
+        w if w >= 700 => pango::Weight::Bold,
+        w if w >= 600 => pango::Weight::Semibold,
+        w if w >= 500 => pango::Weight::Medium,
+        _ => pango::Weight::Normal,
+    });
+    let attributes = pango::AttrList::new();
+    attributes.insert(pango::AttrFontDesc::new(&description));
+    if role.tracking != 0.0 {
+        attributes.insert(pango::AttrInt::new_letter_spacing(pango_spacing(role.tracking) as i32));
+    }
+    if role.tabular {
+        attributes.insert(pango::AttrFontFeatures::new("tnum"));
+    }
+    if role.family == font::DISPLAY {
+        attributes.insert(pango::AttrFloat::new_line_height(DISPLAY_LINE_HEIGHT));
+    }
+    attributes
+}
+
+/// Gives a label the font of a role with [`role_attributes`].
+pub fn set_role(label: &gtk::Label, role: font::Role) {
+    label.set_attributes(Some(&role_attributes(role)));
+}
+
+/// A plain-text label in a role of the text face (`TITLE3`, `TEXT_CAPTION`…), left
+/// aligned, with classes of `style.css`. Its text can change with `set_text`.
+pub fn text_label(role: font::Role, text: &str, classes: &[&str]) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.set_xalign(0.0);
+    set_role(&label, role);
+    for class in classes {
+        label.add_css_class(class);
+    }
+    label
+}
+
+/// A label in a role, in a colour class from `style.css` (`value`, `label`, `secondary`…).
+pub fn label(role: font::Role, text: &str, class: &str) -> gtk::Label {
+    let label = gtk::Label::new(None);
+    label.set_markup(&markup(role, text));
+    label.set_xalign(0.0);
+    if !class.is_empty() {
+        label.add_css_class(class);
+    }
+    label
+}
+
+/// Sets the text of a label made by [`label`].
+pub fn set_label(label: &gtk::Label, role: font::Role, text: &str) {
+    label.set_markup(&markup(role, text));
+}

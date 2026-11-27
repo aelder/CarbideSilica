@@ -1,0 +1,32 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Carbide Silica
+Source: https://github.com/aelder/CarbideSilica
+Comment: The full texts of the licences are in /usr/share/carbide-silica/fonts (OFL-*.txt),
+ /usr/share/carbide-silica/sounds (LICENSE-button-sounds.txt) and
+ /usr/share/doc/carbide-silica/LICENSE. The tarball has the same files below share/.
+
+Files: *
+Copyright: 2026 Verus Carbide contributors
+License: MIT
+
+Files: usr/share/carbide-silica/fonts/Jost*
+Copyright: 2020 The Jost Project Authors (https://github.com/indestructible-type)
+License: OFL-1.1
+
+Files: usr/share/carbide-silica/fonts/Inter*
+Copyright: 2020 The Inter Project Authors (https://github.com/rsms/inter)
+License: OFL-1.1
+
+Files: usr/share/carbide-silica/fonts/IBMPlexMono*
+Copyright: 2017 IBM Corp. with Reserved Font Name "Plex"
+License: OFL-1.1
+
+Files: usr/share/carbide-silica/sounds/*.mp3
+Copyright: 2026-present Josh Comeau
+License: MIT
+
+License: MIT
+ See /usr/share/doc/carbide-silica/LICENSE.
+
+License: OFL-1.1
+ See the OFL-*.txt files in /usr/share/carbide-silica/fonts.

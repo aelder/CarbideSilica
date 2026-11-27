@@ -3693,7 +3693,8 @@ fn date_targets(root: &Value) -> Vec<(String, DateTarget)> {
 }
 
 #[path = "ffi_statement.rs"]
-mod statement;
+// `pub(super)` lets `ffi::rust_api` name the statement records for a Rust caller.
+pub(super) mod statement;
 
 #[cfg(test)]
 #[path = "ffi_transaction_tests.rs"]

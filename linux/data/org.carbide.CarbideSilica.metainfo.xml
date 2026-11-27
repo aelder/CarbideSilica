@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.carbide.CarbideSilica</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Carbide Silica</name>
+  <summary>Explorer for Verus and PBaaS chains</summary>
+  <description>
+    <p>
+      Carbide Silica shows the data of a Verus node as charts and diagrams. Each page also
+      gives the exact figures. The app is a front end for Carbide, the terminal explorer by
+      alexenglish, and uses the same RPC client, decoding and cache.
+    </p>
+    <p>
+      The app is read-only. It does not read a wallet. It cannot create, sign or send a
+      transaction.
+    </p>
+    <ul>
+      <li>A transaction page starts with a statement in words and shows the flow of the amounts.</li>
+      <li>The Charts page shows five measures on one time axis with one cursor.</li>
+      <li>An identity page shows each version and who holds the keys.</li>
+      <li>The Dashboard shows the recent staked and mined blocks.</li>
+    </ul>
+    <p>
+      The app needs access to the RPC port of a Verus node. It reads the node configuration
+      from ~/.komodo/VRSC/VRSC.conf by default.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.carbide.CarbideSilica.desktop</launchable>
+  <developer id="com.github.aelder">
+    <name>aelder</name>
+  </developer>
+  <url type="homepage">https://github.com/aelder/CarbideSilica</url>
+  <url type="bugtracker">https://github.com/aelder/CarbideSilica/issues</url>
+  <categories>
+    <category>Network</category>
+  </categories>
+  <keywords>
+    <keyword>Verus</keyword>
+    <keyword>PBaaS</keyword>
+    <keyword>blockchain</keyword>
+    <keyword>explorer</keyword>
+  </keywords>
+  <provides>
+    <binary>carbide-silica</binary>
+  </provides>
+  <requires>
+    <display_length compare="ge">980</display_length>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-26">
+      <description>
+        <p>The first Linux release. It has all pages of the macOS app.</p>
+      </description>
+    </release>
+  </releases>
+</component>

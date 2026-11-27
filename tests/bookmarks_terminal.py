@@ -16,7 +16,8 @@ import threading
 import time
 import unicodedata
 
-VRSC = "i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV"
+from synthetic_chain import VRSC
+
 VDEX = "iHog9UCTrn95qpUBFCZ7kKz7qWdMA8MQ6N"
 TXID = "a" * 64
 VETH = "i9nwxtKuVYX4MSbeULLiK2ttVi6rUEhh4X"

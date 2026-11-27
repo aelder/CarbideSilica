@@ -1,0 +1,51 @@
+# The desktop bridge as a plain Rust library, for the Linux app (`linux/`).
+#
+# `../Cargo.toml` builds the bridge for Swift: its crate root is `src/desktop_bridge.rs`,
+# which keeps the `ffi` module private because Swift reaches it through UniFFI. This
+# package compiles the same sources (Carbide's modules in ../../../src and the bridge in
+# ../src) with its own root, `lib.rs`, which makes the API public as `carbide_bridge::api`.
+# It adds no logic. The [dependencies] list mirrors ../Cargo.toml and must be kept in step
+# with it. The module list in lib.rs mirrors src/desktop_bridge.rs.
+[package]
+name = "carbide-bridge-rust"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+name = "carbide_bridge"
+path = "lib.rs"
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+clap = { version = "4.6", features = ["derive", "env"] }
+crossterm = "0.29"
+directories = "6"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+maxminddb = "0.30"
+rand = "0.10"
+ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls"] }
+ripemd = "0.1"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+time = { version = "0.3.55", features = ["formatting"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tokio = { version = "1.53", features = ["fs", "macros", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+toml = "0.8"
+# The bridge's records derive UniFFI traits. The Linux app does not use the generated
+# C functions, but the derives need the crate.
+uniffi = { version = "0.32.2", features = ["tokio"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["process", "signal", "fs", "term", "feature"] }
+signal-hook = "0.3.18"
