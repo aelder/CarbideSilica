@@ -7,6 +7,7 @@
 
 <p align="center">
   <img alt="macOS 15 or later" src="https://img.shields.io/badge/macOS-15%2B-1c1c1c?style=flat-square&logo=apple&logoColor=white">
+  <img alt="Linux with GTK 4.14 or later" src="https://img.shields.io/badge/Linux-GTK_4.14%2B-1c1c1c?style=flat-square&logo=linux&logoColor=white">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-f05138?style=flat-square&logo=swift&logoColor=white">
   <img alt="Rust 1.88 or later" src="https://img.shields.io/badge/Rust-1.88%2B-8c4a2f?style=flat-square&logo=rust&logoColor=white">
   <img alt="Bridge made with UniFFI" src="https://img.shields.io/badge/bridge-UniFFI-55616d?style=flat-square">
@@ -20,6 +21,7 @@
   <a href="#pages">Pages</a> &nbsp;
   <a href="#comparison-with-the-terminal-app">Comparison</a> &nbsp;
   <a href="#build-and-run">Build and run</a> &nbsp;
+  <a href="#linux">Linux</a> &nbsp;
   <a href="#keys">Keys</a> &nbsp;
   <a href="#network-requests">Network requests</a> &nbsp;
   <a href="#architecture">Architecture</a> &nbsp;
@@ -155,6 +157,22 @@ The arguments are the same as Carbide's, with one dash or two.
 | `-open=` | A block, transaction, address, identity or currency to open at start |
 
 The arguments apply to one run. They do not change the saved settings.
+
+## Linux
+
+The `linux` folder has a Linux version of the app. It is written in Rust with GTK 4 and calls the same bridge crate. It has the same pages and functions as the macOS app.
+
+It needs GTK 4.14 or later, ALSA, fontconfig and the CA certificates of the system. The `.deb` package is built and tested on Debian 13.
+
+```sh
+cd linux
+./build.sh release      # release build in Docker
+./package.sh            # .deb and .tar.gz in linux/dist/
+```
+
+The app reads the node configuration from `~/.komodo/VRSC/VRSC.conf`. Ctrl replaces Command, and Alt replaces Option. Jost, Inter and IBM Plex Mono replace the Apple fonts. The app was tested only in a container on aarch64. [linux/README.md](../linux/README.md) has the install steps, the keys and the known limits.
+
+![The Dashboard of the Linux app with the chain pulse, the recent blocks and the recent transactions.](../linux/docs/progress/dashboard.png)
 
 ## Keys
 

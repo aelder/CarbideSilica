@@ -43,6 +43,7 @@ takes the picture `<out.png>`. Steps are separated by `;` or new lines:
 | `drag x1 y1 x2 y2` | presses at the first place, moves to the second and releases |
 | `scroll down 5 [x y]` | turns the wheel (up, down, left, right), at x y when given |
 | `shot name.png` | takes a picture now, into the folder of `<out.png>`; a name has no folder |
+| `icon name.png` | writes the largest window icon into that folder and prints `WM_CLASS` |
 
 Coordinates are pixels of the display. Before the first key the window gets the keyboard
 focus (Xvfb has no window manager), and each key goes to the window of the app that was
@@ -53,7 +54,53 @@ saves a file into the folder of the pictures. Do not click a key that changes th
 (the peer commands), the location data download or the public API confirmation.
 
 Environment: `CARBIDE_SILICA_SETTINGS` (settings file), `CARBIDE_SILICA_RESOURCES` (fonts and
-sounds folder; default `resources/` of the source tree or `<prefix>/share/carbide-silica`).
+sounds folder; default `<prefix>/share/carbide-silica` when that folder exists, else
+`resources/` of the source tree). `<prefix>` is the folder above the folder of the binary.
+
+## 1a. Release build and packages
+
+```sh
+cd linux
+./build.sh release         # optimized build: /target/release/carbide-silica in the volume
+./package.sh               # release build, .deb and .tar.gz in linux/dist/ (not in git)
+./package.sh verify        # installs the .deb in a clean container, picture dist/verify-deb.png
+./package.sh verify-tar    # installs the tarball in /opt/test, picture dist/verify-tar.png
+STEPS="icon icon.png" OUT=/tmp/pkg/deb.png ./package.sh verify
+```
+
+The release profile (`Cargo.toml`) has `opt-level = 3`, fat LTO, one codegen unit and
+stripped symbols. `tools/package-inside.sh` runs in the build image. It checks the desktop
+file with `desktop-file-validate` and the metainfo file with `appstreamcli validate`, builds
+the release binary, and copies the files into a prefix:
+
+```
+bin/carbide-silica
+share/carbide-silica/{fonts,sounds}        resources/, with the licence files
+share/applications/org.carbide.CarbideSilica.desktop
+share/metainfo/org.carbide.CarbideSilica.metainfo.xml
+share/icons/hicolor/{16..512}/apps/org.carbide.CarbideSilica.png, scalable/…svg
+share/doc/carbide-silica/{copyright,LICENSE}
+```
+
+The `.deb` has the prefix `/usr`. Its `Depends` come from `dpkg-shlibdeps`, plus
+`ca-certificates`: the HTTP client of the bridge loads the CA certificates at start and does
+not connect without them, also to a local node. Its architecture
+is `dpkg --print-architecture` of the container. The tarball has the prefix as its top
+folder, with `install.sh` and `uninstall.sh` (`data/tarball`, default prefix `~/.local`).
+
+The sources of the desktop files are in `data/`: the desktop file, the metainfo file, the
+Debian copyright file and the icon. The macOS app has no icon file, so the icon
+(`data/icons/hicolor/scalable/apps/org.carbide.CarbideSilica.svg`) is drawn from the colours
+of section 4. `package-inside.sh` makes the PNG sizes with `rsvg-convert`. The application
+ID `org.carbide.CarbideSilica` (`APP_ID` in `main.rs`) is the name of the icon, the desktop
+file and the metainfo file. At start, `theme::install` adds `<prefix>/share/icons` and
+`linux/data/icons` to the icon theme and sets the default window icon by that name.
+
+`package.sh verify` uses `Dockerfile.verify`: Debian 13 with the X tools of the picture and no
+GTK, no fonts and no source tree. `tools/verify-inside.sh` installs the package with
+`apt-get install --no-install-recommends`, so a missing `Depends` shows, then runs
+`tools/shot-inside.sh` with `BINARY` set to the installed binary. The step `icon name.png`
+writes the window icon (`_NET_WM_ICON`) as a picture.
 
 ## 2. Structure
 
@@ -71,6 +118,8 @@ linux/src/shell/             window, title bar, sidebar, path bar, navigation, k
 linux/src/shared/            parts that more than one page uses (section 6)
 linux/src/pages/mod.rs       the registry: places and routes to build functions
 linux/src/pages/<page>/      one folder for each page; mod.rs has the build function
+linux/data/                  desktop file, metainfo, icon, Debian copyright, tarball scripts
+linux/package.sh, tools/     packages and their check (section 1a)
 macos/bridge/rust/           the bridge as a Rust library (section 9)
 ```
 
@@ -440,8 +489,10 @@ function.
   and the local time zone, with weeks that begin on Sunday, as the English calendar of the
   macOS app. Byte counts follow `ByteCountFormatter` (binary) in English.
 - Open: `HeightDates`, the permission dialog, the settings window and the keyboard reference
-  window are written but not exercised against a public API or pictured; `known_chains` on
-  Linux depends on Carbide's search paths for node configurations and was not checked;
+  window are written but not exercised against a public API or pictured; `known_chains`
+  (`macos/bridge/src/ffi.rs`) looks only in the macOS folders, so on Linux the chain menu
+  lists no node of this computer, although a run without `-conf=` finds
+  `~/.komodo/VRSC/VRSC.conf` through Carbide's own search;
   Ctrl+Alt+L can be taken by a desktop for its lock screen; the peer map needs the location
   data, which the pictures do not download; the witness card's decoded report was not
   pictured, because no transaction with signers was opened.
