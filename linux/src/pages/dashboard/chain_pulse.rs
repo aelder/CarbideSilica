@@ -17,12 +17,10 @@
 //!   passes, and the front gives light to the line, the marks, the time curve and the dots,
 //!   as the trace of a vector monitor does. It redraws on the frame clock only during the
 //!   second of the front;
-//! - the mark (`mark`) is the present wait, a line that moves along the axis of the waits
-//!   without steps. It redraws on the frame clock only when it moved a quarter pixel.
+//! - the mark (`mark`) draws the live wait on both axes from the same frame timestamp.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::time::Duration;
 
 use gtk::prelude::*;
 use gtk::{glib, gsk};
@@ -34,6 +32,7 @@ use crate::theme::draw::{self, Anchor};
 use crate::theme::{self, font, lamp, tone, Color};
 use crate::wait_record::{self, SPAN};
 use crate::widgets::canvas::Canvas;
+use crate::widgets::wait_plot::WaitPlot;
 use crate::widgets::display::{self, Readout};
 
 /// The target time between blocks.
@@ -92,7 +91,7 @@ struct State {
     selected: Option<String>,
     hovered: Option<String>,
     width: f32,
-    /// The moment of the last beat: the present, or the newest block's time.
+    /// Unix time at the current display frame, or the newest block's time for stored data.
     now: f64,
     beat: i64,
     marks: Vec<Placed>,
@@ -132,16 +131,15 @@ fn record() -> Option<api::PulseHistory> {
 }
 
 fn longest_wait() -> Option<f64> {
-    record().and_then(|h| h.waits.last().map(|w| *w as f64))
+    wait_record::with(|r| r.history.as_ref()?.waits.last().map(|w| *w as f64))
 }
 
 fn wait_quantile(share: f64) -> Option<f64> {
-    let history = record()?;
-    let waits = &history.waits;
-    if waits.is_empty() {
-        return None;
-    }
-    Some(waits[((waits.len() as f64 * share) as usize).min(waits.len() - 1)] as f64)
+    wait_record::with(|r| {
+        let waits = &r.history.as_ref()?.waits;
+        let last = waits.len().checked_sub(1)?;
+        Some(waits[((waits.len() as f64 * share) as usize).min(last)] as f64)
+    })
 }
 
 fn is_record(seconds: f64) -> bool {
@@ -195,6 +193,11 @@ fn clock(seconds: f64) -> String {
     }
 }
 
+fn live_clock(seconds: f64) -> String {
+    let tenths = (seconds * 10.0) as u64;
+    format!("{}.{}", clock((tenths / 10) as f64), tenths % 10)
+}
+
 fn duration(seconds: f64) -> String {
     if seconds < 60.0 {
         format!("{}s", seconds as i64)
@@ -212,7 +215,7 @@ impl State {
         if !self.live {
             return None;
         }
-        self.blocks.first().map(|b| (format::now() - b.time as f64).max(0.0))
+        self.blocks.first().map(|b| (self.now - b.time as f64).max(0.0))
     }
 
     /// Groups the blocks into bursts, in chain order, and gives each burst one position.
@@ -303,7 +306,7 @@ impl State {
         let Some(index) = self.hovered.as_ref().and_then(|hash| self.blocks.iter().position(|b| &b.hash == hash)) else {
             return (
                 format!(
-                    "The top chart shows the blocks of the last 25 minutes. The bottom chart shows the time between blocks in the last {}. One dot is 1 of each 100 blocks.",
+                    "The top chart shows the blocks of the last 25 minutes. The bottom chart shows the time between blocks in the last {}. Taller stacks or bars mean more waits of that length.",
                     Self::record_span()
                 ),
                 false,
@@ -358,9 +361,7 @@ impl ChainPulse {
         let trace = Canvas::new(0, 0, move |canvas, snapshot, w, _| draw_trace(canvas, snapshot, &s.borrow(), w));
         trace.set_can_target(false);
         let s = state.clone();
-        let mark_state = Rc::new(Cell::new((f32::NAN, String::new(), false)));
-        let ms = mark_state.clone();
-        let mark = Canvas::new(0, 0, move |canvas, snapshot, w, _| draw_mark(canvas, snapshot, &s.borrow(), w, &ms));
+        let mark = Canvas::new(0, 0, move |canvas, snapshot, w, _| draw_mark(canvas, snapshot, &s.borrow(), w));
         mark.set_can_target(false);
         let plot = gtk::Overlay::new();
         plot.set_child(Some(&base));
@@ -433,24 +434,30 @@ impl ChainPulse {
         });
         plot.add_controller(click);
 
-        // The mark of the present wait moves at the rate of the display, and redraws only
-        // when it moved.
+        // GTK's frame clock is monotonic. Convert its timestamp to the same Unix time
+        // used by block headers so delayed frames and newly received tips use actual age.
         let weak = Rc::downgrade(&pulse);
-        pulse.mark.add_tick_callback(move |canvas, _| {
+        pulse.mark.add_tick_callback(move |canvas, clock| {
             let Some(pulse) = weak.upgrade() else { return glib::ControlFlow::Break };
-            let state = pulse.state.borrow();
-            let width = canvas.width() as f32;
-            let flaring = state.sweep_start.is_some();
-            let (x, text) = match state.current_wait() {
-                Some(wait) => (mark_x(wait, width), clock(wait)),
-                None => (f32::NAN, String::new()),
-            };
-            let (last_x, last_text, last_flare) = mark_state.take();
-            let moved = !(x.is_nan() && last_x.is_nan()) && ((x - last_x).abs() >= 0.25 || x.is_nan() != last_x.is_nan());
-            if moved || text != last_text || flaring || last_flare {
-                canvas.queue_draw();
+            let mut state = pulse.state.borrow_mut();
+            if state.live {
+                let unix_frame = glib::real_time() + (clock.frame_time() - glib::monotonic_time());
+                state.now = unix_frame as f64 / 1_000_000.0;
             }
-            mark_state.set((if moved { x } else { last_x }, text, flaring));
+            let new_second = state.live && state.now as i64 != state.beat;
+            let resized = state.width != pulse.base.width() as f32;
+            let start = new_second.then(|| clock.frame_time() - (state.now.fract() * 1e6) as i64);
+            let live = state.live;
+            drop(state);
+            if new_second || resized {
+                pulse.beat(start);
+            }
+            if live {
+                canvas.queue_draw();
+                if pulse.state.borrow().sweep_start.is_some() {
+                    pulse.trace.queue_draw();
+                }
+            }
             glib::ControlFlow::Continue
         });
 
@@ -458,14 +465,7 @@ impl ChainPulse {
         let weak = Rc::downgrade(&pulse);
         wait_record::watch(&pulse.root, move || {
             if let Some(pulse) = weak.upgrade() {
-                pulse.beat(false);
-            }
-        });
-        // Once a second: the readouts, the places of the marks and a new front.
-        let weak = Rc::downgrade(&pulse);
-        crate::page::every(&pulse.root, Duration::from_secs(1), move || {
-            if let Some(pulse) = weak.upgrade() {
-                pulse.beat(true);
+                pulse.beat(None);
             }
         });
         pulse
@@ -477,6 +477,7 @@ impl ChainPulse {
             let mut state = self.state.borrow_mut();
             state.blocks = blocks.to_vec();
             state.live = live;
+            state.now = if live { format::now() } else { blocks.first().map_or(0.0, |b| b.time as f64) };
             state.waiting = waiting;
             state.selected = selected;
         }
@@ -484,7 +485,7 @@ impl ChainPulse {
             // The reader starts again when the node gets to the tip: it reads only then.
             wait_record::keep(&model, live);
         }
-        self.beat(false);
+        self.beat(None);
     }
 
     pub fn set_selected(&self, selected: Option<String>) {
@@ -514,46 +515,23 @@ impl ChainPulse {
         }
     }
 
-    /// One update: the moment, the places of the marks, the readouts. With `front`, a new
-    /// second starts a pass of the front.
-    fn beat(&self, front: bool) {
-        let width = self.base.width() as f32;
+    /// Lay out a new second, new data or a resized plot. Only a new live second
+    /// starts a sweep. The frame callback animates the existing layout between beats.
+    fn beat(&self, sweep_start: Option<i64>) {
         {
             let mut state = self.state.borrow_mut();
-            state.width = width;
-            state.now = if state.live { format::now() } else { state.blocks.first().map(|b| b.time as f64).unwrap_or(0.0) };
-            let beat = state.now as i64;
+            state.width = self.base.width() as f32;
             let previous = std::mem::take(&mut state.marks);
             state.place();
-            if front && beat != state.beat && state.live && animations_on() && width > 0.0 {
-                state.before = previous;
-                state.sweep_start = self.trace.frame_clock().map(|clock| clock.frame_time());
-            } else if !front {
-                state.before = state.marks.clone();
-            }
-            state.beat = beat;
+            state.sweep_start = sweep_start.filter(|_| animations_on() && state.width > 0.0);
+            state.before = previous;
+            state.beat = state.now as i64;
         }
         self.update_readouts();
         self.update_caption();
         self.base.queue_draw();
         self.trace.queue_draw();
         self.mark.queue_draw();
-        if self.state.borrow().sweep_start.is_some() {
-            let weak_state = Rc::downgrade(&self.state);
-            self.trace.add_tick_callback(move |canvas, clock| {
-                let Some(state) = weak_state.upgrade() else { return glib::ControlFlow::Break };
-                canvas.queue_draw();
-                let done = state.borrow().sweep_start.is_none_or(|start| clock.frame_time() - start >= 1_000_000);
-                if done {
-                    let mut state = state.borrow_mut();
-                    state.sweep_start = None;
-                    state.before = state.marks.clone();
-                    glib::ControlFlow::Break
-                } else {
-                    glib::ControlFlow::Continue
-                }
-            });
-        }
     }
 
     /// The figures that answer first: how many blocks, against the target and against what
@@ -724,15 +702,7 @@ fn draw_blocks(widget: &Canvas, snapshot: &gtk::Snapshot, state: &State, width: 
         if !is_long(wait) {
             continue;
         }
-        wait_span(widget, snapshot, before.x + 8.0, burst.x - 8.0, wait, false);
-    }
-
-    // The wait since the newest block. Only the present has one.
-    if state.live
-        && let (Some(newest), Some(wait)) = (state.bursts.last(), state.current_wait())
-        && is_long(wait)
-    {
-        wait_span(widget, snapshot, newest.x + 8.0, right, wait, true);
+        wait_span(widget, snapshot, before.x + 8.0, burst.x - 8.0, &clock(wait), wait_color(wait), false);
     }
 
     // The marks are drawn by the trace. The plot draws only the ring of the mark that the
@@ -756,16 +726,15 @@ fn draw_blocks(widget: &Canvas, snapshot: &gtk::Snapshot, state: &State, width: 
 }
 
 /// A long wait: a stronger stretch of the line with its duration above it.
-fn wait_span(widget: &Canvas, snapshot: &gtk::Snapshot, x0: f32, x1: f32, seconds: f64, dashed: bool) {
+fn wait_span(widget: &Canvas, snapshot: &gtk::Snapshot, x0: f32, x1: f32, label: &str, color: Color, dashed: bool) {
     if x1 <= x0 {
         return;
     }
-    let color = wait_color(seconds);
     draw::rule(snapshot, x0, AXIS_Y, x1, AXIS_Y, color, 2.0, if dashed { &[5.0, 4.0] } else { &[] });
     if x1 - x0 <= 56.0 {
         return;
     }
-    draw::figure(snapshot, widget, &clock(seconds), (x0 + x1) / 2.0, AXIS_Y - 11.0, Anchor::Center, color);
+    draw::figure(snapshot, widget, label, (x0 + x1) / 2.0, AXIS_Y - 11.0, Anchor::Center, color);
 }
 
 // MARK: Drawing the waits
@@ -775,7 +744,6 @@ fn wait_span(widget: &Canvas, snapshot: &gtk::Snapshot, x0: f32, x1: f32, second
 fn wait_shapes(width: f32, current: Option<f64>) -> (gsk::Path, gsk::Path, gsk::Path, Vec<(f32, f32)>) {
     let right = width - RIGHT_INSET;
     let base = WAITS_BASE;
-    let dot = 5.0f32;
     let high = waits_end(current);
     let curve = gsk::PathBuilder::new();
     let mut points = Vec::new();
@@ -791,26 +759,12 @@ fn wait_shapes(width: f32, current: Option<f64>) -> (gsk::Path, gsk::Path, gsk::
     curve.line_to(right, BLOCKS_BOTTOM);
     points.push((right, BLOCKS_BOTTOM));
 
-    let passed = gsk::PathBuilder::new();
-    let ahead = gsk::PathBuilder::new();
-    if let Some(history) = record()
-        && !history.waits.is_empty()
-    {
-        let waits = &history.waits;
-        let count = waits.len().min(100);
-        let mut stacks: std::collections::HashMap<i64, i64> = Default::default();
-        for index in 0..count {
-            let rank = ((index as f64 + 0.5) / count as f64 * waits.len() as f64) as usize;
-            let value = waits[rank.min(waits.len() - 1)] as f64;
-            let bin = ((wait_x(value, width, high) - GUTTER) / (dot + 1.5)) as i64;
-            let level = *stacks.get(&bin).unwrap_or(&0);
-            stacks.insert(bin, level + 1);
-            let center = (GUTTER + (bin as f32 + 0.5) * (dot + 1.5), base - 3.0 - dot / 2.0 - level as f32 * (dot + 1.5));
-            let target = if current.is_none_or(|c| value < c) { &passed } else { &ahead };
-            target.add_circle(&draw::point(center.0, center.1), dot / 2.0);
-        }
-    }
-    (curve.to_path(), passed.to_path(), ahead.to_path(), points)
+    let history = record();
+    let waits = history.as_ref().map_or(&[][..], |h| h.waits.as_slice());
+    // Reserve the space under the upper time axis for its minute labels.
+    let plot = WaitPlot { left: GUTTER, right, top: BLOCKS_BOTTOM + 31.0, bottom: base - 3.0, diameter: 5.0, pitch: 6.5 };
+    let (passed, ahead) = plot.paths(waits, current, |seconds| wait_x(seconds, width, high));
+    (curve.to_path(), passed, ahead, points)
 }
 
 /// The recorded waits as dots on a logarithmic time axis. Each dot is an equal share of
@@ -1006,10 +960,14 @@ fn mark_x(wait: f64, width: f32) -> f32 {
 /// The present wait as a mark that moves along the axis without steps. With a new block it
 /// starts again at the left. When the front of the trace is at it, it has more light for a
 /// moment, which then goes down as the light of a phosphor does.
-fn draw_mark(widget: &Canvas, snapshot: &gtk::Snapshot, state: &State, width: f32, _cache: &Cell<(f32, String, bool)>) {
+fn draw_mark(widget: &Canvas, snapshot: &gtk::Snapshot, state: &State, width: f32) {
     let Some(wait) = state.current_wait() else { return };
     let x = mark_x(wait, width);
-    let color = if is_record(wait) { tone::ALERT } else { tone::PRESENT };
+    let color = wait_color(wait);
+    let label = live_clock(wait);
+    if let Some(newest) = state.bursts.last() && is_long(wait) {
+        wait_span(widget, snapshot, newest.x + 8.0, width - RIGHT_INSET, &label, color, true);
+    }
     // The flare: the front crosses from the right to the left in one second. It reaches
     // the mark at a part of the second, and the flare lasts 0.4 seconds from then.
     let (start, end) = (width - RIGHT_INSET + 12.0, GUTTER - 12.0);
@@ -1028,12 +986,30 @@ fn draw_mark(widget: &Canvas, snapshot: &gtk::Snapshot, state: &State, width: f3
         }
     }
     let (top, bottom) = (WAITS_BASE - 38.0, WAITS_BASE);
+    // Place the stroke and its label under one fractional translation, including
+    // when the marker moves less than a pixel in a frame.
+    snapshot.save();
+    snapshot.translate(&draw::point(x, 0.0));
     draw::push_shadow(snapshot, color, 0.9, glow);
-    draw::fill_rect(snapshot, x - 0.75 * wide, top, 1.5 * wide, bottom - top, color);
+    draw::rule(snapshot, 0.0, top, 0.0, bottom, color, 1.5 * wide, &[]);
     snapshot.pop();
     let mark_font = font::Role { size: 13.0, ..font::FIGURE };
     draw::push_shadow(snapshot, color, 0.9, glow);
-    draw::text(snapshot, widget, mark_font, &clock(wait), x, top - 11.0, Anchor::Center, color);
+    draw::text(snapshot, widget, mark_font, &label, 0.0, top - 11.0, Anchor::Center, color);
     snapshot.pop();
+    snapshot.restore();
     let _ = lamp::HALATION;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::live_clock;
+
+    #[test]
+    fn live_wait_rolls_over_at_the_same_tenth_as_the_marker() {
+        assert_eq!(live_clock(0.0), "0:00.0");
+        assert_eq!(live_clock(59.999), "0:59.9");
+        assert_eq!(live_clock(60.0), "1:00.0");
+        assert_eq!(live_clock(3600.125), "1:00:00.1");
+    }
 }

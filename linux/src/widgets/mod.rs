@@ -10,3 +10,4 @@ pub mod lamp;
 pub mod link;
 pub mod loader;
 pub mod row_light;
+pub mod wait_plot;

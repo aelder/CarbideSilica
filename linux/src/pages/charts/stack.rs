@@ -24,6 +24,7 @@ use crate::page::load::clear;
 use crate::theme::draw::{self, Anchor};
 use crate::theme::{self, font, tone, Color};
 use crate::widgets::canvas::Canvas;
+use crate::widgets::wait_plot::WaitPlot;
 use crate::widgets::display::{self, PlateFill};
 use crate::widgets::link;
 
@@ -689,7 +690,7 @@ impl WaitsStrip {
             }
         });
         canvas.set_hexpand(true);
-        canvas.update_property(&[gtk::accessible::Property::Label("Dot plot of the waits between bursts in this range")]);
+        canvas.update_property(&[gtk::accessible::Property::Label("Distribution of waits between bursts in this range")]);
         root.append(&canvas);
         let caption = theme::label(font::CAPTION, "", "label");
         caption.set_wrap(true);
@@ -717,11 +718,7 @@ impl WaitsStrip {
         }
         self.last.set(signature);
         let count = model.waits.len();
-        let mut text = if count <= 100 {
-            format!("Each dot is one of the {count} waits. ")
-        } else {
-            format!("Each dot is 1 in 100 of the {} waits. ", format::integer(count as u64))
-        };
+        let mut text = format!("{} waits. Taller stacks or bars mean more waits of that length. ", format::integer(count as u64));
         text += &format!("Blocks within {BURST_SECONDS} seconds of each other are one burst. ");
         text += &match wait {
             Some(wait) => format!(
@@ -746,7 +743,6 @@ fn share_shorter(waits: &[f64], seconds: f64) -> i64 {
 fn draw_waits(snapshot: &gtk::Snapshot, widget: &impl IsA<gtk::Widget>, width: f32, height: f32, model: &StackModel, wait: Option<f64>) {
     let right = width - RIGHT;
     let base = height - 20.0;
-    let dot = 6.0f32;
     let low = 10.0f64;
     let high = 1_800f64.max(model.waits.last().copied().unwrap_or(0.0) * 1.15);
     let position = |seconds: f64| LEFT + ((seconds.max(low).ln() - low.ln()) / (high.ln() - low.ln())) as f32 * (right - LEFT);
@@ -769,25 +765,10 @@ fn draw_waits(snapshot: &gtk::Snapshot, widget: &impl IsA<gtk::Widget>, width: f
         draw::rule(snapshot, tx, base, tx, base + 4.0, tone::AXIS, 1.0, &[]);
         draw::name(snapshot, widget, label, tx, base + 12.0, Anchor::Center, tone::LABEL);
     }
-    let count = model.waits.len().min(100);
-    let mut stacks: std::collections::HashMap<i64, i32> = Default::default();
-    // The waits shorter than the shown wait have light, as in the chain pulse.
-    let shorter_dots = gsk::PathBuilder::new();
-    let longer_dots = gsk::PathBuilder::new();
-    for index in 0..count {
-        let rank = ((index as f64 + 0.5) / count as f64 * model.waits.len() as f64) as usize;
-        let value = model.waits[rank.min(model.waits.len() - 1)];
-        let bin = ((position(value) - LEFT) / (dot + 1.0)) as i64;
-        let level = *stacks.get(&bin).unwrap_or(&0);
-        stacks.insert(bin, level + 1);
-        let cx = LEFT + (bin as f32 + 0.5) * (dot + 1.0);
-        let cy = base - 2.0 - dot / 2.0 - level as f32 * (dot + 1.0);
-        let shorter = wait.is_none_or(|w| value < w);
-        let builder = if shorter { &shorter_dots } else { &longer_dots };
-        builder.add_circle(&draw::point(cx, cy), dot / 2.0);
-    }
-    draw::fill(snapshot, &longer_dots.to_path(), tone::AXIS);
-    draw::lit(snapshot, &shorter_dots.to_path(), tone::RECORD, 0.4);
+    let plot = WaitPlot { left: LEFT, right, top: 4.0, bottom: base - 2.0, diameter: 6.0, pitch: 7.0 };
+    let (shorter, longer) = plot.paths(&model.waits, wait, position);
+    draw::fill(snapshot, &longer, tone::AXIS);
+    draw::lit(snapshot, &shorter, tone::RECORD, 0.4);
     if let Some(wait) = wait {
         let cx = position(wait).min(right);
         draw::lit(snapshot, &draw::rect_path(cx - 0.75, 2.0, 1.5, base - 2.0), tone::PRESENT, 0.6);
