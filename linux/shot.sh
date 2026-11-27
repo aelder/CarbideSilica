@@ -43,7 +43,10 @@ image=carbide-silica-linux
 mkdir -p "$(dirname "$out")"
 outdir="$(cd "$(dirname "$out")" && pwd)"
 docker build -q -t "$image" "$here" >/dev/null
-docker run --rm --network host \
+# GEOIP=<folder>: an existing location data folder, mounted read-only where the app looks.
+set --
+[ -n "${GEOIP:-}" ] && set -- -v "$GEOIP":/tmp/home/cache/verus-carbide/geoip:ro
+docker run --rm --network host "$@" \
     -v "$repo":/src \
     -v carbide-linux-cargo:/usr/local/cargo/registry \
     -v "${CARBIDE_TARGET_VOLUME:-carbide-linux-target}":/target \
