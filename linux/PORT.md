@@ -40,6 +40,7 @@ takes the picture `<out.png>`. Steps are separated by `;` or new lines:
 | `type text` | types a text |
 | `move x y` | moves the pointer, to show a hover state |
 | `click x y [button]`, `dclick x y` | clicks or double-clicks |
+| `drag x1 y1 x2 y2` | presses at the first place, moves to the second and releases |
 | `scroll down 5 [x y]` | turns the wheel (up, down, left, right), at x y when given |
 | `shot name.png` | takes a picture now, into the folder of `<out.png>`; a name has no folder |
 

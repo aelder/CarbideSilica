@@ -2,7 +2,7 @@
 //! expires, the seller, and the links to each object that the offer refers to
 //! (`OfferLine`).
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gtk::glib;
@@ -47,6 +47,8 @@ pub fn offer_line(page: &Rc<Page>, model: &Rc<AppModel>, line: Line) -> gtk::Box
         })
     };
     let ticker = |id: &str| known_name(id, model, None);
+    // True while the popover of the code points is open.
+    let points_shown = Rc::new(Cell::new(false));
     let identity_name = |id: &str| identity_name(model, offer, id);
 
     // The name, its kind, the scripts it uses and what is exchanged.
@@ -82,14 +84,40 @@ pub fn offer_line(page: &Rc<Page>, model: &Rc<AppModel>, line: Line) -> gtk::Box
     if let Some(traits) = item.traits.as_ref().filter(|t| matches!(t.kind, logic::NameKind::Other | logic::NameKind::Emoji)) {
         let words = if traits.scripts.is_empty() { "no letters".to_string() } else { traits.scripts.join(", ") };
         let popover = gtk::Popover::new();
+        let codes = crate::page::paragraph(&traits.code_points, &["mono", "value"]);
         let points = link::link(&words, false, {
-            let popover = popover.downgrade();
+            let (popover, names, codes) = (popover.downgrade(), names.downgrade(), codes.downgrade());
             move || {
-                if let Some(popover) = popover.upgrade() {
-                    if popover.is_visible() { popover.popdown() } else { popover.popup() }
+                let (Some(popover), Some(names)) = (popover.upgrade(), names.upgrade()) else { return };
+                if popover.is_visible() {
+                    popover.popdown();
+                    return;
+                }
+                // The popover points at the link. It is not a child of the link, so that the
+                // link's hover style does not reach its text.
+                let mut child = names.first_child();
+                while let Some(widget) = child {
+                    if widget.has_css_class("code-points-link")
+                        && let Some(bounds) = widget.compute_bounds(&names)
+                    {
+                        let rect = gtk::gdk::Rectangle::new(
+                            bounds.x() as i32,
+                            bounds.y() as i32,
+                            bounds.width() as i32,
+                            bounds.height() as i32,
+                        );
+                        popover.set_pointing_to(Some(&rect));
+                    }
+                    child = widget.next_sibling();
+                }
+                popover.popup();
+                // The text can be selected, but it is not selected when the popover opens.
+                if let Some(codes) = codes.upgrade() {
+                    glib::idle_add_local_once(move || codes.select_region(0, 0));
                 }
             }
         });
+        points.add_css_class("code-points-link");
         points.add_css_class("label-link");
         if let Some(label) = link::label_of(&points) {
             label.add_css_class("caption-small");
@@ -105,16 +133,20 @@ pub fn offer_line(page: &Rc<Page>, model: &Rc<AppModel>, line: Line) -> gtk::Box
             &["value"],
         );
         column.append(&count);
-        let codes = crate::page::paragraph(&traits.code_points, &["mono", "value"]);
         codes.set_selectable(true);
         codes.set_max_width_chars(52);
         column.append(&codes);
         popover.set_child(Some(&column));
-        popover.set_parent(&points);
+        // A click in the popover stays in it: the row does not open its offer then.
+        let shown = points_shown.clone();
+        popover.connect_show(move |_| shown.set(true));
+        let shown = points_shown.clone();
+        popover.connect_hide(move |_| shown.set(false));
+        popover.set_parent(&names);
         {
-            // The popover goes with its link.
+            // The popover goes with the column of names.
             let popover = popover.clone();
-            points.connect_destroy(move |_| popover.unparent());
+            names.connect_destroy(move |_| popover.unparent());
         }
         names.append(&points);
     }
@@ -188,7 +220,14 @@ pub fn offer_line(page: &Rc<Page>, model: &Rc<AppModel>, line: Line) -> gtk::Box
     row.append(&clamped(&seller, 104));
 
     row.append(&links_menu(model, item));
-    row_light::row_light(&row, Some(Box::new(move || open())));
+    row_light::row_light(
+        &row,
+        Some(Box::new(move || {
+            if !points_shown.get() {
+                open()
+            }
+        })),
+    );
     row
 }
 
@@ -239,53 +278,59 @@ fn links_menu(model: &Rc<AppModel>, item: &MarketItem) -> gtk::MenuButton {
     let offer = item.offer.clone();
     let fill: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::default();
     let fill_fn: Rc<dyn Fn()> = {
-        let (weak, list, popover, addresses, fill) = (Rc::downgrade(model), list.clone(), popover.downgrade(), addresses.clone(), Rc::downgrade(&fill));
+        let (weak, list, menu, addresses, fill) = (Rc::downgrade(model), list.clone(), button.downgrade(), addresses.clone(), Rc::downgrade(&fill));
         Rc::new(move || {
             let Some(model) = weak.upgrade() else { return };
             crate::page::load::clear(&list);
-            let item_button = |title: String, action: Box<dyn Fn(&Rc<AppModel>)>| {
+            // An item closes the menu and does its action. `closes` is false for the item
+            // that reads the addresses: the menu stays open and shows them when they come.
+            // A menu whose list was built again while it was closed did not open on the next
+            // click of its key.
+            let item_button = |title: String, closes: bool, action: Box<dyn Fn(&Rc<AppModel>, &gtk::Button)>| {
                 let entry = gtk::Button::with_label(&title);
                 entry.add_css_class("flat");
                 entry.add_css_class("menu-row");
                 if let Some(label) = entry.child().and_downcast::<gtk::Label>() {
                     label.set_xalign(0.0);
                 }
-                let (weak, popover) = (Rc::downgrade(&model), popover.clone());
-                entry.connect_clicked(move |_| {
-                    if let Some(popover) = popover.upgrade() {
-                        popover.popdown();
+                let (weak, menu) = (Rc::downgrade(&model), menu.clone());
+                entry.connect_clicked(move |entry| {
+                    if closes && let Some(menu) = menu.upgrade() {
+                        menu.popdown();
                     }
                     if let Some(model) = weak.upgrade() {
-                        action(&model);
+                        action(&model, entry);
                     }
                 });
                 list.append(&entry);
             };
             let txid = offer.txid.clone();
-            item_button("Funding Transaction".into(), Box::new(move |m| m.open(Route::Transaction { txid: txid.clone() })));
+            item_button("Funding Transaction".into(), true, Box::new(move |m, _| m.open(Route::Transaction { txid: txid.clone() })));
             for link in offer.links.iter().filter(|l| l.kind == OfferLinkKind::Identity) {
                 let value = link.value.clone();
                 let name = identity_name(&model, &offer, &value);
-                item_button(format!("Identity {name}"), Box::new(move |m| m.open(Route::Identity { name: value.clone() })));
+                item_button(format!("Identity {name}"), true, Box::new(move |m, _| m.open(Route::Identity { name: value.clone() })));
             }
             for link in offer.links.iter().filter(|l| l.kind == OfferLinkKind::Currency) {
                 let value = link.value.clone();
                 let name = known_name(&value, &model, None);
-                item_button(format!("Currency {name}"), Box::new(move |m| m.open(Route::Currency { name: value.clone() })));
+                item_button(format!("Currency {name}"), true, Box::new(move |m, _| m.open(Route::Currency { name: value.clone() })));
             }
             match addresses.borrow().clone() {
                 Some(found) => {
                     for address in found {
                         let short = format::short(&address, 6, 4);
-                        item_button(format!("Address {short}"), Box::new(move |m| m.open(crate::route::holder(&address))));
+                        item_button(format!("Address {short}"), true, Box::new(move |m, _| m.open(crate::route::holder(&address))));
                     }
                 }
                 None => {
                     let (addresses, fill, txid) = (addresses.clone(), fill.clone(), offer.txid.clone());
                     item_button(
                         "Read Funding Addresses".into(),
-                        Box::new(move |m| {
+                        false,
+                        Box::new(move |m, entry| {
                             let Some(explorer) = m.explorer() else { return };
+                            entry.set_sensitive(false);
                             let (addresses, fill, txid) = (addresses.clone(), fill.clone(), txid.clone());
                             glib::spawn_future_local(async move {
                                 let found = bridge::run(async move { explorer.offer_funding(vec![txid]).await }).await;

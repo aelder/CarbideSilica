@@ -307,6 +307,8 @@ menubutton.lamp > button { background: none; border: none; box-shadow: none; pad
 .table-row { background-color: transparent; }
 .table-row:hover { background-color: @grid; }
 .table-row.selected { background-color: alpha(@present, 0.1); box-shadow: inset 2px 0 0 @present; }
+/* The keyboard cursor on a row: the rules above must not hide it. */
+.table-row.cursor-on, .table-row.cursor-on:hover { background-color: alpha(@record, 0.22); }
 
 /* Text at 85% of the value tone. */
 .value-soft { color: alpha(@value, 0.85); }
@@ -333,6 +335,10 @@ menubutton.lamp > button { background: none; border: none; box-shadow: none; pad
 
 /* Currencies: a row of the table. */
 .currencies-tile { padding: 9px 8px; }
+
+/* Charts: the two tables, on the black of the display with a faint field on every second row. */
+listview.chart-table { background-color: transparent; color: @value; }
+listview.chart-table > row:nth-child(even) { background-color: alpha(@value, 0.04); }
 
 /* Marketplace: an offer, and the name of an offer as a link. */
 .market-offer { padding: 7px 8px; }

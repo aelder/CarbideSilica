@@ -86,13 +86,6 @@ step() {
             focused=1
             sleep 0.6
             ;;
-        dclick)
-            xdotool mousemove "$1" "$2"
-            sleep 0.3
-            xdotool click --repeat 2 --delay 80 1
-            focused=1
-            sleep 0.6
-            ;;
         drag)
             # drag x1 y1 x2 y2: press at the first point, move in steps, release at the second
             xdotool mousemove "$1" "$2"
