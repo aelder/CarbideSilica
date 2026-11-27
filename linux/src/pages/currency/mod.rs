@@ -120,18 +120,6 @@ pub fn data_disclosure(
     overlay
 }
 
-/// Takes the keyboard focus from a key inside `part` before the part is built again. A
-/// clicked key keeps the focus, and when it goes, the scroll view moves to the next key
-/// that takes the focus: the page would jump under the pointer.
-pub fn release_focus(part: &impl IsA<gtk::Widget>) {
-    let Some(window) = part.as_ref().root().and_downcast::<gtk::Window>() else { return };
-    if let Some(focus) = gtk::prelude::GtkWindowExt::focus(&window)
-        && (focus == *part.as_ref() || focus.is_ancestor(part))
-    {
-        gtk::prelude::GtkWindowExt::set_focus(&window, None::<&gtk::Widget>);
-    }
-}
-
 /// The JSON of the node, in the monospaced face, scrolling sideways.
 pub fn json_text(json: &str) -> gtk::Widget {
     let text = page::text(json, &["mono", "callout"]);

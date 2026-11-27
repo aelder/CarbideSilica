@@ -250,6 +250,7 @@ impl Sources {
 
     fn draw(self: &Rc<Self>) {
         let (Some(page), Some(model)) = (self.page.upgrade(), self.model.upgrade()) else { return };
+        crate::page::load::release_focus(&self.holder);
         clear(&self.holder);
         self.cells.borrow_mut().clear();
         self.chain_check.replace(None);
@@ -289,9 +290,13 @@ impl Sources {
         }
         let weak = Rc::downgrade(self);
         let save = lamp::button("Save", move || {
-            if let Some(sources) = weak.upgrade() {
-                sources.save();
-            }
+            // After the click: saving draws the card again, with this key in it.
+            let weak = weak.clone();
+            glib::idle_add_local_once(move || {
+                if let Some(sources) = weak.upgrade() {
+                    sources.save();
+                }
+            });
         });
         save.set_sensitive(overview.unsaved && overview.settings_problem.is_none());
         save.set_tooltip_text(Some("Write the states to Carbide's settings file"));
@@ -391,7 +396,13 @@ impl Sources {
                     && (y as f32) >= bounds.y()
                     && (y as f32) < bounds.y() + bounds.height()
                 {
-                    sources.select(key);
+                    // After the click: the table is built again.
+                    let (weak, key) = (Rc::downgrade(&sources), key.clone());
+                    glib::idle_add_local_once(move || {
+                        if let Some(sources) = weak.upgrade() {
+                            sources.select(&key);
+                        }
+                    });
                     return;
                 }
             }
@@ -418,9 +429,13 @@ impl Sources {
         let selected = states.iter().position(|s| s.0 == row.state).unwrap_or(0);
         let (weak, row_copy) = (Rc::downgrade(self), row.clone());
         let segments = lamp::Segments::new(&titles, selected, move |index| {
-            if let Some(sources) = weak.upgrade() {
-                sources.change(&row_copy, states[index].0);
-            }
+            // After the click: the change draws the table again, with this key in it.
+            let (weak, row, state) = (weak.clone(), row_copy.clone(), states[index].0);
+            glib::idle_add_local_once(move || {
+                if let Some(sources) = weak.upgrade() {
+                    sources.change(&row, state);
+                }
+            });
         });
         segments.root.set_sensitive(!(row.kind == api::SourceKind::LocalNode && !row.has_credentials));
         segments.root.set_halign(gtk::Align::Start);
@@ -434,6 +449,8 @@ impl Sources {
         }
         if row.kind == api::SourceKind::PublicApi && row.state == api::SourceState::Disabled && state != api::SourceState::Disabled {
             let Some(window) = self.page.upgrade().and_then(|p| p.root.root()).and_downcast::<gtk::Window>() else { return };
+            // The state is the same until Enable: the keys show it again.
+            self.draw();
             let dialog = dialogs::dialog(
                 &window,
                 "Enable this public API?",

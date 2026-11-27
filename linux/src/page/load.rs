@@ -118,3 +118,15 @@ pub fn clear(container: &gtk::Box) {
         container.remove(&child);
     }
 }
+
+/// Takes the keyboard focus from a widget inside `part` before the part is built again. A
+/// clicked key keeps the focus, and when it goes, GTK gives the focus to the next widget
+/// that takes it: the scroll view moves to it, and a selectable text shows as selected.
+pub fn release_focus(part: &impl IsA<gtk::Widget>) {
+    let Some(window) = part.as_ref().root().and_downcast::<gtk::Window>() else { return };
+    if let Some(focus) = gtk::prelude::GtkWindowExt::focus(&window)
+        && (focus == *part.as_ref() || focus.is_ancestor(part))
+    {
+        gtk::prelude::GtkWindowExt::set_focus(&window, None::<&gtk::Widget>);
+    }
+}
