@@ -126,9 +126,13 @@ pub fn seek_card(page: &Rc<Page>, charts: &Rc<Charts>) {
             entry.grab_focus();
         }
     }));
-    // The state lives as long as the page: the listener keeps it.
-    let kept = state.clone();
-    charts.listen(move |charts| kept.update_preview(charts));
+    // The state lives as long as the page: the listener keeps it, and the holder that the
+    // keys Go, Cancel and Show the latest block reach it through.
+    let (kept, _holder) = (state.clone(), seek.clone());
+    charts.listen(move |charts| {
+        let _ = &_holder;
+        kept.update_preview(charts)
+    });
     state.future.set_visible(false);
     state.update();
 }
